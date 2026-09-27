@@ -1,0 +1,9 @@
+# Databáze a screenshoty jsou osobní data a do gitu nepatří.
+# Repozitář je veřejný, takže tohle hlídá i omylem kliknutý commit v Codespace.
+/data/*
+!/data/.htaccess
+!/data/uploads/
+/data/uploads/*
+!/data/uploads/.gitkeep
+
+__pycache__/

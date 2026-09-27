@@ -1,0 +1,13 @@
+{
+  "name": "Trading Desk",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends php-cli php-sqlite3 php-mbstring php-zip python3-reportlab python3-pil fonts-dejavu-core",
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "forwardPorts": [8420],
+  "portsAttributes": {
+    "8420": {
+      "label": "Trading Desk",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}

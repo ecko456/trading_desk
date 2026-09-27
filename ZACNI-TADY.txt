@@ -1,0 +1,40 @@
+TRADING DESK
+============
+
+Deník obchodů a denní příprava pro Market Profile / Volume Profile.
+Běží celý u tebe v počítači. Nic se neposílá na internet, nic se neplatí,
+žádná registrace. Data jsou soubor na tvém disku.
+
+
+CO UDĚLAT
+---------
+
+Otevři soubor  INSTALL.md  a najdi si svoji sekci:
+
+  Windows ....... Varianta A   (asi 20 minut, jen jednou)
+  Mac ........... Varianta B   (asi 10 minut, jen jednou)
+  Ubuntu/Linux .. Varianta C   (asi 5 minut)
+  Bez instalace . Varianta D   (GitHub Codespaces v prohlížeči)
+
+INSTALL.md je textový soubor, otevřeš ho Poznámkovým blokem nebo
+libovolným editorem. Čte se to lépe v aplikaci, která umí Markdown,
+ale stačí i obyčejný text.
+
+
+AŽ TO BUDE HOTOVÉ
+-----------------
+
+Windows ....... dvojklik na  start-windows.bat
+Mac ........... dvojklik na  start-macos.command
+Ubuntu/Linux .. v prohlížeči otevři  http://localhost/trading/
+
+
+DŮLEŽITÉ
+--------
+
+Zálohuj se. V aplikaci je sekce "Záloha", kde jedním kliknutím stáhneš
+ZIP s databází i screenshoty. Jednu kopii měj mimo tenhle počítač.
+Když se rozbije disk, data nikde jinde nejsou.
+
+Aplikace nemá přihlašování, protože běží jen u tebe na localhost.
+Nezpřístupňuj ji do internetu ani do domácí sítě.
