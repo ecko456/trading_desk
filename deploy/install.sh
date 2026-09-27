@@ -17,7 +17,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 apt-get update
-apt-get install -y apache2 php php-sqlite3 php-mbstring php-zip rsync python3-reportlab python3-pil fonts-dejavu-core
+apt-get install -y apache2 php php-cli php-sqlite3 php-mbstring php-zip rsync python3-reportlab python3-pil fonts-dejavu-core
 
 install -d -m 0750 -o root -g www-data "${TARGET_DIR}"
 install -d -m 0770 -o www-data -g www-data "${DATA_DIR}" "${DATA_DIR}/uploads"
@@ -73,7 +73,7 @@ else
 fi
 
 # Dokud nemá aplikace správce, vypíše se jednorázový kód pro jeho založení.
-SETUP_CODE="$(sudo -u www-data env TRADING_DATA_DIR="${DATA_DIR}" php "${TARGET_DIR}/bin/setup-token.php" 2>/dev/null || true)"
+SETUP_CODE="$(runuser -u www-data -- env TRADING_DATA_DIR="${DATA_DIR}" php "${TARGET_DIR}/bin/setup-token.php" 2>/dev/null || true)"
 
 echo
 echo "Trading Desk je připravený na: http://localhost/trading/"
