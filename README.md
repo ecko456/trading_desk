@@ -71,7 +71,7 @@ Apache do adresáře zapisuje jako `www-data`. Data nejsou veřejně dostupná; 
 
 ## Ruční Apache konfigurace
 
-Pokud nechceš použít instalátor, zkopíruj aplikaci do `/var/www/trading-journal`, vytvoř `/var/lib/trading-journal`, nainstaluj `php-sqlite3` a `php-zip` a aktivuj obsah souboru `deploy/apache-trading.conf`.
+Pokud nechceš použít instalátor, zkopíruj aplikaci do `/var/www/trading-journal`, vytvoř `/var/lib/trading-journal`, nainstaluj `php-sqlite3`, `php-mbstring` a `php-zip` a aktivuj obsah souboru `deploy/apache-trading.conf`.
 
 Před reloadem vždy ověř konfiguraci:
 
