@@ -220,6 +220,17 @@ Bez nich funguje všechno ostatní, jen tlačítko *Stáhnout PDF* nahlásí, ž
 
 **Mac:** rozbal novou verzi vedle staré a **přenes si do ní složku `data/`** ze staré verze. V ní jsou všechny tvoje obchody.
 
+**Server s Gitem (varianta E):** stáhni novou verzi a spusť instalaci znovu. Data v `/var/lib/trading-journal` zůstanou.
+
+```bash
+cd ~/trading_desk
+git fetch origin main
+git checkout -B main FETCH_HEAD
+sudo bash deploy/install.sh
+```
+
+Když aplikace spadne na chybu hned po aktualizaci, instalace se nepovedla celá; spusť poslední příkaz znovu a přečti si, co vypíše.
+
 Po aktualizaci dej v prohlížeči Ctrl+Shift+R (na Macu Cmd+Shift+R), ať se načte nová verze.
 
 ---

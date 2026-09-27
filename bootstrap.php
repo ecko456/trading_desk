@@ -10,6 +10,7 @@ const AUDIT_WARNING_DAYS = 3;
 require_once __DIR__ . '/lib/vault.php';
 require_once __DIR__ . '/lib/accounts.php';
 require_once __DIR__ . '/lib/wall.php';
+require_once __DIR__ . '/lib/workspace.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -372,6 +373,7 @@ function migrate_schema(PDO $pdo): void
         $pdo->exec("UPDATE zones SET short_entry = \"trigger\", \"trigger\" = '' WHERE direction = 'short' AND COALESCE(TRIM(\"trigger\"), '') <> '' AND COALESCE(TRIM(short_entry), '') = ''");
         $pdo->exec('PRAGMA user_version = 2');
     }
+    ensure_workspace_schema($pdo);
 }
 
 const PLAN_EXTRA_COLUMNS = [
@@ -864,7 +866,7 @@ function plan_payload(int $id): ?array
     $plan['refs'] = fetch_all('SELECT * FROM plan_refs WHERE plan_id = ? ORDER BY sort_order, id', [$id]);
     $plan['screenshots'] = fetch_all('SELECT id, plan_id, trade_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots WHERE plan_id = ? ORDER BY created_at, id', [$id]);
     $plan['trades'] = fetch_all('SELECT * FROM trades WHERE plan_id = ? ORDER BY trade_date DESC, id DESC', [$id]);
-    return $plan;
+    return array_merge($plan, plan_extras($plan));
 }
 
 const REF_KINDS = ['single_print', 'poor_high', 'poor_low', 'naked_poc', 'gap', 'excess', 'lvn', 'other'];
@@ -1048,6 +1050,10 @@ function save_plan(array $data): array
             $refStatement->execute([$id, $index, $kind, $low, $high, $status, trim((string)value($ref, 'note', ''))]);
         }
 
+        // DiNapoli swingy, trend a vlastní pole náhledu.
+        $storedCustom = (string)(fetch_one('SELECT custom FROM plans WHERE id = ?', [$id])['custom'] ?? '{}');
+        save_plan_extras($pdo, $id, $data, $storedCustom);
+
         $pdo->commit();
         return plan_payload($id) ?? [];
     } catch (Throwable $error) {
@@ -1075,7 +1081,7 @@ function calculate_trade(array $data): array
     $risk = nullable_float(value($data, 'risk_amount'));
     $fees = nullable_float(value($data, 'fees')) ?? 0.0;
     $direction = strtolower((string)value($data, 'direction', 'long')) === 'short' ? -1.0 : 1.0;
-    $pointValue = market_point_value((string)value($data, 'market', '')) ?? nullable_float(value($data, 'point_value'));
+    $pointValue = workspace_point_value((string)value($data, 'market', '')) ?? nullable_float(value($data, 'point_value'));
 
     $distance = $entry !== null && $stop !== null ? abs($entry - $stop) : null;
     $quantity = nullable_float(value($data, 'quantity'));
@@ -1617,6 +1623,8 @@ function save_trade(array $data): array
 
     $pdo = db();
     $id = nullable_int(value($data, 'id'));
+    $stored = $id === null ? '{}' : (string)(fetch_one('SELECT custom FROM trades WHERE id = ?', [$id])['custom'] ?? '{}');
+    $fields['custom'] = merge_custom_values('trade', value($data, 'custom', []), $stored);
     if ($id === null) {
         $fields['created_at'] = utc_now();
         $fields['updated_at'] = utc_now();

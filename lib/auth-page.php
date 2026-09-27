@@ -35,7 +35,7 @@ function hero_profile(): string
       <?= hero_profile() ?>
       <div class="auth-brand">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span><strong>Trading Desk</strong><small>Market Profile journal</small></span>
+        <span><strong>Trading Desk</strong><small>Market Profile · DiNapoli</small></span>
       </div>
       <div class="auth-pitch">
         <p class="eyebrow">Příprava · Exekuce · Disciplína</p>

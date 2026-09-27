@@ -20,6 +20,8 @@ const state = {
   weeklyContext: null,
   biasInherited: false,
   readinessData: null,
+  workspace: null,
+  dnAnalysis: null,
 };
 
 const viewLabels = {
@@ -35,6 +37,7 @@ const viewLabels = {
   wall: ['Nástěnka', 'Komunita'],
   admin: ['Členové', 'Správa'],
   profile: ['Profil', 'Můj účet'],
+  settings: ['Nastavení', 'Můj desk'],
 };
 
 const strategyStyleLabels = { trend: 'Trendový', reversal: 'Reversal', both: 'Trendový i reversal' };
@@ -147,6 +150,7 @@ function activateView(name) {
   if (name === 'psyche') { refreshProfile(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
   if (name === 'wall') { refreshWall(); refreshMembers(); }
   if (name === 'admin') refreshAdmin();
+  if (name === 'settings') renderSettings();
 }
 
 function closeQuickPlanMenu() {
@@ -193,6 +197,153 @@ function collectRows(containerSelector, rowSelector, fields) {
 }
 
 const optionTag = (value, label, current) => `<option value="${value}"${String(current ?? '') === value ? ' selected' : ''}>${label}</option>`;
+
+// ---------------------------------------------------------------------------
+// Přizpůsobené prostředí: co trader v náhledu a u obchodu vidí. Nastavení je
+// v jeho deníku; bez něj se chová jako dřív (všechno zapnuté).
+// ---------------------------------------------------------------------------
+function prefs() {
+  return state.workspace?.prefs || { method: 'both', hidden: { plan: [], trade: [], modules: [] }, tokens_extra: [], markets: [], defaults: {}, dn: {} };
+}
+
+function isHiddenEl(key) {
+  const group = key.startsWith('trade.') ? 'trade' : 'plan';
+  return (prefs().hidden?.[group] || []).includes(key);
+}
+
+function moduleOn(key) {
+  return !(prefs().hidden?.modules || []).includes(key);
+}
+
+function activeFields(scope) {
+  return (state.workspace?.fields || []).filter(field => field.scope === scope && !field.archived);
+}
+
+function marketList() {
+  const markets = prefs().markets || [];
+  return markets.length ? markets : defaultMarkets.map(symbol => ({ symbol, point_value: marketPointValue[symbol] ?? null, rth: RTH_OPEN[symbol] || '09:30' }));
+}
+
+function pointValueFor(market) {
+  const symbol = String(market ?? '').trim().toUpperCase();
+  const own = marketList().find(item => item.symbol === symbol);
+  return own ? own.point_value : (marketPointValue[symbol] ?? null);
+}
+
+function rthOpenFor(market) {
+  const symbol = String(market ?? '').trim().toUpperCase();
+  return marketList().find(item => item.symbol === symbol)?.rth || RTH_OPEN[symbol] || '09:30';
+}
+
+/** Ovládací prvek vlastního pole; jméno cf_<id> ho odliší od běžných polí. */
+function customFieldControl(field, value) {
+  const name = `cf_${field.id}`;
+  const label = escapeHtml(field.label);
+  const help = field.help ? `<small class="field-hint">${escapeHtml(field.help)}</small>` : '';
+  const radio = (optionValue, text, tone, checked) => `<label class="${tone}"><input type="radio" name="${name}" value="${optionValue}"${checked ? ' checked' : ''}><span>${text}</span></label>`;
+  if (field.kind === 'bool') {
+    return `<div class="custom-field"><span class="field-label">${label}</span><div class="tri-switch compact" role="radiogroup" aria-label="${label}">${radio('1', 'Ano', 'is-long', value === true)}${radio('0', 'Ne', 'is-short', value === false)}</div>${help}</div>`;
+  }
+  if (field.kind === 'rating') {
+    return `<div class="custom-field"><span class="field-label">${label}</span><div class="tri-switch compact" role="radiogroup" aria-label="${label}">${[1, 2, 3, 4, 5].map(number => radio(String(number), String(number), 'is-neutral', Number(value) === number)).join('')}</div>${help}</div>`;
+  }
+  if (field.kind === 'select') {
+    return `<label class="custom-field">${label}<select name="${name}"><option value="">—</option>${field.options.map(option => `<option value="${escapeHtml(option)}"${option === value ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}</select>${help}</label>`;
+  }
+  if (field.kind === 'number') {
+    return `<label class="custom-field">${label}<input type="number" step="any" name="${name}" value="${escapeHtml(value ?? '')}">${help}</label>`;
+  }
+  if (field.kind === 'textarea') {
+    return `<label class="custom-field span-all">${label}<textarea name="${name}" rows="2">${escapeHtml(value ?? '')}</textarea>${help}</label>`;
+  }
+  return `<label class="custom-field">${label}<input name="${name}" maxlength="300" value="${escapeHtml(value ?? '')}">${help}</label>`;
+}
+
+/** Hodnoty vlastních polí z formuláře do tvaru pro server: { id: hodnota }. */
+function extractCustomValues(data, scope) {
+  const custom = {};
+  activeFields(scope).forEach(field => {
+    const raw = data[`cf_${field.id}`];
+    delete data[`cf_${field.id}`];
+    const text = String(raw ?? '').trim();
+    if (field.kind === 'bool') custom[field.id] = text === '1' ? true : text === '0' ? false : null;
+    else custom[field.id] = text === '' ? null : text;
+  });
+  Object.keys(data).filter(key => key.startsWith('cf_')).forEach(key => delete data[key]);
+  return custom;
+}
+
+function currentCustomValues(container) {
+  const values = {};
+  $$('[name^="cf_"]', container).forEach(control => {
+    const id = control.name.slice(3);
+    if (control.type === 'radio') {
+      if (control.checked) values[id] = control.value === '1' ? true : control.value === '0' ? false : control.value;
+    } else if (control.value !== '') values[id] = control.value;
+  });
+  return values;
+}
+
+function renderPlanCustomFields(values = currentCustomValues($('#planCustomFields'))) {
+  const fields = activeFields('plan');
+  $('#planCustomFields').innerHTML = fields.map(field => customFieldControl(field, values?.[field.id])).join('');
+}
+
+function renderTradeCustomFields(values = {}) {
+  const fields = activeFields('trade');
+  $('#tradeCustomSection').hidden = !fields.length;
+  $('#tradeCustomFields').innerHTML = fields.map(field => customFieldControl(field, values?.[field.id])).join('');
+}
+
+/** Skryje části náhledu, ve kterých nezbyl žádný zapnutý prvek, i s krokem v navigaci. */
+function syncPlanSections() {
+  $$('#planForm .plan-section[data-section]').forEach(section => {
+    const key = section.dataset.section;
+    let hidden;
+    if (key === 'custom') hidden = !activeFields('plan').length;
+    else if (section.dataset.el) hidden = isHiddenEl(section.dataset.el);
+    else {
+      const parts = $$('[data-el]', section).filter(element => !element.closest('.plan-row'));
+      hidden = key !== 'zones' && parts.length > 0 && parts.every(element => isHiddenEl(element.dataset.el));
+    }
+    section.hidden = hidden;
+    const step = $(`#planSteps [data-step="${key}"]`);
+    if (step) step.hidden = hidden;
+  });
+}
+
+const BRAND_TAGLINES = { mp: 'Market Profile journal', dn: 'DiNapoli journal', both: 'Market Profile · DiNapoli' };
+
+function applyWorkspace() {
+  document.body.dataset.method = prefs().method;
+  const tagline = $('#brandTagline');
+  if (tagline) tagline.textContent = BRAND_TAGLINES[prefs().method] || 'Trading journal';
+  $$('[data-el]').forEach(element => { element.hidden = isHiddenEl(element.dataset.el); });
+  $$('[data-el-group]').forEach(element => { element.hidden = element.dataset.elGroup.split(',').every(isHiddenEl); });
+  $$('[data-module]').forEach(element => { element.hidden = !moduleOn(element.dataset.module); });
+  $$('[data-module-group]').forEach(element => { element.hidden = element.dataset.moduleGroup.split(',').every(key => !moduleOn(key)); });
+  // Zóny se překreslí s nabídkou štítků podle metodiky; rozepsané hodnoty zůstanou.
+  renderZones(collectRows('#zoneList', '.zone-row', zoneFields));
+  renderPlanCustomFields();
+  syncPlanSections();
+  $('#tvIncludeDnControl').hidden = isHiddenEl('dn.swings');
+  renderDataLists();
+  renderTradeHead();
+  renderTradeTable();
+  renderReadiness();
+  updateAuditBanner();
+  if ($('#planDate').value) applySessionLocks();
+  schedulePlanRefresh();
+}
+
+async function loadWorkspace() {
+  try {
+    state.workspace = await api('workspace');
+  } catch (error) {
+    state.workspace = null;
+  }
+  applyWorkspace();
+}
 
 // ---------------------------------------------------------------------------
 // Náhled trhu: kalendář session. Všechno se počítá v pražském čase, RTH podle
@@ -245,7 +396,7 @@ function isoWeek(date) {
 }
 
 function sessionSchedule(sessionDate, market) {
-  const rth = zonedInstant(sessionDate, RTH_OPEN[String(market || '').trim().toUpperCase()] || '09:30', NEW_YORK);
+  const rth = zonedInstant(sessionDate, rthOpenFor(market), NEW_YORK);
   return {
     globex: zonedInstant(addDays(sessionDate, -1), '18:00', NEW_YORK),
     eu: zonedInstant(sessionDate, EU_OPEN, PRAGUE),
@@ -485,7 +636,15 @@ function vaContext(lowValue, highValue, context) {
 // ---------------------------------------------------------------------------
 // Řádky náhledu: zóny, levely, reference a scénáře.
 // ---------------------------------------------------------------------------
-const zoneSourceTokens = ['VAH', 'VAL', 'POC', 'nPOC', 'SP', 'Poor high', 'Poor low', 'Excess', 'LVN', 'HVN', 'IB', 'Weekly VA', 'Monthly VA', 'Composite', 'DiNapoli'];
+const MP_TOKENS = ['VAH', 'VAL', 'POC', 'nPOC', 'SP', 'Poor high', 'Poor low', 'Excess', 'LVN', 'HVN', 'IB', 'Weekly VA', 'Monthly VA', 'Composite'];
+const DN_TOKENS = ['F3', 'F5', 'COP', 'OP', 'XOP', 'Confluence', 'Agreement', '3x3', 'Fib node'];
+
+/** Štítky zdroje zóny podle metodiky tradera a jeho vlastních štítků. */
+function zoneTokens() {
+  const method = prefs().method;
+  const base = method === 'mp' ? MP_TOKENS : method === 'dn' ? DN_TOKENS : [...MP_TOKENS, ...DN_TOKENS];
+  return [...new Set([...base, ...(prefs().tokens_extra || [])])];
+}
 const zoneStatusLabels = { planned: 'Čeká', active: 'Aktivní', hit: 'Zasažena', invalid: 'Neplatná' };
 const refKinds = { single_print: 'Single prints', poor_high: 'Poor high', poor_low: 'Poor low', naked_poc: 'Naked POC', gap: 'Gap', excess: 'Excess / tail', lvn: 'LVN', other: 'Jiná reference' };
 const refTokens = { single_print: 'SP', poor_high: 'Poor high', poor_low: 'Poor low', naked_poc: 'nPOC', gap: 'Gap', excess: 'Excess', lvn: 'LVN', other: '' };
@@ -524,14 +683,14 @@ function zoneTemplate(zone = {}, index = 0) {
       <input type="hidden" name="direction" value="${direction}">
       <small class="dir-hint">Vyber směr a zobrazí se podmínky vstupu.</small>
     </div>
-    <div class="conditions">${condition('long', 'Long')}${condition('short', 'Short')}</div>
+    <div class="conditions" data-el="zones.conditions"${isHiddenEl('zones.conditions') ? ' hidden' : ''}>${condition('long', 'Long')}${condition('short', 'Short')}</div>
     ${legacy ? `<label class="row-extra legacy-trigger">Původní trigger (starší záznam)<input name="trigger" value="${escapeHtml(legacy)}"></label>` : '<input type="hidden" name="trigger" value="">'}
-    <div class="token-field">
+    <div class="token-field" data-el="zones.tokens"${isHiddenEl('zones.tokens') ? ' hidden' : ''}>
       <span class="field-label">Zdroj a konfluence</span>
-      <div class="chip-row">${zoneSourceTokens.map(token => `<button type="button" class="chip${tokens.includes(token) ? ' is-on' : ''}" data-token="${escapeHtml(token)}">${escapeHtml(token)}</button>`).join('')}</div>
+      <div class="chip-row">${zoneTokens().map(token => `<button type="button" class="chip${tokens.includes(token) ? ' is-on' : ''}" data-token="${escapeHtml(token)}">${escapeHtml(token)}</button>`).join('')}</div>
       <input name="source" value="${escapeHtml(zone.source)}" placeholder="Vyber výše nebo dopiš vlastní, oddělené čárkou">
     </div>
-    <div class="zone-grid-secondary">
+    <div class="zone-grid-secondary" data-el="zones.targets"${isHiddenEl('zones.targets') ? ' hidden' : ''}>
       <label class="span-2">Invalidace zóny<input name="invalidation" value="${escapeHtml(zone.invalidation)}" placeholder="Kde přestává zóna platit"></label>
       <label>SL<input type="number" step="any" name="stop_loss" value="${escapeHtml(zone.stop_loss)}"></label>
       <label>TP1<input type="number" step="any" name="tp1" value="${escapeHtml(zone.tp1)}"></label>
@@ -680,7 +839,7 @@ function updateZoneBadges() {
     $('[data-zone-metrics]', row).textContent = parts.join(' · ');
     const context = vaContext(low, high, state.weeklyContext);
     const badge = $('[data-va-context]', row);
-    badge.hidden = !context;
+    badge.hidden = !context || isHiddenEl('zones.context');
     badge.textContent = context?.text || '';
     badge.dataset.tone = context?.key || '';
   });
@@ -759,6 +918,165 @@ function refPricesToLevels() {
   if (!added && !updated) { toast('Nejdřív vyplň v kroku 2 aspoň jednu hodnotu profilu.', 'error'); return; }
   schedulePlanRefresh();
   toast(`Levely: ${added} přidáno${updated ? `, ${updated} aktualizováno` : ''}.`);
+}
+
+// ---------------------------------------------------------------------------
+// DiNapoli: swingy, Fibonacci úrovně a místa, kde se kryjí. Výpočet je ve
+// static/dinapoli.js a stejný na serveru (lib/workspace.php).
+// ---------------------------------------------------------------------------
+const DN_KIND_TITLES = { F3: 'F3 · .382', F5: 'F5 · .618', COP: 'COP · .618', OP: 'OP · 1.0', XOP: 'XOP · 1.618' };
+
+function dnSwingTemplate(swing = {}, index = 0) {
+  return `<article class="dn-swing plan-row">
+    <div class="dn-swing-grid">
+      <label>Swing<input name="label" maxlength="40" value="${escapeHtml(swing.label)}" placeholder="S${index + 1}"></label>
+      <label>A · začátek<input type="number" step="any" name="price_a" value="${escapeHtml(swing.price_a)}"></label>
+      <label>B · konec<input type="number" step="any" name="price_b" value="${escapeHtml(swing.price_b)}"></label>
+      <label>C · retracement<input type="number" step="any" name="price_c" value="${escapeHtml(swing.price_c)}" placeholder="pro cíle"></label>
+      <label class="grow">Poznámka<input name="note" maxlength="300" value="${escapeHtml(swing.note)}" placeholder="Timeframe, odkud swing je…"></label>
+    </div>
+    <div class="dn-swing-foot"><div class="dn-levels" data-dn-levels></div><div class="dn-swing-actions"><button class="mini-button" type="button" data-dn-to-levels>Do levelů</button><button class="remove-row" type="button" data-remove-dn>Odebrat</button></div></div>
+  </article>`;
+}
+
+function renderDnSwings(swings = []) {
+  $('#dnSwingList').innerHTML = swings.length
+    ? swings.map(dnSwingTemplate).join('')
+    : '<div class="empty-state compact">Přidej swing: A je začátek pohybu, B jeho konec. Aplikace dopočítá F3 a F5, s bodem C i cíle COP, OP a XOP, a sama najde confluence a agreement.</div>';
+}
+
+function dnSwings() {
+  return collectRows('#dnSwingList', '.dn-swing', ['label', 'price_a', 'price_b', 'price_c', 'note']);
+}
+
+function updateDnAnalysis() {
+  if (!window.DiNapoli) return;
+  const analysis = window.DiNapoli.analyze(dnSwings(), $('#dnTolerance').value);
+  state.dnAnalysis = analysis;
+  $('#dnTolerance').placeholder = analysis.auto_tolerance ? `auto ${displayPrice(analysis.auto_tolerance)}` : 'auto';
+  $$('#dnSwingList .dn-swing').forEach((row, index) => {
+    const levels = analysis.levels.filter(level => level.swing_index === index).sort((a, b) => Object.keys(DN_KIND_TITLES).indexOf(a.kind) - Object.keys(DN_KIND_TITLES).indexOf(b.kind));
+    const a = numberOrNull($('[name="price_a"]', row).value);
+    const b = numberOrNull($('[name="price_b"]', row).value);
+    const direction = a !== null && b !== null && a !== b ? (b > a ? 'up' : 'down') : '';
+    row.dataset.direction = direction;
+    $('[data-dn-levels]', row).innerHTML = levels.length
+      ? `<span class="dn-direction">${direction === 'up' ? '↗ swing nahoru' : '↘ swing dolů'}</span>${levels.map(level => `<span class="dn-level is-${level.group}" title="${escapeHtml(DN_KIND_TITLES[level.kind])}"><b>${escapeHtml(level.kind)}</b>${escapeHtml(displayPrice(level.price))}</span>`).join('')}`
+      : '<span class="muted">Doplň A a B.</span>';
+  });
+  const clusters = analysis.clusters;
+  $('#dnClusters').innerHTML = clusters.length
+    ? `<p class="subhead">Kde se úrovně kryjí<small>Tolerance ${escapeHtml(displayPrice(analysis.tolerance))} b${$('#dnTolerance').value ? '' : ' (automaticky 0,05 % ceny)'}</small></p>${clusters.map((cluster, index) => `<article class="dn-cluster${cluster.types.includes('agreement') ? ' is-agreement' : ''}">
+        <div><span class="dn-cluster-type">${cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence')).join(' + ')}</span><strong>${escapeHtml(cluster.low === cluster.high ? displayPrice(cluster.low) : `${displayPrice(cluster.low)} – ${displayPrice(cluster.high)}`)}</strong><small>${escapeHtml(cluster.members.join(' · '))}</small></div>
+        <button class="button button-small" type="button" data-dn-cluster="${index}">Udělat zónu</button>
+      </article>`).join('')}`
+    : (analysis.levels.length > 2 ? '<p class="section-hint">Úrovně z různých swingů se zatím nekryjí. Confluence vzniká, když se potkají retracementy dvou swingů, agreement při shodě retracementu s cílem expanze.</p>' : '');
+  const swingCount = new Set(analysis.levels.map(level => level.swing_index)).size;
+  $('#dnSummary').textContent = swingCount ? `${swingCount} ${swingCount === 1 ? 'swing' : swingCount < 5 ? 'swingy' : 'swingů'} · ${clusters.length ? `${clusters.length} ${clusters.length === 1 ? 'shoda' : clusters.length < 5 ? 'shody' : 'shod'}` : 'bez shody'}` : 'Retracementy, cíle a kde se kryjí';
+}
+
+function dnSwingToLevels(row) {
+  const index = $$('#dnSwingList .dn-swing').indexOf(row);
+  const levels = (state.dnAnalysis?.levels || []).filter(level => level.swing_index === index);
+  if (!levels.length) { toast('Nejdřív doplň u swingu A a B.', 'error'); return; }
+  const up = row.dataset.direction === 'up';
+  let added = 0;
+  let updated = 0;
+  levels.forEach(level => {
+    const title = `${level.swing} ${level.kind}`;
+    const kind = level.group === 'retracement' ? (up ? 'support' : 'resistance') : (up ? 'resistance' : 'support');
+    const existing = $$('.level-row').find(item => $('[name="name"]', item).value.trim() === title);
+    if (existing) {
+      $('[name="price"]', existing).value = level.price;
+      updated += 1;
+      return;
+    }
+    appendRow('#levelList', levelTemplate({ name: title, price: level.price, kind, source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted' }, $$('.level-row').length));
+    added += 1;
+  });
+  schedulePlanRefresh();
+  toast(`Levely: ${added} přidáno${updated ? `, ${updated} aktualizováno` : ''}.`);
+}
+
+function dnClusterToZone(cluster) {
+  const pad = Math.max((state.dnAnalysis?.tolerance || 0) / 2, 0);
+  const low = cluster.low === cluster.high ? cluster.low - pad : cluster.low;
+  const high = cluster.low === cluster.high ? cluster.high + pad : cluster.high;
+  const types = cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence'));
+  const kinds = [...new Set(cluster.members.map(member => member.split(' ').pop()))];
+  const zone = {
+    name: `${types.join(' + ')} ${displayPrice((low + high) / 2)}`,
+    price_low: Math.round(low * 1e4) / 1e4,
+    price_high: Math.round(high * 1e4) / 1e4,
+    source: [...types, ...kinds].join(', '),
+    invalidation: cluster.members.join(' + '),
+  };
+  const row = appendRow('#zoneList', zoneTemplate(zone, $$('.zone-row').length));
+  renumberRows();
+  schedulePlanRefresh();
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toast('Zóna je založená ze shody úrovní. Vyber směr a podmínky vstupu.');
+}
+
+function syncDnPatternChips() {
+  const selected = sourceTokens($('#dnPatterns').value);
+  $$('#dnPatternChips [data-dn-pattern]').forEach(chip => chip.classList.toggle('is-on', selected.includes(chip.dataset.dnPattern)));
+}
+
+/** Věty do pracovního závěru z DiNapoli části. */
+function dnConclusion(data) {
+  if (isHiddenEl('dn.trend') && isHiddenEl('dn.swings') && isHiddenEl('dn.patterns')) return [];
+  const parts = [];
+  const fast = data.dn_dma_3x3;
+  const slow = data.dn_dma_25x5;
+  if (fast && slow) {
+    if (fast === 'above' && slow === 'above') parts.push('Cena je nad 3x3 i 25x5 DMA: trend nahoru, hledej long z Fibonacci supportů.');
+    else if (fast === 'below' && slow === 'below') parts.push('Cena je pod 3x3 i 25x5 DMA: trend dolů, hledej short z Fibonacci rezistencí.');
+    else parts.push('3x3 a 25x5 DMA se neshodují: trh je v přechodu, obchoduj hlavně od shod úrovní.');
+  } else if (fast) {
+    parts.push(fast === 'above' ? 'Cena je nad 3x3 DMA.' : 'Cena je pod 3x3 DMA.');
+  }
+  if (data.dn_thrust === 'up') parts.push('Běží thrust nahoru; první návrat k F3 nebo F5 bývá nejlepší místo pro long.');
+  if (data.dn_thrust === 'down') parts.push('Běží thrust dolů; první návrat k F3 nebo F5 bývá nejlepší místo pro short.');
+  const clusters = state.dnAnalysis?.clusters || [];
+  if (clusters.length && !isHiddenEl('dn.swings')) {
+    parts.push(`Nejsilnější Fibonacci místa: ${clusters.slice(0, 3).map(cluster => `${cluster.types.includes('agreement') ? 'agreement' : 'confluence'} ${cluster.low === cluster.high ? displayPrice(cluster.low) : `${displayPrice(cluster.low)}–${displayPrice(cluster.high)}`}`).join(', ')}.`);
+  }
+  const patterns = sourceTokens(data.dn_patterns);
+  if (patterns.length && !isHiddenEl('dn.patterns')) parts.push(`Sleduješ vzory: ${patterns.join(', ')}.`);
+  return parts;
+}
+
+function bindDnEvents() {
+  $('#addDnSwing').addEventListener('click', () => {
+    const row = appendRow('#dnSwingList', dnSwingTemplate({}, $$('#dnSwingList .dn-swing').length));
+    $('[name="price_a"]', row).focus();
+    schedulePlanRefresh();
+  });
+  $('#dnSwingList').addEventListener('click', event => {
+    const row = event.target.closest('.dn-swing');
+    if (!row) return;
+    if (event.target.closest('[data-remove-dn]')) {
+      row.remove();
+      if (!$$('#dnSwingList .dn-swing').length) renderDnSwings([]);
+      schedulePlanRefresh();
+    }
+    if (event.target.closest('[data-dn-to-levels]')) dnSwingToLevels(row);
+  });
+  $('#dnClusters').addEventListener('click', event => {
+    const button = event.target.closest('[data-dn-cluster]');
+    const cluster = button ? state.dnAnalysis?.clusters?.[Number(button.dataset.dnCluster)] : null;
+    if (cluster) dnClusterToZone(cluster);
+  });
+  $('#dnPatternChips').addEventListener('click', event => {
+    const chip = event.target.closest('[data-dn-pattern]');
+    if (!chip) return;
+    const selected = sourceTokens($('#dnPatterns').value);
+    const next = selected.includes(chip.dataset.dnPattern) ? selected.filter(item => item !== chip.dataset.dnPattern) : [...selected, chip.dataset.dnPattern];
+    $('#dnPatterns').value = next.join(', ');
+    syncDnPatternChips();
+    schedulePlanRefresh();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -855,7 +1173,6 @@ function buildConclusion() {
   if (data.value_area === 'rising' && data.vpoc === 'rising') parts.push('Value i POC migrují výš, preferovaný je long scénář.');
   else if (data.value_area === 'falling' && data.vpoc === 'falling') parts.push('Value i POC migrují níž, preferovaný je short scénář.');
   else if (data.value_area || data.vpoc) parts.push('Migrace value a POC není v souladu; směrová výhoda je slabší.');
-  else if (!frames.length) parts.push('Doplň bias, profil a migraci value.');
 
   if (shapeNotes[data.profile_shape]) parts.push(shapeNotes[data.profile_shape]);
   if (closeNotes[data.previous_close]) parts.push(closeNotes[data.previous_close]);
@@ -879,9 +1196,11 @@ function buildConclusion() {
     const grouped = open.reduce((acc, ref) => { acc[refKinds[ref.kind] || ref.kind] = (acc[refKinds[ref.kind] || ref.kind] || 0) + 1; return acc; }, {});
     parts.push(`Na dojetí zůstává: ${Object.entries(grouped).map(([name, count]) => (count > 1 ? `${count}× ${name}` : name)).join(', ')}.`);
   }
+  parts.push(...dnConclusion(data));
   if (data.initial_balance === 'small') parts.push('Menší IB nechává prostor pro range extension.');
   if (String(data.initial_balance || '').startsWith('large')) parts.push('Velká IB mohla spotřebovat velkou část denního rozpětí; sleduj přechod do rotace.');
 
+  if (!parts.length) parts.push(prefs().method === 'dn' ? 'Doplň bias a trend podle DMA.' : 'Doplň bias, profil a migraci value.');
   $('#workingConclusion').textContent = parts.join(' ');
 }
 
@@ -889,19 +1208,41 @@ function planSectionState() {
   const data = planFieldValues();
   const filled = keys => keys.filter(key => String(data[key] ?? '').trim()).length;
   const zones = collectRows('#zoneList', '.zone-row', zoneFields);
-  const readyZones = zones.filter(zone => zone.price_low && zone.price_high && zone.direction && !missingZoneConditions([zone]).length);
-  const gated = $$('#planForm [data-gate]');
+  const conditionsOn = !isHiddenEl('zones.conditions');
+  const readyZones = zones.filter(zone => zone.price_low && zone.price_high && zone.direction && (!conditionsOn || !missingZoneConditions([zone]).length));
+  const gated = $$('#planForm [data-gate]').filter(label => !label.hidden);
   const open = gated.filter(label => !label.classList.contains('is-locked'));
-  const biasKeys = planType() === 'weekly' ? ['pa_monthly', 'pa_weekly', 'mp_weekly'] : ['pa_monthly', 'pa_weekly', 'pa_daily', 'mp_weekly', 'mp_daily'];
-  return {
-    structure: filled(biasKeys) / biasKeys.length,
-    profile: (filled(['profile_shape', 'previous_close', 'value_area', 'vpoc', 'auction']) + (data.ref_vah && data.ref_val ? 1 : 0)) / 6,
+  const weekly = planType() === 'weekly';
+  const biasKeys = [
+    ...(isHiddenEl('bias.pa') ? [] : weekly ? ['pa_monthly', 'pa_weekly'] : ['pa_monthly', 'pa_weekly', 'pa_daily']),
+    ...(isHiddenEl('bias.mp') ? [] : weekly ? ['mp_weekly'] : ['mp_weekly', 'mp_daily']),
+  ];
+  const average = values => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null);
+  const profile = [];
+  if (!isHiddenEl('profile.shape')) profile.push(data.profile_shape ? 1 : 0);
+  if (!isHiddenEl('profile.close')) profile.push(data.previous_close ? 1 : 0);
+  if (!isHiddenEl('profile.values')) profile.push(data.ref_vah && data.ref_val ? 1 : 0);
+  if (!isHiddenEl('profile.auction')) profile.push(filled(['value_area', 'vpoc', 'auction']) / 3);
+  const dn = [];
+  if (!isHiddenEl('dn.trend')) dn.push(Math.min(1, filled(['dn_dma_3x3', 'dn_dma_7x5', 'dn_dma_25x5', 'dn_thrust']) / 2));
+  if (!isHiddenEl('dn.swings')) dn.push((state.dnAnalysis?.levels || []).length ? 1 : 0);
+  const customFields = activeFields('plan');
+  const result = {
+    structure: biasKeys.length ? filled(biasKeys) / biasKeys.length : null,
+    profile: average(profile),
     refs: $$('.ref-row').length ? 1 : null,
+    dinapoli: average(dn),
     open: open.length ? open.filter(label => $('select', label).value).length / open.length : null,
     zones: zones.length ? (readyZones.length ? Math.min(1, 0.5 + readyZones.length / zones.length / 2) : 0.25) : 0,
     ideas: $$('.idea-row').length ? 1 : 0,
+    custom: customFields.length ? customFields.filter(field => String(data[`cf_${field.id}`] ?? '').trim() !== '').length / customFields.length : null,
     bias: ((data.bias && data.bias !== 'neutral') || data.bias_description.trim() ? 0.5 : 0) + (data.bias_invalidation.trim() || data.no_trade_conditions.trim() ? 0.5 : 0),
   };
+  // Skryté části se do připravenosti nepočítají.
+  Object.keys(result).forEach(key => {
+    if ($(`#planForm [data-section="${key}"]`)?.hidden) result[key] = null;
+  });
+  return result;
 }
 
 function updatePlanProgress() {
@@ -925,6 +1266,7 @@ function schedulePlanRefresh() {
 }
 
 function refreshPlanInsights() {
+  updateDnAnalysis();
   if (planType() === 'weekly') state.weeklyContext = contextFromForm();
   renderWeeklyContext();
   updateAlignment();
@@ -1003,6 +1345,15 @@ function renderPriceMap() {
     else items.push({ type: 'line', cls: 'pm-ref', price: low ?? high, label });
   });
 
+  if (!isHiddenEl('dn.swings')) {
+    (state.dnAnalysis?.clusters || []).forEach(cluster => {
+      const pad = Math.max((state.dnAnalysis.tolerance || 0) / 2, 0);
+      items.push({ type: 'band', cls: 'pm-cluster', low: cluster.low - pad, high: cluster.high + pad, label: cluster.types.includes('agreement') ? 'Agreement' : 'Confluence' });
+    });
+    (state.dnAnalysis?.levels || []).forEach(level => {
+      items.push({ type: 'line', cls: level.group === 'retracement' ? 'pm-fib' : 'pm-objective', price: level.price, label: `${level.swing} ${level.kind}` });
+    });
+  }
   const prices = items.flatMap(item => (item.type === 'zone' || item.type === 'band' ? [item.low, item.high] : [item.price]));
   if (!prices.length) {
     root.innerHTML = '<div class="empty-state compact">Zadej ceny profilu, zón nebo levelů a uvidíš je tady na jedné ose.</div>';
@@ -1075,6 +1426,8 @@ function serializePlan() {
   data.levels = collectRows('#levelList', '.level-row', ['name', 'price', 'kind', 'source', 'line_style', 'note']);
   data.ideas = collectRows('#ideaList', '.idea-row', ['name', 'direction', 'zone_name', 'trigger', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'final_tp', 'rr', 'status', 'notes']);
   data.refs = collectRows('#refList', '.ref-row', ['kind', 'price_low', 'price_high', 'status', 'note']);
+  data.dn_swings = collectRows('#dnSwingList', '.dn-swing', ['label', 'price_a', 'price_b', 'price_c', 'note']);
+  data.custom = extractCustomValues(data, 'plan');
   return data;
 }
 
@@ -1083,7 +1436,7 @@ async function savePlan({ quiet = false } = {}) {
   if (!payload.plan_date || !payload.market) throw new Error('Doplň datum a trh.');
   // Každý obchodovaný směr musí mít definici vstupu i toho, kdy obchod nebrat.
   // Rozpracovaný náhled se uloží i bez ní, připravený ne.
-  const missing = missingZoneConditions(payload.zones);
+  const missing = isHiddenEl('zones.conditions') ? [] : missingZoneConditions(payload.zones);
   if (missing.length && payload.status === 'ready') {
     updateZoneBadges();
     throw new Error(`Připravený náhled potřebuje u každého směru podmínky. Chybí: ${missing.join('; ')}.`);
@@ -1143,10 +1496,23 @@ function tradingViewSettings() {
 const REF_PINE_COLOR = 'color.rgb(167, 139, 250)';
 const PROFILE_PINE_COLOR = 'color.rgb(122, 162, 255)';
 
+const DN_RETRACEMENT_PINE_COLOR = 'color.rgb(63, 211, 161)';
+const DN_OBJECTIVE_PINE_COLOR = 'color.rgb(214, 179, 111)';
+
 function tradingViewItems() {
   const zones = collectRows('#zoneList', '.zone-row', ['name', 'direction', 'price_low', 'price_high', 'source']);
   const levels = collectRows('#levelList', '.level-row', ['name', 'price', 'kind', 'source', 'line_style']);
-  if (!$('#tvIncludeRefs').checked) return { zones, levels };
+  if ($('#tvIncludeDn').checked && !isHiddenEl('dn.swings') && state.dnAnalysis) {
+    const pad = Math.max(state.dnAnalysis.tolerance / 2, 0);
+    state.dnAnalysis.clusters.forEach(cluster => {
+      const name = cluster.types.includes('agreement') ? 'Agreement' : 'Confluence';
+      zones.push({ name, direction: '', price_low: cluster.low - pad, price_high: cluster.high + pad, source: cluster.members.join(' + '), pine_color: DN_OBJECTIVE_PINE_COLOR });
+    });
+    state.dnAnalysis.levels.forEach(level => {
+      levels.push({ name: `${level.swing} ${level.kind}`, price: level.price, kind: '', source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted', pine_color: level.group === 'retracement' ? DN_RETRACEMENT_PINE_COLOR : DN_OBJECTIVE_PINE_COLOR });
+    });
+  }
+  if (!$('#tvIncludeRefs').checked || isHiddenEl('profile.values')) return { zones, levels };
   const names = new Set(levels.map(level => level.name.trim()));
   const prefix = planType() === 'weekly' ? 'PW' : 'PD';
   [['ref_high', 'High'], ['ref_vah', 'VAH'], ['ref_poc', 'POC'], ['ref_val', 'VAL'], ['ref_low', 'Low']].forEach(([name, label]) => {
@@ -1253,7 +1619,7 @@ function resetPlan({ type = planType(), date = null, market = null } = {}) {
   setPlanType(type);
   $('#planId').value = '';
   $('#planDate').value = date || defaultPlanDate(type);
-  $('#planMarket').value = market || $('#globalMarket').value || lastMarket || 'ES';
+  $('#planMarket').value = market || $('#globalMarket').value || lastMarket || prefs().defaults?.market || marketList()[0]?.symbol || 'ES';
   $('#planSession').value = tradeTypeLabel(null);
   $('#closeLegacyOption').hidden = true;
   $('#closeLadderHint').textContent = 'Vyplň Close, VAH, POC a VAL a poloha se doplní sama.';
@@ -1266,6 +1632,9 @@ function resetPlan({ type = planType(), date = null, market = null } = {}) {
   renderIdeas([]);
   renderLevels([]);
   renderRefs([]);
+  renderDnSwings([]);
+  syncDnPatternChips();
+  renderPlanCustomFields({});
   renderScreenshots();
   onPlanTypeChange();
   refreshPlanInsights();
@@ -1293,6 +1662,9 @@ async function loadPlan(id) {
   renderIdeas(plan.ideas || []);
   renderLevels(plan.levels || []);
   renderRefs(plan.refs || []);
+  renderDnSwings(plan.dn_swings || []);
+  syncDnPatternChips();
+  renderPlanCustomFields(plan.custom || {});
   renderScreenshots();
   activateView('plan');
   onPlanTypeChange();
@@ -1429,11 +1801,16 @@ function renderReadiness(data = state.readinessData) {
       action: '<button class="mini-button" type="button" data-open-view="accounts">Účty</button>',
     },
   ];
-  const core = items.slice(0, 3).filter(item => item.tone === 'done').length;
+  // Moduly, které trader skryl, se v připravenosti neukazují.
+  const modules = [null, null, 'psyche', 'calendar', 'accounts'];
+  const visible = items.filter((item, index) => !modules[index] || moduleOn(modules[index]));
+  const coreItems = visible.filter((item, index) => items.indexOf(item) < 3);
+  const core = coreItems.filter(item => item.tone === 'done').length;
   $('#readinessTitle').textContent = `Připravenost na ${prettyDate(session)}`;
-  $('#readinessScore').textContent = `${core} ze 3 hotovo`;
-  $('#readinessScore').className = `readiness-score${core === 3 ? ' is-done' : ''}`;
-  $('#readinessGrid').innerHTML = items.map(item => `<article class="ready-item is-${item.tone}">
+  $('#readinessScore').textContent = `${core} ze ${coreItems.length} hotovo`;
+  $('#readinessScore').className = `readiness-score${core === coreItems.length ? ' is-done' : ''}`;
+  $('#readinessGrid').dataset.count = String(visible.length);
+  $('#readinessGrid').innerHTML = visible.map(item => `<article class="ready-item is-${item.tone}">
     <i aria-hidden="true"></i>
     <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div>
     ${item.action}
@@ -1555,7 +1932,37 @@ function renderStrategyChart(chart) {
   $('#strategyChartCaption').textContent = `${visible.length} strategií · ${dates.length} obchodních dnů`;
 }
 
+function renderCustomStats(items) {
+  const surface = $('#customStatsSurface');
+  const useful = items.filter(item => item.rows.length);
+  surface.hidden = !activeFields('trade').some(field => ['bool', 'select', 'rating', 'number'].includes(field.kind));
+  if (surface.hidden) return;
+  if (!useful.length) {
+    $('#customFieldStats').innerHTML = '<div class="empty-state compact">Až budeš u obchodů vyplňovat svá pole, uvidíš tady, při jaké hodnotě ti trh platí nejvíc.</div>';
+    return;
+  }
+  $('#customFieldStats').innerHTML = useful.map(item => {
+    const max = Math.max(...item.rows.map(row => Math.abs(row.avg_r)), 0.01);
+    const best = item.rows.filter(row => row.trades >= 3).sort((a, b) => b.avg_r - a.avg_r)[0];
+    return `<article class="custom-stat">
+      <header><strong>${escapeHtml(item.field.label)}</strong><span class="muted">${item.samples} obchodů${best && item.rows.length > 1 ? ` · nejlépe „${escapeHtml(best.value)}“ ${signedR(best.avg_r)}` : ''}</span></header>
+      <div class="custom-stat-rows">${item.rows.map(row => `<div class="custom-stat-row">
+        <span class="value">${escapeHtml(row.value)}</span>
+        <span class="bar"><i class="${row.avg_r >= 0 ? 'is-positive' : 'is-negative'}" data-width="${Math.round(Math.abs(row.avg_r) / max * 50)}"></i></span>
+        <strong class="${row.avg_r >= 0 ? 'value-positive' : 'value-negative'}">${signedR(row.avg_r)}</strong>
+        <small>${row.trades} obch. · celkem ${signedR(row.total_r)}${row.profit_factor != null ? ` · PF ${displayNumber(row.profit_factor)}` : ''}${row.plan_adherence != null ? ` · plán ${row.plan_adherence} %` : ''}</small>
+      </div>`).join('')}</div>
+    </article>`;
+  }).join('');
+  $$('#customFieldStats .bar i').forEach(bar => {
+    bar.style.width = `${bar.dataset.width}%`;
+    if (bar.classList.contains('is-negative')) bar.style.marginLeft = `${50 - Number(bar.dataset.width)}%`;
+    else bar.style.marginLeft = '50%';
+  });
+}
+
 async function refreshStrategyStats() {
+  api('custom_field_stats').then(result => renderCustomStats(result.items || [])).catch(() => { $('#customStatsSurface').hidden = true; });
   try {
     const result = await api('strategy_stats');
     renderStrategyChart(result.chart);
@@ -2208,7 +2615,7 @@ function updateAuditBanner() {
   const banner = $('#auditBanner');
   const flag = $('#navAuditFlag');
 
-  banner.hidden = due.length === 0 && soon.length === 0;
+  banner.hidden = !moduleOn('accounts') || (due.length === 0 && soon.length === 0);
   flag.hidden = banner.hidden;
   banner.classList.toggle('is-soon', due.length === 0 && soon.length > 0);
   flag.classList.toggle('is-soon', due.length === 0 && soon.length > 0);
@@ -2357,7 +2764,7 @@ function computeTrade(data) {
   const stop = numberOrNull(data.stop_loss);
   const risk = numberOrNull(data.risk_amount);
   const fees = numberOrNull(data.fees) ?? 0;
-  const pointValue = marketPointValue[String(data.market ?? '').trim().toUpperCase()] ?? null;
+  const pointValue = pointValueFor(data.market);
 
   if (entry === null || stop === null || entry === stop) return { error: 'Doplň entry a stop loss, ať jde spočítat výsledek.' };
   if (risk === null || risk <= 0) return { error: 'Doplň risk na trade v dolarech; z něj se počítá celý výsledek i R.' };
@@ -2434,8 +2841,10 @@ function setEmotions(value) {
 }
 
 function renderDataLists() {
-  const markets = [...new Set([...defaultMarkets, ...state.trades.map(item => item.market), ...state.plans.map(item => item.market)]
-    .map(value => String(value ?? '').trim()).filter(Boolean))].sort();
+  // Vlastní trhy první v pořadí z nastavení, pak ostatní použité v deníku.
+  const own = marketList().map(item => item.symbol);
+  const used = [...state.trades.map(item => item.market), ...state.plans.map(item => item.market)].map(value => String(value ?? '').trim()).filter(Boolean);
+  const markets = [...new Set([...own, ...used.filter(value => !own.includes(value)).sort()])];
   $('#marketOptions').innerHTML = markets.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
 
   const sessions = [...new Set([...defaultSessions, ...state.trades.map(item => tradeTypeLabel(item.session)), ...state.plans.map(item => tradeTypeLabel(item.session))].filter(Boolean))];
@@ -2455,9 +2864,33 @@ function filteredTrades() {
   return state.trades.filter(trade => (!market || trade.market === market) && (!search || `${trade.strategy} ${trade.notes} ${trade.mistake}`.toLocaleLowerCase('cs').includes(search)));
 }
 
+function tableFields() {
+  return activeFields('trade').filter(field => field.in_table);
+}
+
+function customCell(field, trade) {
+  let values = {};
+  try { values = JSON.parse(trade.custom || '{}') || {}; } catch (error) { values = {}; }
+  const value = values[field.id];
+  if (value === undefined || value === null || value === '') return '<td class="muted">—</td>';
+  if (field.kind === 'bool') return `<td class="${value ? 'value-positive' : 'value-negative'}">${value ? 'Ano' : 'Ne'}</td>`;
+  if (field.kind === 'rating') return `<td>${escapeHtml(value)} / 5</td>`;
+  return `<td>${escapeHtml(value)}</td>`;
+}
+
+function renderTradeHead() {
+  const strategy = isHiddenEl('trade.strategy') ? '' : '<th>Setup</th>';
+  const plan = isHiddenEl('trade.followed') ? '' : '<th>Plán</th>';
+  $('#tradeHead').innerHTML = `<tr><th>Datum</th><th>Trh</th>${strategy}<th>Směr</th><th class="num">Entry / Exit</th><th class="num">R</th><th class="num">P&amp;L</th>${plan}${tableFields().map(field => `<th>${escapeHtml(field.label)}</th>`).join('')}<th></th></tr>`;
+}
+
 function renderTradeTable() {
   const rows = filteredTrades();
-  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td><td>${escapeHtml(trade.strategy || '—')}</td><td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${displayNumber(trade.entry_price)} / ${displayNumber(trade.exit_price)}</td><td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td><td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td><td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td><td>${sharedMark('trade', trade.id)}<button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button>${shareButton('trade', trade.id)}<button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Žádné obchody odpovídající filtru.</td></tr>';
+  const fields = tableFields();
+  const strategyOn = !isHiddenEl('trade.strategy');
+  const planOn = !isHiddenEl('trade.followed');
+  const columns = 7 + (strategyOn ? 1 : 0) + (planOn ? 1 : 0) + fields.length;
+  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td>${strategyOn ? `<td>${escapeHtml(trade.strategy || '—')}</td>` : ''}<td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${displayNumber(trade.entry_price)} / ${displayNumber(trade.exit_price)}</td><td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td><td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td>${planOn ? `<td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td>` : ''}${fields.map(field => customCell(field, trade)).join('')}<td>${sharedMark('trade', trade.id)}<button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button>${shareButton('trade', trade.id)}<button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || `<tr><td colspan="${columns}" class="muted">Žádné obchody odpovídající filtru.</td></tr>`;
 }
 
 async function refreshTrades() {
@@ -2482,16 +2915,22 @@ async function openTrade(trade = null) {
   renderStrategyOptions('');
   renderAccountOptions();
   form.elements.plan_id.value = trade?.plan_id || state.currentPlan?.id || '';
-  form.elements.account_id.value = state.accounts.length === 1 ? String(state.accounts[0].id) : '';
+  const defaults = prefs().defaults || {};
+  const defaultAccount = defaults.account_id && state.accounts.some(account => account.id === defaults.account_id) ? String(defaults.account_id) : '';
+  form.elements.account_id.value = defaultAccount || (state.accounts.length === 1 ? String(state.accounts[0].id) : '');
+  if (!trade && defaults.risk) form.elements.risk_amount.value = defaults.risk;
   if (trade) {
     setFormValues(form, trade);
     form.elements.strategy_id.value = trade.strategy_id ? String(trade.strategy_id) : '';
     form.elements.account_id.value = trade.account_id ? String(trade.account_id) : '';
   }
   form.elements.trade_date.value = trade?.trade_date || today();
-  form.elements.market.value = trade?.market || $('#globalMarket').value || state.currentPlan?.market || 'ES';
-  form.elements.session.value = tradeTypeLabel(trade?.session);
-  form.elements.fees.value = trade?.fees ?? 0;
+  form.elements.market.value = trade?.market || $('#globalMarket').value || state.currentPlan?.market || defaults.market || marketList()[0]?.symbol || 'ES';
+  form.elements.session.value = trade ? tradeTypeLabel(trade.session) : (defaults.session || tradeTypeLabel(null));
+  form.elements.fees.value = trade?.fees ?? defaults.fees ?? 0;
+  let customValues = {};
+  try { customValues = JSON.parse(trade?.custom || '{}') || {}; } catch (error) { customValues = {}; }
+  renderTradeCustomFields(customValues);
   form.elements.result_r.value = roundedFieldValue(trade?.result_r);
   form.elements.result_usd.value = roundedFieldValue(trade?.result_usd);
   setEmotions(trade?.emotion);
@@ -2516,6 +2955,7 @@ async function saveTrade() {
   payload.strategy_id = payload.strategy_id && payload.strategy_id !== '__new' ? Number(payload.strategy_id) : null;
   payload.account_id = payload.account_id ? Number(payload.account_id) : null;
   payload.emotion = selectedEmotions().join(',');
+  payload.custom = extractCustomValues(payload, 'trade');
   try {
     const trade = await api('trade', { method: 'POST', body: payload });
     const files = [...$('#tradeScreenshots').files];
@@ -2592,6 +3032,7 @@ function enableRadioToggle(root) {
 function bindPlanEvents() {
   const form = $('#planForm');
   enableRadioToggle(form);
+  enableRadioToggle($('#tradeForm'));
   // Lišta náhledu se může zalomit do dvou řádků; kroky pod ní se podle toho posunou.
   if ('ResizeObserver' in window) {
     const toolbar = $('.plan-toolbar');
@@ -2708,7 +3149,7 @@ function bindPlanEvents() {
     try { await copyTradingViewCode(); } catch (error) { toast('Kód se nepodařilo zkopírovat.', 'error'); }
   });
   $('#downloadTradingViewZones').addEventListener('click', downloadTradingViewCode);
-  ['tvShowLabels', 'tvIncludeSource', 'tvIncludeRefs', 'tvExtendMode'].forEach(id => $(`#${id}`).addEventListener('change', refreshTradingViewExport));
+  ['tvShowLabels', 'tvIncludeSource', 'tvIncludeRefs', 'tvIncludeDn', 'tvExtendMode'].forEach(id => $(`#${id}`).addEventListener('change', refreshTradingViewExport));
   $('#tvFillTransparency').addEventListener('input', refreshTradingViewExport);
   $('#tradingViewDialog').addEventListener('click', event => { if (event.target === $('#tradingViewDialog')) $('#tradingViewDialog').close(); });
 
@@ -3011,7 +3452,10 @@ async function init() {
   bindEvents();
   bindWallEvents();
   bindMemberEvents();
+  bindDnEvents();
+  bindSettingsEvents();
   applyHues(document);
+  await loadWorkspace();
   resetPlan({ type: 'daily' });
   // Pole otevření se odemykají podle času, i když necháš náhled otevřený.
   setInterval(() => {
@@ -3020,6 +3464,7 @@ async function init() {
   await checkHealth();
   await refreshShares();
   await Promise.all([refreshDashboard(), refreshPlans(), refreshTrades(), refreshStrategies(), refreshAccounts(), refreshMe()]);
+  if (state.workspace && !prefs().onboarded) openOnboarding();
 }
 
 init();

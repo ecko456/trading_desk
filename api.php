@@ -151,6 +151,35 @@ try {
         json_response(['registration_open' => registration_open()]);
     }
 
+    /* ---------- přizpůsobené prostředí */
+
+    if ($action === 'workspace' && $method === 'GET') {
+        json_response(['prefs' => workspace(), 'fields' => custom_fields(), 'registry' => workspace_registry()]);
+    }
+
+    if ($action === 'workspace' && $method === 'POST') {
+        json_response(['prefs' => save_workspace(request_json())]);
+    }
+
+    if ($action === 'custom_field' && $method === 'POST') {
+        json_response(['field' => save_custom_field(request_json()), 'fields' => custom_fields()]);
+    }
+
+    if ($action === 'custom_field_move' && $method === 'POST') {
+        $data = request_json();
+        move_custom_field((int)($data['id'] ?? 0), (int)($data['delta'] ?? 0));
+        json_response(['fields' => custom_fields()]);
+    }
+
+    if ($action === 'custom_field' && $method === 'DELETE') {
+        delete_custom_field((int)($_GET['id'] ?? 0));
+        json_response(['fields' => custom_fields()]);
+    }
+
+    if ($action === 'custom_field_stats' && $method === 'GET') {
+        json_response(['items' => custom_field_statistics()]);
+    }
+
     /* ---------- deník přihlášeného uživatele */
 
     if ($action === 'plans' && $method === 'GET') {
@@ -447,6 +476,9 @@ try {
             'levels' => fetch_all('SELECT * FROM levels ORDER BY plan_id, sort_order, id'),
             'ideas' => fetch_all('SELECT * FROM ideas ORDER BY plan_id, sort_order, id'),
             'plan_refs' => fetch_all('SELECT * FROM plan_refs ORDER BY plan_id, sort_order, id'),
+            'plan_dn_swings' => fetch_all('SELECT * FROM plan_dn_swings ORDER BY plan_id, sort_order, id'),
+            'custom_fields' => fetch_all('SELECT * FROM custom_fields ORDER BY scope, sort_order, id'),
+            'workspace' => workspace(),
             'strategies' => fetch_all('SELECT * FROM strategies ORDER BY name COLLATE NOCASE'),
             'accounts' => fetch_all('SELECT * FROM accounts ORDER BY name COLLATE NOCASE'),
             'calendar_events' => fetch_all('SELECT * FROM calendar_events ORDER BY event_date, id'),

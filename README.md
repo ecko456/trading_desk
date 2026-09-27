@@ -8,6 +8,9 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - **šifrovaný deník na přání**: místo hesla přístupový klíč, deník i screenshoty jsou na disku zašifrované a správce je nepřečte,
 - **společná nástěnka**: sdílení náhledů, obchodů a strategií, vlastní příspěvky s grafy, komentáře a reakce,
 - **správa členů**: schvalování, blokace, role správce, obnova hesla, uzavření registrací,
+- **prostředí na míru**: každý trader si v Nastavení zvolí metodiku (Market Profile, DiNapoli nebo obojí), zapne jen ty prvky náhledu a zápisu obchodu, které používá, přidá vlastní pole, vlastní trhy s hodnotou bodu, výchozí hodnoty a moduly v menu,
+- **DiNapoli kalkulačka**: Fibonacci F3 a F5, cíle COP, OP a XOP, automatické hledání confluence a agreement, trend podle DMA 3x3, 7x5 a 25x5 a vzory (Double Repo, Railroad Tracks, Single Penetration…),
+- **vlastní pole a jejich rozbor**: ano/ne, výběr, hodnocení 1–5, číslo i text; u obchodů aplikace spočítá, jak se ti daří podle každé hodnoty,
 - **týdenní i denní náhled** trhu postavený pro Market Profile: bias z price action (Monthly, Weekly, Daily) a z MP/VP (Weekly, Daily), tvar profilu P, b, D, B, poloha close vůči value, reference na dojetí (single prints, poor high/low, naked POC…),
 - pole o otevření trhu (Globex, EU, RTH, typ otevření, Initial Balance) jsou zamčená, dokud jejich čas nenastane; o víkendu se náhled sám nastaví na pondělí,
 - zóny se směrem long, short nebo obojí a s definicí, co se musí splnit pro vstup a kdy obchod nebrat, zvlášť pro každý směr,
@@ -25,7 +28,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - knihovnu strategií a setupů s timeframem, charakterem systému a ukázkovými grafy,
 - obchodní účty s pevným vstupním stavem konta a riskem na den,
 - Money audit, který každých 30 dní ověří, jestli jsou zapsané všechny obchody,
-- obchodní deník s automatickým výpočtem P&L a R pro ES, NQ, GC, CL a 6E,
+- obchodní deník s automatickým výpočtem P&L a R pro ES, NQ, GC, CL, 6E a vlastní trhy,
 - přehled s připraveností na nejbližší session (týdenní a denní náhled, test psychiky, red news, Money audit), průměrem R na obchod, profit factorem, dodržením plánu a equity v R,
 - historie denních i týdenních náhledů,
 - PDF, které nahoře ukáže bias, pod ním krátký popis trhu a potom zóny s podmínkami,
@@ -130,6 +133,43 @@ Co šifrování nechrání: správce serveru, který by upravil kód aplikace a 
 Náhled, obchod nebo strategii sdílíš tlačítkem **Sdílet** v náhledu, deníku, historii nebo u strategie, případně na nástěnce přes **Sdílet z deníku**. Na nástěnku se uloží **snímek** v okamžiku sdílení: šifrovaný deník zůstane šifrovaný a na nástěnce je jen to, co jsi výslovně zveřejnil. U obchodu se částky v dolarech a poznámky s emocemi sdílí, jen když je zaškrtneš; jinak ostatní vidí výsledek v R. Opětovné sdílení snímek aktualizuje a komentáře zůstanou.
 
 Na nástěnku jde psát i vlastní příspěvky s až šesti grafy. Pod každým příspěvkem jsou komentáře a reakce (Líbí se, Silné, Přesné, Zajímavé). Autor může mazat komentáře pod svým příspěvkem, správce moderuje celou nástěnku. V menu se ukazuje počet nových příspěvků od poslední návštěvy.
+
+## Nastavení: prostředí na míru
+
+Každý člen má vlastní **Nastavení** (v menu *Můj desk*). Při prvním přihlášení se otevře krátký průvodce: metodika, trhy, výchozí risk a moduly. Spustit ho jde znovu kdykoli v Nastavení → Moduly.
+
+- **Metodika**: Market Profile, DiNapoli, nebo obojí. Podle volby se náhled trhu sám upraví: DiNapoli skryje profil, reference a otevření podle Daltona a přidá DiNapoli kalkulačku; Market Profile ji naopak schová. Tvoje ruční volby prvků, které k metodice nepatří, zůstanou.
+- **Náhled trhu**: vypínače pro každý prvek náhledu (bias z price action, bias z MP, tvar profilu, hodnoty profilu, reference, trend podle DMA, swingy, vzory, otevření, časová osa, podmínky zón, štítky, TP, levely, scénáře, grafy a pravý panel). Skryté části se nezobrazují, nepočítají se do připravenosti a už vyplněná data zůstanou uložená. Vedle je živý náhled, jak bude formulář vypadat. Štítky zón (VAH, F5, COP…) jde doplnit o vlastní.
+- **Zápis obchodu**: vypínače polí dialogu obchodu (účet, session, strategie, TP, poplatky, dodržení plánu, hodnocení, emoce, chyba, poznámky, screenshoty) a výchozí hodnoty pro nový obchod: trh, session, risk, poplatky a účet.
+- **Vlastní pole**: pro obchod i pro náhled. Typy *ano / ne*, *výběr z možností*, *hodnocení 1–5*, *číslo*, *krátký* a *delší text*. Pole jde přejmenovat, přesunout, archivovat (hodnoty zůstanou) nebo smazat. Pole obchodu můžeš zobrazit jako sloupec v deníku. Nápady jedním kliknutím: *Čekal jsem na potvrzení*, *Kvalita setupu A+/A/B*, *Soulad s vyšším TF*…
+- **Moje trhy**: symboly, hodnota bodu (pro výpočet velikosti pozice a R) a čas RTH open v New Yorku (pro časovou osu a zamykání polí). Základní trhy ES, NQ, YM, RTY, GC, CL a 6E jdou upravit nebo vrátit do výchozího stavu.
+- **Moduly**: co je v menu. Nástěnka, historie, kalendář, strategie, psychika a účty jde vypnout; přehled i připravenost na session se přizpůsobí.
+
+Nastavení je uložené v deníku daného člena, takže u šifrovaného deníku je šifrované také.
+
+### Rozbor vlastních polí
+
+V části **Strategie** je pod výkonností strategií rozbor vlastních polí obchodu: pro každou hodnotu (Ano / Ne, A+ / A / B, hodnocení 1–5) počet obchodů, průměrné R a součet R. Číselná pole se rozdělí podle mediánu. Ukáže se tak třeba, jestli obchody s potvrzením opravdu vycházejí lépe. Úspěšnost v procentech se schválně nepočítá; rozhoduje průměrné R.
+
+## DiNapoli kalkulačka
+
+Když máš v metodice DiNapoli, objeví se v náhledu krok **DiNapoli**:
+
+1. **Trend podle DMA**: poloha ceny nad nebo pod 3x3, 7x5 a 25x5 a směr thrustu.
+2. **Swingy**: pro každý swing zadáš A (začátek), B (konec) a volitelně C (konec reakce). Aplikace spočítá:
+
+```text
+F3  = B − 0,382 × (B − A)        retracement
+F5  = B − 0,618 × (B − A)        retracement
+COP = C + 0,618 × (B − A)        cíl expanze
+OP  = C + 1,000 × (B − A)
+XOP = C + 1,618 × (B − A)
+```
+
+3. **Shluky**: levely z různých swingů, které leží blízko sebe (tolerance je automaticky 0,05 % ceny, jde ji přepsat). *Confluence* = retracementy ze dvou a více swingů, *agreement* = retracement jednoho swingu na cíli expanze druhého. Tlačítkem **Udělat zónu** ze shluku vznikne obchodní zóna, **Do levelů** přenese F3, F5 a cíle do klíčových levelů.
+4. **Vzory**: Double Repo, Single Penetration, Railroad Tracks, Failure, Bread & Butter, Minesweeper A a B a Fib Node jako štítky, plus poznámky.
+
+DiNapoli levely se ukážou na mapě ceny, v pracovním závěru, v PDF, ve sdíleném náhledu na nástěnce a volitelně v TradingView exportu. Výpočet v prohlížeči i na serveru je stejný a testy to hlídají.
 
 ## Náhled trhu: týdenní a denní
 
@@ -343,7 +383,7 @@ PDF je poskládané tak, aby nejdůležitější věci byly nahoře:
 1. **Bias** jako přehledná tabulka: Price action a MP/VP pro Weekly a Daily (u týdenního náhledu Monthly a Weekly) a vpravo výrazně pracovní bias se souhrnem souladu timeframů.
 2. **Co se na trhu odehrává**: tvůj krátký popis trhu a pod ním automatický pracovní závěr.
 3. **Zóny**: rozsah, směr (long, short, long i short), poloha vůči value minulého týdne a pro každý směr zvlášť *co se musí splnit pro vstup* a *kdy obchod neberu*. Chybějící definice je v PDF vyznačená.
-4. Potom Market Profile kontext, reference na dojetí, levely, scénáře, rizika a poznámky, navázané obchody a grafy.
+4. Potom Market Profile kontext, reference na dojetí, DiNapoli (trend podle DMA, swingy s F3, F5, COP, OP a XOP, shluky a vzory), levely, scénáře, rizika a poznámky, vlastní pole, navázané obchody a grafy.
 
 Prázdné položky se do PDF nevypisují.
 
@@ -359,7 +399,7 @@ Levely jdou do TradingView exportu společně se zónami. Vykreslí se jako `lin
 
 ## Export zón do TradingView
 
-V části **Obchodní zóny** otevři **TradingView export**. Aplikace použije aktuálně vyplněné spodní a horní hranice, rozliší long, short a obousměrné zóny barvou a připraví Pine Script v6. Volba **Hodnoty profilu a reference** přidá VAH, POC, VAL, high a low předchozího období (modře, čárkovaně), u denního náhledu i týdenní VAH a VAL, a otevřené reference na dojetí (fialově). Kód můžeš jedním kliknutím zkopírovat nebo stáhnout jako `.pine` soubor. Popisky lze zobrazit několik barů napravo od aktuální ceny, výškově uprostřed zóny, a volitelně do nich přidat také zdroj nebo shodu.
+V části **Obchodní zóny** otevři **TradingView export**. Aplikace použije aktuálně vyplněné spodní a horní hranice, rozliší long, short a obousměrné zóny barvou a připraví Pine Script v6. Volba **Hodnoty profilu a reference** přidá VAH, POC, VAL, high a low předchozího období (modře, čárkovaně), u denního náhledu i týdenní VAH a VAL, a otevřené reference na dojetí (fialově). Volba **DiNapoli levely** přidá F3 a F5, cíle COP, OP a XOP ze swingů a shluky confluence a agreement. Kód můžeš jedním kliknutím zkopírovat nebo stáhnout jako `.pine` soubor. Popisky lze zobrazit několik barů napravo od aktuální ceny, výškově uprostřed zóny, a volitelně do nich přidat také zdroj nebo shodu.
 
 Doporučení: alespoň jednu kopii uchovávej mimo disk Ubuntu serveru.
 

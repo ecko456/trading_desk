@@ -160,9 +160,36 @@ function priceLadder(snapshot) {
   });
   (snapshot.levels || []).forEach(level => push(level.price, 'level', level.name || 'Level'));
   (snapshot.refs || []).filter(ref => ref.status !== 'filled').forEach(ref => push(ref.price_low ?? ref.price_high, 'ref', ref.note || (ref.kind || 'reference').replace('_', ' ')));
+  (snapshot.dinapoli?.clusters || []).forEach(cluster => push((Number(cluster.low) + Number(cluster.high)) / 2, 'cluster', `${cluster.types.includes('agreement') ? 'Agreement' : 'Confluence'} · ${cluster.members.join(' + ')}`));
   if (rows.length < 2) return '';
   rows.sort((a, b) => b.price - a.price);
   return `<p class="snap-section-title">Mapa ceny</p><div class="snap-ladder">${rows.slice(0, 18).map(row => `<div class="ladder-row" data-tone="${row.tone}"><b>${snapNumber(row.price)}</b><i></i><span>${escapeHtml(row.label)}</span></div>`).join('')}</div>`;
+}
+
+function renderCustomReadable(rows) {
+  if (!rows?.length) return '';
+  return `<p class="snap-section-title">Vlastní pole</p><dl class="snap-facts snap-custom">${rows.map(row => `<div><dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd></div>`).join('')}</dl>`;
+}
+
+function renderDnSnapshot(snapshot) {
+  const analysis = snapshot.dinapoli;
+  const dma = { above: 'nad', below: 'pod' };
+  const trend = [['3x3', snapshot.dn_dma_3x3], ['7x5', snapshot.dn_dma_7x5], ['25x5', snapshot.dn_dma_25x5]].filter(([, value]) => value)
+    .map(([name, value]) => `<span class="badge ${value === 'above' ? 'badge-green' : 'badge-due'}">Cena ${dma[value]} ${name}</span>`);
+  if (snapshot.dn_thrust) trend.push(`<span class="badge badge-gold">Thrust ${snapshot.dn_thrust === 'up' ? 'nahoru' : 'dolů'}</span>`);
+  const patterns = String(snapshot.dn_patterns || '').split(',').map(item => item.trim()).filter(Boolean).map(item => `<span class="badge badge-violet">${escapeHtml(item)}</span>`);
+  if (!analysis?.levels?.length && !trend.length && !patterns.length) return '';
+  const swings = [];
+  (analysis?.levels || []).forEach(level => {
+    let swing = swings.find(item => item.name === level.swing);
+    if (!swing) swings.push(swing = { name: level.swing, levels: [] });
+    swing.levels.push(level);
+  });
+  return `<p class="snap-section-title">DiNapoli</p>
+    ${trend.length || patterns.length ? `<div class="snap-chips">${[...trend, ...patterns].join('')}</div>` : ''}
+    ${swings.map(swing => `<div class="dn-levels snap-dn"><span class="dn-direction">${escapeHtml(swing.name)}</span>${swing.levels.map(level => `<span class="dn-level is-${level.group}"><b>${escapeHtml(level.kind)}</b>${escapeHtml(snapNumber(level.price))}</span>`).join('')}</div>`).join('')}
+    ${(analysis?.clusters || []).map(cluster => `<article class="dn-cluster${cluster.types.includes('agreement') ? ' is-agreement' : ''}"><div><span class="dn-cluster-type">${cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence')).join(' + ')}</span><strong>${escapeHtml(priceRange(cluster.low, cluster.high))}</strong><small>${escapeHtml(cluster.members.join(' · '))}</small></div></article>`).join('')}
+    ${textBlock(snapshot.dn_notes)}`;
 }
 
 function renderPlanSnapshot(snapshot, post) {
@@ -199,9 +226,11 @@ function renderPlanSnapshot(snapshot, post) {
     ${textBlock(snapshot.bias_description)}
     ${zones ? `<p class="snap-section-title">Zóny</p><div class="snap-zones">${zones}</div>` : ''}
     ${levels ? `<p class="snap-section-title">Klíčové levely</p><div class="snap-chips">${levels}</div>` : ''}
+    ${renderDnSnapshot(snapshot)}
     ${priceLadder(snapshot)}
     ${risks}
     ${snapshot.general_notes ? textBlock(snapshot.general_notes) : ''}
+    ${renderCustomReadable(snapshot.custom_readable)}
   </div>`;
 }
 
@@ -228,6 +257,7 @@ function renderTradeSnapshot(snapshot) {
     ${emotions ? `<div class="snap-chips">${emotions}</div>` : ''}
     ${snapshot.mistake ? `<p class="snap-text"><strong>Chyba / odchylka:</strong> ${escapeHtml(snapshot.mistake)}</p>` : ''}
     ${snapshot.notes ? textBlock(snapshot.notes) : ''}
+    ${renderCustomReadable(snapshot.custom_readable)}
   </div>`;
 }
 
@@ -458,11 +488,13 @@ const SHARE_OPTIONS = {
   plan: [
     ['charts', true, 'Grafy náhledu', 'Screenshoty připojené k náhledu.'],
     ['notes', false, 'Poznámky', 'Pole Poznámky z náhledu. Bias, zóny a rizika se sdílí vždy.'],
+    ['custom', false, 'Vlastní pole', 'Tvoje pole z náhledu, třeba checklist nebo VIX.'],
   ],
   trade: [
     ['charts', true, 'Grafy obchodu', 'Screenshoty entry a exitu.'],
     ['money', false, 'Částky v dolarech', 'Výsledek, risk a poplatky v $. Bez nich uvidí ostatní jen R.'],
     ['notes', false, 'Poznámky a emoce', 'Chyba, poučení a emoce z obchodu.'],
+    ['custom', false, 'Vlastní pole', 'Hodnoty tvých polí u obchodu.'],
   ],
   strategy: [
     ['stats', true, 'Statistiky', 'Počet obchodů, celkové a průměrné R a profit factor.'],

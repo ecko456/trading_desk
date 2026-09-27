@@ -341,6 +341,32 @@ class StaticAppTests(unittest.TestCase):
         self.assertLess(html.index("static/wall.js"), html.index("static/app.js"))
         self.assertLess(html.index("static/members.js"), html.index("static/app.js"))
 
+    def test_workspace_markers_cover_the_registry(self):
+        html = (ROOT / "index.php").read_text(encoding="utf-8")
+        workspace = (ROOT / "lib" / "workspace.php").read_text(encoding="utf-8")
+        javascript = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        plan_keys = re.findall(r"^    '((?:bias|profile|refs|dn|open|timing|zones|levels|ideas|charts|side)[a-z_.]*)' =>", workspace, re.M)
+        trade_keys = re.findall(r"^    '(trade\.[a-z_]+)' =>", workspace, re.M)
+        self.assertGreater(len(plan_keys), 20)
+        for key in plan_keys + trade_keys:
+            in_template = f"el('{key}')" in html or (key in ("bias.pa", "bias.mp") and "'bias.pa' : 'bias.mp'" in html)
+            in_script = f'data-el="{key}"' in javascript
+            self.assertTrue(in_template or in_script, f"prvek {key} nemá značku v šabloně ani ve skriptu")
+        for module in ("wall", "archive", "calendar", "strategies", "psyche", "accounts"):
+            self.assertIn(f"module_attr('{module}')", html)
+
+    def test_settings_and_dinapoli_are_wired(self):
+        html = (ROOT / "index.php").read_text(encoding="utf-8")
+        javascript = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="view-settings"', html)
+        self.assertIn('id="onboardingDialog"', html)
+        self.assertIn('data-section="dinapoli"', html)
+        self.assertIn('data-step="dinapoli"', html)
+        for script in ("static/dinapoli.js", "static/settings.js"):
+            self.assertLess(html.index(script), html.index("static/app.js"))
+        for name in ("bindDnEvents()", "bindSettingsEvents()", "await loadWorkspace()", "openOnboarding()"):
+            self.assertIn(name, javascript)
+
     def test_chart_colors_come_from_validated_tokens(self):
         javascript = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
         css = (ROOT / "static" / "styles.css").read_text(encoding="utf-8")

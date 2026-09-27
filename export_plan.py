@@ -634,6 +634,52 @@ def build_pdf(payload: dict, output_path: str) -> None:
             tints.append(LINE if done else VIOLET)
         story.append(simple_table(["Typ", "Cena", "Stav", "Poznámka"], rows, [usable_width * .2, usable_width * .2, usable_width * .14, usable_width * .46], styles, tints))
 
+    # DiNapoli: trend podle DMA, swingy s Fibonacci úrovněmi a místa, kde se kryjí.
+    dinapoli = plan.get("dinapoli") or {}
+    dn_levels = dinapoli.get("levels") or []
+    dn_clusters = dinapoli.get("clusters") or []
+    dma = {"above": "Nad", "below": "Pod"}
+    thrust = {"up": "Nahoru", "down": "Dolů"}
+    trend_table = context_grid([
+        ("3x3 DMA", label(dma, plan.get("dn_dma_3x3"))),
+        ("7x5 DMA", label(dma, plan.get("dn_dma_7x5"))),
+        ("25x5 DMA", label(dma, plan.get("dn_dma_25x5"))),
+        ("Thrust", label(thrust, plan.get("dn_thrust"))),
+        ("Vzory", clean(plan.get("dn_patterns"), "")),
+    ], styles, usable_width)
+    if dn_levels or trend_table or filled(plan.get("dn_notes")):
+        swing_names = []
+        for level in dn_levels:
+            if level.get("swing") not in swing_names:
+                swing_names.append(level.get("swing"))
+        story.extend(section_title("DiNapoli", f"{len(swing_names)} swingů · {len(dn_clusters)} shod", styles))
+        if trend_table:
+            story.extend([trend_table, Spacer(1, 2.5 * mm)])
+        if dn_levels:
+            swings = plan.get("dn_swings") or []
+            rows = []
+            for index, name in enumerate(swing_names):
+                own = {level.get("kind"): level.get("price") for level in dn_levels if level.get("swing") == name}
+                source = next((swing for position, swing in enumerate(swings) if (clean(swing.get("label"), "") or f"S{position + 1}") == name), {})
+                rows.append([Paragraph(f"<b>{escape(str(name))}</b>", styles["body_small"]),
+                             Paragraph(escape(f"{fmt_number(source.get('price_a'))} → {fmt_number(source.get('price_b'))}"), styles["body_small"]),
+                             Paragraph(escape(fmt_number(source.get("price_c")) if source.get("price_c") is not None else "-"), styles["body_small"])]
+                            + [Paragraph(escape(fmt_number(own[kind]) if kind in own else "-"), styles["body_small"]) for kind in ("F3", "F5", "COP", "OP", "XOP")])
+            width = usable_width / 8
+            story.append(simple_table(["Swing", "A → B", "C", "F3 .382", "F5 .618", "COP", "OP", "XOP"], rows, [width] * 8, styles))
+        if dn_clusters:
+            rows, tints = [], []
+            for cluster in dn_clusters:
+                types = cluster.get("types") or []
+                low, high = cluster.get("low"), cluster.get("high")
+                rows.append([Paragraph(escape(" + ".join("Agreement" if kind == "agreement" else "Confluence" for kind in types)), styles["body_small"]),
+                             Paragraph(escape(fmt_number(low) if low == high else f"{fmt_number(low)} – {fmt_number(high)}"), styles["body_small"]),
+                             Paragraph(escape(" · ".join(cluster.get("members") or [])), styles["body_small"])])
+                tints.append(AMBER if "agreement" in types else GREEN)
+            story.extend([Spacer(1, 2.5 * mm), simple_table(["Shoda", "Pásmo", "Složení"], rows, [usable_width * .22, usable_width * .22, usable_width * .56], styles, tints)])
+        if filled(plan.get("dn_notes")):
+            story.extend([Spacer(1, 2 * mm), Paragraph(ptext(plan.get("dn_notes")), styles["body_small"])])
+
     if levels:
         story.extend(section_title("Klíčové levely", f"{len(levels)} horizontálních úrovní", styles))
         rows, tints = [], []
@@ -673,6 +719,12 @@ def build_pdf(payload: dict, output_path: str) -> None:
         ("Další poznámky", plan.get("general_notes"), PAPER, LINE),
     ]
     visible_notes = [item for item in notes if filled(item[1])]
+    custom_rows = plan.get("custom_readable") or []
+    if custom_rows:
+        story.extend(section_title("Vlastní pole", f"{len(custom_rows)} vyplněných", styles))
+        rows = [[Paragraph(f"<b>{escape(str(row.get('label')))}</b>", styles["body_small"]), Paragraph(ptext(row.get("value")), styles["body_small"])] for row in custom_rows]
+        story.append(simple_table(["Pole", "Hodnota"], rows, [usable_width * .32, usable_width * .68], styles))
+
     if visible_notes:
         story.extend(section_title("Potvrzení, rizika a poznámky", "exekuční rámec", styles))
         cells = [boxed([Paragraph(escape(title.upper()), styles["label"]), Paragraph(ptext(value), styles["body_small"])], usable_width / 2 - 4, background, border) for title, value, background, border in visible_notes]

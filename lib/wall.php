@@ -25,6 +25,7 @@ const PLAN_SHARE_FIELDS = [
     'value_area', 'vpoc', 'auction', 'weekly_position', 'previous_close',
     'globex_open', 'eu_open', 'ny_open', 'open_type', 'initial_balance', 'single_print', 'tail',
     'important_news', 'no_trade_conditions',
+    'dn_dma_3x3', 'dn_dma_7x5', 'dn_dma_25x5', 'dn_thrust', 'dn_patterns', 'dn_notes',
 ];
 const ZONE_SHARE_FIELDS = ['name', 'direction', 'price_low', 'price_high', 'priority', 'source', 'invalidation', 'trigger', 'stop_loss', 'tp1', 'tp2', 'rr', 'status', 'long_entry', 'long_skip', 'short_entry', 'short_skip', 'va_context'];
 const LEVEL_SHARE_FIELDS = ['name', 'price', 'kind', 'source', 'line_style', 'note'];
@@ -72,6 +73,13 @@ function build_share_snapshot(string $kind, int $sourceId, array $options): arra
         $snapshot['levels'] = array_map(static fn(array $row): array => pick_fields($row, LEVEL_SHARE_FIELDS), $plan['levels'] ?? []);
         $snapshot['refs'] = array_map(static fn(array $row): array => pick_fields($row, REF_SHARE_FIELDS), $plan['refs'] ?? []);
         $snapshot['ideas'] = array_map(static fn(array $row): array => pick_fields($row, IDEA_SHARE_FIELDS), $plan['ideas'] ?? []);
+        if (($plan['dinapoli']['levels'] ?? []) !== []) {
+            $snapshot['dn_swings'] = array_map(static fn(array $row): array => pick_fields($row, ['label', 'price_a', 'price_b', 'price_c']), $plan['dn_swings'] ?? []);
+            $snapshot['dinapoli'] = $plan['dinapoli'];
+        }
+        if ((bool)($options['custom'] ?? false) && ($plan['custom_readable'] ?? []) !== []) {
+            $snapshot['custom_readable'] = $plan['custom_readable'];
+        }
         $label = (string)$plan['plan_type'] === 'weekly' ? 'Týdenní náhled' : 'Denní náhled';
         $screenshots = $withCharts ? fetch_all('SELECT * FROM screenshots WHERE plan_id = ? ORDER BY created_at, id LIMIT ' . WALL_MAX_MEDIA, [$sourceId]) : [];
         return ['title' => $label . ' ' . $plan['market'] . ' ' . $plan['plan_date'], 'market' => (string)$plan['market'], 'snapshot' => $snapshot, 'screenshots' => $screenshots];
@@ -88,6 +96,12 @@ function build_share_snapshot(string $kind, int $sourceId, array $options): arra
         }
         if ((bool)($options['notes'] ?? false)) {
             $snapshot += pick_fields($trade, ['emotion', 'mistake', 'notes']);
+        }
+        if ((bool)($options['custom'] ?? false)) {
+            $readable = custom_values_readable('trade', (string)($trade['custom'] ?? '{}'));
+            if ($readable !== []) {
+                $snapshot['custom_readable'] = $readable;
+            }
         }
         $screenshots = $withCharts ? fetch_all('SELECT * FROM screenshots WHERE trade_id = ? ORDER BY created_at, id LIMIT ' . WALL_MAX_MEDIA, [$sourceId]) : [];
         return ['title' => 'Obchod ' . $trade['market'] . ' ' . $trade['trade_date'], 'market' => (string)$trade['market'], 'snapshot' => $snapshot, 'screenshots' => $screenshots];

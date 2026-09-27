@@ -31,6 +31,9 @@ function icon(string $name): string
         'send' => '<path d="M4 12 20 4l-4.5 16-3.5-6.5z"/><path d="m12 13.5 8-9.5"/>',
         'user' => '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
         'trash' => '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>',
+        'sliders' => '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+        'fib' => '<path d="M3.5 19.5h17"/><path d="M4 18 11 5l5 8 4-4"/><path d="M3.5 9.5h17M3.5 13.5h17" stroke-dasharray="2 2.5"/>',
+        'spark' => '<path d="M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/>',
     ];
     return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$name] ?? '') . '</svg>';
 }
@@ -61,6 +64,17 @@ if ($viewer === null) {
     exit;
 }
 $viewerIsAdmin = is_admin($viewer);
+$ws = workspace();
+/** Nadpis skupiny v menu se skryje, když jsou skryté všechny její moduly. */
+function group_attr(array $modules): string
+{
+    foreach ($modules as $module) {
+        if (!is_hidden('modules', $module)) {
+            return '';
+        }
+    }
+    return ' hidden';
+}
 $viewerName = htmlspecialchars((string)$viewer['display_name'], ENT_QUOTES);
 $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn(string $part): string => mb_substr($part, 0, 1), array_slice(preg_split('/\s+/u', trim((string)$viewer['display_name'])) ?: [], 0, 2)))), ENT_QUOTES);
 ?>
@@ -77,28 +91,29 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <link rel="preload" href="static/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="<?= asset_url('static/styles.css') ?>">
 </head>
-<body data-user-id="<?= (int)$viewer['id'] ?>" data-user-hue="<?= (int)$viewer['avatar_hue'] ?>" data-user-role="<?= htmlspecialchars((string)$viewer['role']) ?>" data-user-encrypted="<?= $viewer['encrypted'] ? '1' : '0' ?>" data-must-change="<?= $viewer['must_change_secret'] ? '1' : '0' ?>">
+<body data-method="<?= htmlspecialchars($ws['method']) ?>" data-user-id="<?= (int)$viewer['id'] ?>" data-user-hue="<?= (int)$viewer['avatar_hue'] ?>" data-user-role="<?= htmlspecialchars((string)$viewer['role']) ?>" data-user-encrypted="<?= $viewer['encrypted'] ? '1' : '0' ?>" data-must-change="<?= $viewer['must_change_secret'] ? '1' : '0' ?>">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span><strong>Trading Desk</strong><small>Market Profile journal</small></span>
+        <span><strong>Trading Desk</strong><small id="brandTagline"><?= htmlspecialchars(['mp' => 'Market Profile journal', 'dn' => 'DiNapoli journal', 'both' => 'Market Profile · DiNapoli'][$ws['method']] ?? 'Trading journal', ENT_QUOTES) ?></small></span>
       </div>
       <nav class="nav" aria-label="Hlavní navigace">
-        <p class="nav-group">Komunita</p>
-        <button class="nav-item" type="button" data-view="wall"><?= icon('wall') ?><span>Nástěnka</span><em class="nav-flag is-gold" id="navWallFlag" hidden></em></button>
+        <p class="nav-group" data-module-group="wall"<?= group_attr(['wall']) ?>>Komunita</p>
+        <button class="nav-item" type="button" data-view="wall"<?= module_attr('wall') ?>><?= icon('wall') ?><span>Nástěnka</span><em class="nav-flag is-gold" id="navWallFlag" hidden></em></button>
         <p class="nav-group">Příprava</p>
         <button class="nav-item is-active" type="button" data-view="dashboard"><?= icon('dashboard') ?><span>Přehled</span></button>
         <button class="nav-item" type="button" data-view="plan"><?= icon('plan') ?><span>Náhled trhu</span></button>
-        <button class="nav-item" type="button" data-view="archive"><?= icon('archive') ?><span>Historie náhledů</span></button>
-        <button class="nav-item" type="button" data-view="calendar"><?= icon('calendar') ?><span>Kalendář</span></button>
+        <button class="nav-item" type="button" data-view="archive"<?= module_attr('archive') ?>><?= icon('archive') ?><span>Historie náhledů</span></button>
+        <button class="nav-item" type="button" data-view="calendar"<?= module_attr('calendar') ?>><?= icon('calendar') ?><span>Kalendář</span></button>
         <p class="nav-group">Exekuce</p>
         <button class="nav-item" type="button" data-view="journal"><?= icon('journal') ?><span>Deník obchodů</span></button>
-        <button class="nav-item" type="button" data-view="strategies"><?= icon('strategies') ?><span>Strategie</span></button>
-        <p class="nav-group">Disciplína</p>
-        <button class="nav-item" type="button" data-view="psyche"><?= icon('psyche') ?><span>Psychika</span></button>
-        <button class="nav-item" type="button" data-view="accounts"><?= icon('accounts') ?><span>Účty a audit</span><em class="nav-flag" id="navAuditFlag" hidden>Money audit</em></button>
-        <p class="nav-group">Data</p>
+        <button class="nav-item" type="button" data-view="strategies"<?= module_attr('strategies') ?>><?= icon('strategies') ?><span>Strategie</span></button>
+        <p class="nav-group" data-module-group="psyche,accounts"<?= group_attr(['psyche', 'accounts']) ?>>Disciplína</p>
+        <button class="nav-item" type="button" data-view="psyche"<?= module_attr('psyche') ?>><?= icon('psyche') ?><span>Psychika</span></button>
+        <button class="nav-item" type="button" data-view="accounts"<?= module_attr('accounts') ?>><?= icon('accounts') ?><span>Účty a audit</span><em class="nav-flag" id="navAuditFlag" hidden>Money audit</em></button>
+        <p class="nav-group">Můj desk</p>
+        <button class="nav-item" type="button" data-view="settings"><?= icon('sliders') ?><span>Nastavení</span></button>
         <button class="nav-item" type="button" data-view="backup"><?= icon('backup') ?><span>Záloha a export</span></button>
         <?php if ($viewerIsAdmin): ?>
         <p class="nav-group">Správa</p>
@@ -210,13 +225,15 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
               <button type="button" data-step="structure"><i></i>Bias</button>
               <button type="button" data-step="profile"><i></i>Profil</button>
               <button type="button" data-step="refs"><i></i>Reference</button>
+              <button type="button" data-step="dinapoli"><i></i>DiNapoli</button>
               <button type="button" data-step="open"><i></i>Otevření</button>
               <button type="button" data-step="zones"><i></i>Zóny a levely</button>
               <button type="button" data-step="ideas"><i></i>Scénáře</button>
+              <button type="button" data-step="custom"><i></i>Vlastní pole</button>
               <button type="button" data-step="bias"><i></i>Závěr a rizika</button>
             </nav>
 
-            <section class="timing" id="planTiming" aria-live="polite">
+            <section class="timing" id="planTiming" aria-live="polite"<?= el('timing') ?>>
               <div class="timing-copy">
                 <p class="eyebrow" id="timingEyebrow">Příprava</p>
                 <h2 id="timingTitle">Náhled</h2>
@@ -237,7 +254,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   ?>
                   <div class="bias-board">
                     <?php foreach ($biasGroups as [$prefix, $groupLabel, $groupHint, $frames, $placeholder]): ?>
-                    <div class="bias-group">
+                    <div class="bias-group"<?= el($prefix === 'pa' ? 'bias.pa' : 'bias.mp') ?>>
                       <p class="subhead"><?= $groupLabel ?><small><?= $groupHint ?></small></p>
                       <?php foreach ($frames as $key => $label): ?>
                       <div class="pa-row">
@@ -258,7 +275,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
 
                 <section class="plan-section" id="step-profile" data-section="profile">
                   <div class="section-heading"><div><p class="eyebrow">Krok 2 · Market Profile</p><h2 id="profileHeading">Profil předchozího dne</h2></div><span id="profileHeadingNote">Jak se trh vypořádal s objemem</span></div>
-                  <fieldset class="shape-picker">
+                  <fieldset class="shape-picker"<?= el('profile.shape') ?>>
                     <legend>Jaký profil se utvořil</legend>
                     <div class="shape-options">
                       <?php foreach ($shapes as [$value, $letter, $hint, $widths]): ?>
@@ -268,7 +285,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   </fieldset>
 
                   <div class="profile-columns">
-                    <div>
+                    <div<?= el('profile.values') ?>>
                       <p class="subhead" id="refPricesTitle">Hodnoty předchozího dne</p>
                       <div class="price-grid">
                         <label>High<input type="number" step="any" name="ref_high" data-ref-price></label>
@@ -280,7 +297,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                       </div>
                       <button class="text-button" type="button" id="refPricesToLevels">Přenést hodnoty do levelů</button>
                     </div>
-                    <fieldset class="ladder">
+                    <fieldset class="ladder"<?= el('profile.close') ?>>
                       <legend>Kde trh zavřel vůči objemu</legend>
                       <label class="is-above"><input type="radio" name="previous_close" value="above"><span>Nad VAH</span></label>
                       <label class="is-upper"><input type="radio" name="previous_close" value="upper"><span>Horní polovina value</span></label>
@@ -292,7 +309,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                     </fieldset>
                   </div>
 
-                  <div class="field-grid three">
+                  <div class="field-grid three"<?= el('profile.auction') ?>>
                     <label>Migrace value<select name="value_area"><option value="">—</option><option value="rising">Výš (vyšší value)</option><option value="falling">Níž (nižší value)</option><option value="overlap">Překrývá se</option></select></label>
                     <label>Migrace POC<select name="vpoc"><option value="">—</option><option value="rising">Roste</option><option value="falling">Klesá</option><option value="stable">Stabilní</option></select></label>
                     <label>Stav aukce<select name="auction"><option value="">—</option><option value="balance">Balance</option><option value="imbalance">Imbalance</option><option value="unclear">Nejasná</option></select></label>
@@ -302,7 +319,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   </div>
                 </section>
 
-                <section class="plan-section" id="step-refs" data-section="refs">
+                <section class="plan-section" id="step-refs" data-section="refs"<?= el('refs') ?>>
                   <div class="section-heading"><div><p class="eyebrow">Krok 3 · Nedokončené aukce</p><h2>Reference na dojetí</h2></div><span>Místa, kam se trh často vrací</span></div>
                   <div class="chip-row" id="refQuickAdd">
                     <button class="chip chip-add" type="button" data-add-ref="single_print">+ Single prints</button>
@@ -317,33 +334,62 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   <div class="stack" id="refList"></div>
                 </section>
 
+                <section class="plan-section dn-section" id="step-dinapoli" data-section="dinapoli">
+                  <div class="section-heading"><div><p class="eyebrow">DiNapoli · Fibonacci a DMA</p><h2>DiNapoli levely</h2></div><span id="dnSummary">Retracementy, cíle a kde se kryjí</span></div>
+                  <div class="dn-block"<?= el('dn.trend') ?>>
+                    <p class="subhead">Trend podle posunutých průměrů<small>Kde je cena vůči DMA a jestli běží thrust</small></p>
+                    <div class="dn-trend">
+                      <?php foreach (['dn_dma_3x3' => '3x3 DMA', 'dn_dma_7x5' => '7x5 DMA', 'dn_dma_25x5' => '25x5 DMA'] as $name => $label): ?>
+                      <div class="dn-trend-row"><strong><?= $label ?></strong><div class="tri-switch" role="radiogroup" aria-label="Cena vůči <?= $label ?>"><label class="is-long"><input type="radio" name="<?= $name ?>" value="above"><span>Nad</span></label><label class="is-short"><input type="radio" name="<?= $name ?>" value="below"><span>Pod</span></label></div></div>
+                      <?php endforeach; ?>
+                      <div class="dn-trend-row"><strong>Thrust</strong><div class="tri-switch" role="radiogroup" aria-label="Thrust"><label class="is-long"><input type="radio" name="dn_thrust" value="up"><span>Nahoru</span></label><label class="is-short"><input type="radio" name="dn_thrust" value="down"><span>Dolů</span></label></div></div>
+                    </div>
+                  </div>
+                  <div class="dn-block"<?= el('dn.swings') ?>>
+                    <div class="section-heading"><div><p class="subhead">Fibonacci swingy<small>A → B je swing, C konec retracementu. F3 = .382, F5 = .618, COP / OP / XOP = .618 / 1 / 1.618 od C.</small></p></div><div class="section-actions"><label class="dn-tolerance">Tolerance shody<input type="number" step="any" min="0" name="dn_tolerance" id="dnTolerance" placeholder="auto"></label><button class="button button-small" type="button" id="addDnSwing"><?= icon('plus') ?>Swing</button></div></div>
+                    <div class="stack" id="dnSwingList"></div>
+                    <div class="dn-clusters" id="dnClusters"></div>
+                  </div>
+                  <div class="dn-block"<?= el('dn.patterns') ?>>
+                    <p class="subhead">Vzory<small>Co na grafu vidíš nebo čekáš</small></p>
+                    <div class="chip-row" id="dnPatternChips"><?php foreach (DN_PATTERNS as $pattern): ?><button class="chip" type="button" data-dn-pattern="<?= htmlspecialchars($pattern) ?>"><?= htmlspecialchars($pattern) ?></button><?php endforeach; ?></div>
+                    <input type="hidden" name="dn_patterns" id="dnPatterns">
+                    <label class="dn-notes">Poznámka k DiNapoli<textarea name="dn_notes" rows="2" placeholder="Kde je Fib node, co by potvrdil thrust, kde je objektiv…"></textarea></label>
+                  </div>
+                </section>
+
                 <section class="plan-section" id="step-open" data-section="open">
                   <div class="section-heading"><div><p class="eyebrow">Krok 4 · Otevření</p><h2 id="openHeading">Otevření a první hodina</h2></div><span id="openHeadingNote">Pole se odemknou, až nastane jejich čas</span></div>
                   <div class="field-grid three gated-grid">
-                    <label class="gated" data-gate="globex"><span class="gate-label">Otevření Globexu <em data-gate-note></em></span><select name="globex_open"><?= $vaOptions ?></select></label>
-                    <label class="gated" data-gate="eu"><span class="gate-label">EU open <em data-gate-note></em></span><select name="eu_open"><?= $vaOptions ?></select></label>
-                    <label class="gated" data-gate="rth"><span class="gate-label">RTH open <em data-gate-note></em></span><select name="ny_open"><?= $vaOptions ?></select></label>
-                    <label class="gated" data-gate="rth"><span class="gate-label">Typ otevření <em data-gate-note></em></span><select name="open_type"><option value="">—</option><option value="drive">Open Drive</option><option value="test_drive">Open Test Drive</option><option value="rejection_reverse">Open Rejection Reverse</option><option value="auction_in">Open Auction uvnitř range</option><option value="auction_out">Open Auction mimo range</option></select></label>
-                    <label class="gated" data-gate="ib"><span class="gate-label">Initial Balance <em data-gate-note></em></span><select name="initial_balance"><option value="">—</option><option value="small">Malá</option><option value="normal">Běžná</option><option value="large_drive">Velká - drive</option><option value="large_rotation">Velká - rotace</option></select></label>
+                    <label class="gated" data-gate="globex"<?= el('open.va') ?>><span class="gate-label">Otevření Globexu <em data-gate-note></em></span><select name="globex_open"><?= $vaOptions ?></select></label>
+                    <label class="gated" data-gate="eu"<?= el('open.va') ?>><span class="gate-label">EU open <em data-gate-note></em></span><select name="eu_open"><?= $vaOptions ?></select></label>
+                    <label class="gated" data-gate="rth"<?= el('open.va') ?>><span class="gate-label">RTH open <em data-gate-note></em></span><select name="ny_open"><?= $vaOptions ?></select></label>
+                    <label class="gated" data-gate="rth"<?= el('open.type') ?>><span class="gate-label">Typ otevření <em data-gate-note></em></span><select name="open_type"><option value="">—</option><option value="drive">Open Drive</option><option value="test_drive">Open Test Drive</option><option value="rejection_reverse">Open Rejection Reverse</option><option value="auction_in">Open Auction uvnitř range</option><option value="auction_out">Open Auction mimo range</option></select></label>
+                    <label class="gated" data-gate="ib"<?= el('open.ib') ?>><span class="gate-label">Initial Balance <em data-gate-note></em></span><select name="initial_balance"><option value="">—</option><option value="small">Malá</option><option value="normal">Běžná</option><option value="large_drive">Velká - drive</option><option value="large_rotation">Velká - rotace</option></select></label>
                   </div>
                 </section>
 
                 <section class="plan-section" id="step-zones" data-section="zones">
                   <div class="section-heading"><div><p class="eyebrow">Krok 5 · Lokace</p><h2>Obchodní zóny</h2></div><div class="section-actions"><button class="text-button" type="button" id="exportTradingViewZones">TradingView export</button><button class="button button-small" type="button" id="addZone"><?= icon('plus') ?>Zóna</button></div></div>
-                  <div class="weekly-context" id="weeklyContext"></div>
+                  <div class="weekly-context" id="weeklyContext"<?= el('zones.context') ?>></div>
                   <div class="stack" id="zoneList"></div>
-                  <div class="subsection">
+                  <div class="subsection"<?= el('levels') ?>>
                     <div class="section-heading"><div><h3>Klíčové levely</h3></div><button class="button button-small" type="button" id="addLevel"><?= icon('plus') ?>Level</button></div>
                     <div class="stack" id="levelList"></div>
                   </div>
                 </section>
 
-                <section class="plan-section" id="step-ideas" data-section="ideas">
+                <section class="plan-section" id="step-ideas" data-section="ideas"<?= el('ideas') ?>>
                   <div class="section-heading"><div><p class="eyebrow">Krok 6 · Scénáře</p><h2>Potenciální obchody a TP</h2></div><button class="button button-small" type="button" id="addIdea"><?= icon('plus') ?>Scénář</button></div>
                   <div class="stack" id="ideaList"></div>
                 </section>
 
-                <section class="plan-section chart-section">
+                <section class="plan-section" id="step-custom" data-section="custom" hidden>
+                  <div class="section-heading"><div><p class="eyebrow">Můj checklist</p><h2>Vlastní pole</h2></div><button class="text-button" type="button" data-open-view="settings" data-settings-tab="fields">Upravit pole</button></div>
+                  <div class="custom-fields" id="planCustomFields"></div>
+                </section>
+
+                <section class="plan-section chart-section"<?= el('charts') ?>>
                   <div class="section-heading"><div><p class="eyebrow">Kontext</p><h2>Screenshoty grafu</h2></div><span>PNG, JPEG nebo WebP · max. 20 MB</span></div>
                   <label class="dropzone" id="planDropzone">
                     <input type="file" id="planScreenshot" accept="image/png,image/jpeg,image/webp" multiple>
@@ -358,18 +404,18 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                 <section class="inspector-block bias-block" id="step-bias" data-section="bias">
                   <div class="section-heading"><div><p class="eyebrow">Krok 7 · Pracovní hypotéza</p><h2 id="biasHeading">Bias</h2></div></div>
                   <div class="segmented"><label><input type="radio" name="bias" value="long"><span>Long</span></label><label><input type="radio" name="bias" value="neutral" checked><span>Balance</span></label><label><input type="radio" name="bias" value="short"><span>Short</span></label></div>
-                  <div class="working-conclusion"><span>Pracovní závěr</span><p id="workingConclusion">Doplň strukturu, profil a migraci value.</p></div>
+                  <div class="working-conclusion"<?= el('side.conclusion') ?>><span>Pracovní závěr</span><p id="workingConclusion">Doplň strukturu, profil a migraci value.</p></div>
                   <label>Popis biasu<textarea name="bias_description" rows="4" placeholder="Co trh aktuálně přijímá, kde je iniciativa a co je primární scénář…"></textarea></label>
                   <label>Co bias potvrzuje<textarea name="bias_confirm" rows="2" placeholder="Developing value, open, iniciativa, reakce v zóně…"></textarea></label>
                   <label>Co bias ruší<textarea name="bias_invalidation" rows="2" placeholder="Návrat do value, odmítnutí, selhání struktury…"></textarea></label>
                 </section>
 
-                <section class="inspector-block">
+                <section class="inspector-block"<?= el('side.map') ?>>
                   <div class="section-heading"><div><p class="eyebrow">Mapa ceny</p><h2>Zóny, levely a reference</h2></div></div>
                   <div class="price-map" id="priceMap"></div>
                 </section>
 
-                <section class="inspector-block">
+                <section class="inspector-block"<?= el('side.risk') ?>>
                   <div class="section-heading"><div><p class="eyebrow">Riziko</p><h2>Filtry</h2></div></div>
                   <label>Red news<textarea name="important_news" rows="2" placeholder="Čas a událost…"></textarea></label>
                   <label>No-trade podmínky<textarea name="no_trade_conditions" rows="3" placeholder="Kdy nevstupuji…"></textarea></label>
@@ -383,7 +429,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <!-- DENÍK -->
         <section class="view" id="view-journal">
           <div class="view-toolbar"><div class="inline-fields"><label>Trh<select id="tradeMarketFilter"><option value="">Všechny</option><option>ES</option><option>NQ</option><option>GC</option><option>CL</option><option>6E</option></select></label><label>Hledat<input type="search" id="tradeSearch" placeholder="Setup nebo poznámka"></label></div><button class="button button-primary" type="button" id="addTrade"><?= icon('plus') ?>Přidat obchod</button></div>
-          <section class="surface table-surface"><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Trh</th><th>Setup</th><th>Směr</th><th class="num">Entry / Exit</th><th class="num">R</th><th class="num">P&amp;L</th><th>Plán</th><th></th></tr></thead><tbody id="tradeTable"></tbody></table></div></section>
+          <section class="surface table-surface"><div class="table-wrap"><table><thead id="tradeHead"><tr><th>Datum</th><th>Trh</th><th>Setup</th><th>Směr</th><th class="num">Entry / Exit</th><th class="num">R</th><th class="num">P&amp;L</th><th>Plán</th><th></th></tr></thead><tbody id="tradeTable"></tbody></table></div></section>
         </section>
 
         <!-- HISTORIE NÁHLEDŮ -->
@@ -408,6 +454,10 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           <section class="surface table-surface">
             <div class="section-heading"><div><p class="eyebrow">Srovnání</p><h2>Výkonnost podle setupu</h2></div><span>Řazeno podle celkového R</span></div>
             <div class="table-wrap"><table><thead><tr><th>Strategie</th><th>Timeframe</th><th>Charakter</th><th class="num">Obchodů</th><th class="num">Celkem R</th><th class="num">Průměr R</th><th class="num">Profit factor</th><th class="num">Plán</th><th class="num">Exekuce</th><th>Poslední</th><th></th></tr></thead><tbody id="strategyTable"></tbody></table></div>
+          </section>
+          <section class="surface table-surface" id="customStatsSurface" hidden>
+            <div class="section-heading"><div><p class="eyebrow">Tvoje vlastní pole</p><h2>Co ti skutečně vydělává</h2></div><span>Průměrné R podle hodnot, které u obchodů zapisuješ</span></div>
+            <div class="custom-stats" id="customFieldStats"></div>
           </section>
         </section>
 
@@ -520,6 +570,98 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           </div>
         </section>
 
+        <!-- NASTAVENÍ -->
+        <section class="view" id="view-settings">
+          <div class="settings-layout">
+            <nav class="settings-tabs" id="settingsTabs" aria-label="Části nastavení">
+              <button type="button" data-settings-tab="method" class="is-active"><?= icon('spark') ?><span><strong>Metodika</strong><small>Market Profile, DiNapoli</small></span></button>
+              <button type="button" data-settings-tab="plan"><?= icon('plan') ?><span><strong>Náhled trhu</strong><small>Co v náhledu vidíš</small></span></button>
+              <button type="button" data-settings-tab="trade"><?= icon('journal') ?><span><strong>Zápis obchodu</strong><small>Pole a výchozí hodnoty</small></span></button>
+              <button type="button" data-settings-tab="fields"><?= icon('sliders') ?><span><strong>Vlastní pole</strong><small>Co chceš zapisovat navíc</small></span></button>
+              <button type="button" data-settings-tab="markets"><?= icon('strategies') ?><span><strong>Moje trhy</strong><small>Symboly a hodnota bodu</small></span></button>
+              <button type="button" data-settings-tab="modules"><?= icon('dashboard') ?><span><strong>Moduly</strong><small>Co je v menu</small></span></button>
+            </nav>
+            <div class="settings-panels">
+              <section class="surface settings-panel is-active" data-settings-panel="method">
+                <div class="section-heading"><div><p class="eyebrow">Jak obchoduješ</p><h2>Metodika</h2></div><span id="methodSaved"></span></div>
+                <p class="settings-lead">Podle metodiky se připraví náhled trhu: Market Profile přinese profil, value a reference, DiNapoli Fibonacci swingy, DMA a vzory. Jednotlivé prvky pak doladíš v další části.</p>
+                <div class="method-cards" id="methodCards">
+                  <button type="button" class="method-card" data-method="mp"><span class="method-glyph method-glyph-mp" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>Market Profile</strong><small>Value area, POC, tvar profilu, reference na dojetí, otevření podle Daltona.</small></button>
+                  <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Fibonacci F3 a F5, cíle COP, OP a XOP, confluence, agreement a DMA 3x3.</small></button>
+                  <button type="button" class="method-card" data-method="both"><span class="method-glyph method-glyph-both" aria-hidden="true"><i></i><i></i><i></i><?= icon('fib') ?></span><strong>Obojí</strong><small>Profil i Fibonacci v jednom náhledu. Nejvíc informací, nejvíc polí.</small></button>
+                </div>
+                <div class="plan-preview" id="planPreview"></div>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="plan">
+                <div class="section-heading"><div><p class="eyebrow">Náhled trhu</p><h2>Prvky náhledu</h2></div><button class="text-button" type="button" id="resetPlanElements">Podle metodiky</button></div>
+                <p class="settings-lead">Vypni, co nepoužíváš. Skryté části se neukazují ani nepočítají do připravenosti náhledu; už vyplněná data zůstanou uložená.</p>
+                <div class="toggle-groups" id="planElementToggles"></div>
+                <div class="settings-block">
+                  <p class="subhead">Vlastní štítky zdroje zón<small>Přidají se k nabídce u každé zóny, třeba „Weekly open“ nebo „Gap fill“.</small></p>
+                  <div class="token-editor"><div class="chip-row" id="tokenList"></div><form class="inline-add" id="tokenForm"><input name="token" maxlength="24" placeholder="Nový štítek"><button class="button button-small" type="submit"><?= icon('plus') ?>Přidat</button></form></div>
+                </div>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="trade">
+                <div class="section-heading"><div><p class="eyebrow">Deník obchodů</p><h2>Zápis obchodu</h2></div></div>
+                <p class="settings-lead">Datum, trh, směr, ceny, risk a výsledek jsou vždy. Ostatní zapni podle toho, co opravdu sleduješ. Rozbor chyb potřebuje „Dodržen plán“ a „Hodnocení exekuce“, rozbor spouštěčů „Emoce“.</p>
+                <div class="toggle-groups" id="tradeElementToggles"></div>
+                <form class="settings-block" id="defaultsForm">
+                  <p class="subhead">Výchozí hodnoty nového obchodu<small>Předvyplní se, můžeš je u obchodu vždy změnit.</small></p>
+                  <div class="field-grid four">
+                    <label>Trh<select name="default_market" id="defaultMarket"></select></label>
+                    <label>Typ obchodu<select name="session"><option>Intraday</option><option>Hybrid Intraday</option></select></label>
+                    <label>Risk na trade ($)<input type="number" name="risk" min="0" step="any" placeholder="např. 300"></label>
+                    <label>Poplatky ($)<input type="number" name="fees" min="0" step="0.01" placeholder="0"></label>
+                    <label class="span-2">Účet<select name="account_id" id="defaultAccount"><option value="">—</option></select></label>
+                  </div>
+                  <button class="button button-primary" type="submit">Uložit výchozí hodnoty</button>
+                </form>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="fields">
+                <div class="section-heading"><div><p class="eyebrow">Vlastní pole</p><h2>Co chceš zapisovat navíc</h2></div></div>
+                <p class="settings-lead">Checklist před vstupem, kvalita setupu, VIX, počet pokusů… U obchodů se pole typu ano/ne, výběr, hodnocení a číslo samy vyhodnotí ve Strategiích: uvidíš, jaké průměrné R máš při které hodnotě.</p>
+                <div class="field-scopes">
+                  <div><p class="subhead">U obchodu</p><div class="field-list" id="tradeFieldList"></div></div>
+                  <div><p class="subhead">V náhledu trhu</p><div class="field-list" id="planFieldList"></div></div>
+                </div>
+                <form class="settings-block field-form" id="fieldForm">
+                  <p class="subhead" id="fieldFormTitle">Nové pole</p>
+                  <input type="hidden" name="id">
+                  <div class="field-grid four">
+                    <label class="span-2">Název<input name="label" maxlength="60" required placeholder="Čekal jsem na potvrzení"></label>
+                    <label>Kde<select name="scope"><option value="trade">U obchodu</option><option value="plan">V náhledu</option></select></label>
+                    <label>Typ<select name="kind"><?php foreach (CUSTOM_FIELD_KINDS as $kind => $label): ?><option value="<?= $kind ?>"><?= $label ?></option><?php endforeach; ?></select></label>
+                    <label class="span-2" data-field-options hidden>Možnosti<textarea name="options" rows="3" placeholder="Každá možnost na nový řádek: A+, A, B"></textarea></label>
+                    <label class="span-2">Nápověda<input name="help" maxlength="160" placeholder="Volitelné vysvětlení pod polem"></label>
+                    <label class="toggle-inline" data-field-table><input type="checkbox" name="in_table"><span>Ukazovat jako sloupec v deníku</span></label>
+                  </div>
+                  <div class="form-actions"><button class="button button-ghost" type="button" id="fieldCancel" hidden>Zrušit úpravu</button><button class="button button-primary" type="submit" id="fieldSubmit"><?= icon('plus') ?>Přidat pole</button></div>
+                </form>
+                <div class="field-ideas"><span>Nápady:</span><button class="chip chip-add" type="button" data-field-idea='{"label":"Čekal jsem na potvrzení","kind":"bool","scope":"trade"}'>Čekal jsem na potvrzení</button><button class="chip chip-add" type="button" data-field-idea='{"label":"Kvalita setupu","kind":"select","options":"A+\nA\nB","scope":"trade"}'>Kvalita setupu A+/A/B</button><button class="chip chip-add" type="button" data-field-idea='{"label":"Obchod ve směru biasu","kind":"bool","scope":"trade"}'>Ve směru biasu</button><button class="chip chip-add" type="button" data-field-idea='{"label":"Soustředění","kind":"rating","scope":"trade"}'>Soustředění 1–5</button><button class="chip chip-add" type="button" data-field-idea='{"label":"VIX","kind":"number","scope":"plan"}'>VIX v náhledu</button><button class="chip chip-add" type="button" data-field-idea='{"label":"Hlavní téma dne","kind":"text","scope":"plan"}'>Téma dne</button></div>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="markets">
+                <div class="section-heading"><div><p class="eyebrow">Instrumenty</p><h2>Moje trhy</h2></div><button class="text-button" type="button" id="resetMarkets">Výchozí seznam</button></div>
+                <p class="settings-lead">Trhy v nabídkách a filtrech. Hodnota bodu slouží jen k orientačnímu počtu kontraktů; R i P&amp;L se počítají z risku. Čas RTH (New York) řídí zamykání polí otevření v náhledu.</p>
+                <form id="marketsForm">
+                  <div class="markets-table" id="marketRows"></div>
+                  <div class="form-actions"><button class="button button-ghost" type="button" id="addMarket"><?= icon('plus') ?>Přidat trh</button><button class="button button-primary" type="submit">Uložit trhy</button></div>
+                </form>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="modules">
+                <div class="section-heading"><div><p class="eyebrow">Menu</p><h2>Moduly</h2></div></div>
+                <p class="settings-lead">Skryj, co nepoužíváš. Data zůstanou uložená a modul kdykoli zase zapneš. Přehled, náhled trhu, deník, nastavení a záloha jsou vždy.</p>
+                <div class="toggle-groups" id="moduleToggles"></div>
+                <div class="settings-block"><p class="subhead">Průvodce nastavením<small>Znovu projdeš úvodní tři kroky.</small></p><button class="button button-ghost" type="button" id="rerunOnboarding"><?= icon('spark') ?>Spustit průvodce</button></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
         <!-- PROFIL -->
         <section class="view" id="view-profile">
           <div class="profile-layout">
@@ -617,10 +759,10 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <div class="field-grid four">
           <label>Datum<input type="date" name="trade_date" required></label>
           <label>Trh<input name="market" id="tradeMarket" list="marketOptions" required autocomplete="off" placeholder="ES, NQ, vlastní…"></label>
-          <label>Účet<select name="account_id" id="tradeAccount"><option value="">—</option></select></label>
-          <label>Typ obchodu<input name="session" id="tradeSession" list="sessionOptions" autocomplete="off" placeholder="Intraday, Hybrid Intraday…" title="Intraday je plánovaný pouze na dnešní den. Hybrid Intraday lze při příznivém vývoji držet déle."></label>
+          <label<?= el('trade.account') ?>>Účet<select name="account_id" id="tradeAccount"><option value="">—</option></select></label>
+          <label<?= el('trade.session') ?>>Typ obchodu<input name="session" id="tradeSession" list="sessionOptions" autocomplete="off" placeholder="Intraday, Hybrid Intraday…" title="Intraday je plánovaný pouze na dnešní den. Hybrid Intraday lze při příznivém vývoji držet déle."></label>
           <label>Směr<select name="direction"><option value="long">Long</option><option value="short">Short</option></select></label>
-          <label class="field-with-action span-3">Strategie / setup<span><select name="strategy_id" id="tradeStrategy"><option value="">—</option><option value="__new">+ Přidat strategii / setup</option></select><button class="mini-button" type="button" id="editTradeStrategy" title="Upravit vybranou strategii">Upravit</button></span></label>
+          <label class="field-with-action span-3"<?= el('trade.strategy') ?>>Strategie / setup<span><select name="strategy_id" id="tradeStrategy"><option value="">—</option><option value="__new">+ Přidat strategii / setup</option></select><button class="mini-button" type="button" id="editTradeStrategy" title="Upravit vybranou strategii">Upravit</button></span></label>
         </div>
       </fieldset>
       <fieldset class="form-section">
@@ -629,22 +771,26 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           <label>Entry<input type="number" step="any" name="entry_price"></label>
           <label>Exit<input type="number" step="any" name="exit_price"></label>
           <label>Stop loss<input type="number" step="any" name="stop_loss"></label>
-          <label>Plánovaný TP<input type="number" step="any" name="target_price"></label>
+          <label<?= el('trade.target') ?>>Plánovaný TP<input type="number" step="any" name="target_price"></label>
           <label>Risk na trade ($)<input type="number" step="any" min="0" name="risk_amount" placeholder="např. 500"></label>
-          <label>Poplatky ($)<input type="number" step="0.01" name="fees" value="0"></label>
+          <label<?= el('trade.fees') ?>>Poplatky ($)<input type="number" step="0.01" name="fees" value="0"></label>
           <label>Výsledek R<input type="number" step="0.01" name="result_r" placeholder="dopočítá se"></label>
           <label>Výsledek $<input type="number" step="0.01" name="result_usd" placeholder="dopočítá se"></label>
         </div>
         <p class="calc-hint" id="tradeCalcHint">Doplň entry, stop a risk na trade; velikost pozice, čisté P&amp;L i R se dopočítají.</p>
       </fieldset>
-      <fieldset class="form-section">
+      <fieldset class="form-section" data-el-group="trade.followed,trade.rating">
         <legend>Hodnocení</legend>
         <div class="field-grid two">
-          <label>Dodržen plán<select name="followed_plan"><option value="">—</option><option value="1">Ano</option><option value="0">Ne</option></select></label>
-          <label>Hodnocení obchodu<select name="execution_rating"><option value="">—</option><option value="1">1 · Vše splněno podle plánu</option><option value="2">2 · Drobná odchylka od plánu</option><option value="3">3 · Částečně dodržená pravidla</option><option value="4">4 · Výrazné porušení pravidel</option><option value="5">5 · Nebyla dodržena pravidla pro exekuci</option></select></label>
+          <label<?= el('trade.followed') ?>>Dodržen plán<select name="followed_plan"><option value="">—</option><option value="1">Ano</option><option value="0">Ne</option></select></label>
+          <label<?= el('trade.rating') ?>>Hodnocení obchodu<select name="execution_rating"><option value="">—</option><option value="1">1 · Vše splněno podle plánu</option><option value="2">2 · Drobná odchylka od plánu</option><option value="3">3 · Částečně dodržená pravidla</option><option value="4">4 · Výrazné porušení pravidel</option><option value="5">5 · Nebyla dodržena pravidla pro exekuci</option></select></label>
         </div>
       </fieldset>
-      <fieldset class="checkbox-field">
+      <fieldset class="form-section custom-fieldset" id="tradeCustomSection" hidden>
+        <legend>Moje pole <button class="mini-button" type="button" data-open-view="settings" data-settings-tab="fields">Upravit</button></legend>
+        <div class="custom-fields" id="tradeCustomFields"></div>
+      </fieldset>
+      <fieldset class="checkbox-field"<?= el('trade.emotions') ?>>
         <legend>Emoce během obchodu <span>můžeš označit více stavů</span></legend>
         <div class="checkbox-grid" id="tradeEmotions">
           <label><input type="checkbox" data-emotion value="klid"><span>Klidný a soustředěný</span></label>
@@ -664,10 +810,10 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         </div>
       </fieldset>
       <div class="field-grid two notes-grid">
-        <label>Chyba / odchylka<textarea name="mistake" rows="3"></textarea></label>
-        <label>Poznámka a poučení<textarea name="notes" rows="3"></textarea></label>
+        <label<?= el('trade.mistake') ?>>Chyba / odchylka<textarea name="mistake" rows="3"></textarea></label>
+        <label<?= el('trade.notes') ?>>Poznámka a poučení<textarea name="notes" rows="3"></textarea></label>
       </div>
-      <label class="trade-upload">Screenshoty obchodu<input type="file" id="tradeScreenshots" accept="image/png,image/jpeg,image/webp" multiple><span id="tradeScreenshotNames">Volitelně přidej entry, exit nebo výsledný graf.</span></label>
+      <label class="trade-upload"<?= el('trade.screenshots') ?>>Screenshoty obchodu<input type="file" id="tradeScreenshots" accept="image/png,image/jpeg,image/webp" multiple><span id="tradeScreenshotNames">Volitelně přidej entry, exit nebo výsledný graf.</span></label>
       <div class="modal-actions"><button class="button button-ghost button-calc" type="button" id="calcTradeResult">Vypočítat a doplnit R a výsledek</button><span class="spacer"></span><button class="button button-ghost" value="cancel">Zrušit</button><button class="button button-primary" type="submit" value="default">Uložit obchod</button></div>
     </form>
   </dialog>
@@ -808,6 +954,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
       <div class="tv-export-settings">
         <label class="toggle-control"><input type="checkbox" id="tvShowLabels" checked><span><strong>Popisky vpravo od ceny</strong><small>Název bude několik barů napravo od aktuální ceny a výškově uprostřed zóny.</small></span></label>
         <label class="toggle-control"><input type="checkbox" id="tvIncludeSource"><span><strong>Přidat zdroj / shodu</strong><small>Do popisku vloží také MP, VP nebo DiNapoli konfluenci.</small></span></label>
+        <label class="toggle-control" id="tvIncludeDnControl"><input type="checkbox" id="tvIncludeDn" checked><span><strong>DiNapoli levely</strong><small>F3, F5, COP, OP, XOP a zóny confluence a agreement.</small></span></label>
         <label class="toggle-control"><input type="checkbox" id="tvIncludeRefs" checked><span><strong>Hodnoty profilu a reference</strong><small>VAH, POC, VAL, high a low z profilu a otevřené reference na dojetí.</small></span></label>
         <label>Prodloužení zón<select id="tvExtendMode"><option value="right">Doprava</option><option value="both">Oběma směry</option></select></label>
         <label class="range-control">Průhlednost výplně<div><input type="range" id="tvFillTransparency" min="60" max="96" value="86"><output id="tvFillTransparencyValue" for="tvFillTransparency">86</output></div></label>
@@ -819,7 +966,39 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
     </div>
   </dialog>
 
-  <dialog class="modal modal-narrow" id="shareDialog" aria-labelledby="shareDialogTitle">
+  <dialog class="modal onboarding" id="onboardingDialog" aria-labelledby="onboardingTitle">
+    <form method="dialog" id="onboardingForm">
+      <div class="onboarding-head">
+        <p class="eyebrow">Vítej v Trading Desku</p>
+        <h2 id="onboardingTitle">Nastav si svůj desk</h2>
+        <ol class="onboarding-steps" id="onboardingSteps"><li class="is-active">Metodika</li><li>Trhy</li><li>Moduly</li></ol>
+      </div>
+      <div class="onboarding-page" data-onboarding-page="1">
+        <p class="settings-lead">Jak připravuješ obchody? Podle toho se připraví náhled trhu. Později ho doladíš v Nastavení.</p>
+        <div class="method-cards compact" id="onboardingMethods">
+          <button type="button" class="method-card" data-method="mp"><span class="method-glyph method-glyph-mp" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>Market Profile</strong><small>Value, POC, profil, reference</small></button>
+          <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Fibonacci, COP/OP/XOP, DMA</small></button>
+          <button type="button" class="method-card" data-method="both"><span class="method-glyph method-glyph-both" aria-hidden="true"><i></i><i></i><i></i><?= icon('fib') ?></span><strong>Obojí</strong><small>Profil i Fibonacci</small></button>
+        </div>
+      </div>
+      <div class="onboarding-page" data-onboarding-page="2" hidden>
+        <p class="settings-lead">Co obchoduješ? Označ trhy, které chceš mít v nabídce. Další přidáš kdykoli v Nastavení.</p>
+        <div class="chip-row market-picker" id="onboardingMarkets"></div>
+        <div class="inline-add"><input id="onboardingNewMarket" maxlength="12" placeholder="Vlastní symbol, třeba FDAX"><input id="onboardingNewPoint" type="number" min="0" step="any" placeholder="Hodnota bodu"><button class="button button-small" type="button" id="onboardingAddMarket"><?= icon('plus') ?>Přidat</button></div>
+        <div class="field-grid two onboarding-defaults">
+          <label>Hlavní trh<select id="onboardingDefaultMarket"></select></label>
+          <label>Obvyklý risk na trade ($)<input id="onboardingRisk" type="number" min="0" step="any" placeholder="např. 300"></label>
+        </div>
+      </div>
+      <div class="onboarding-page" data-onboarding-page="3" hidden>
+        <p class="settings-lead">Co chceš v aplikaci používat? Vypnuté moduly zmizí z menu a z přehledu.</p>
+        <div class="toggle-groups" id="onboardingModules"></div>
+      </div>
+      <div class="modal-actions"><button class="button button-ghost" type="button" id="onboardingSkip">Přeskočit</button><span class="spacer"></span><button class="button button-ghost" type="button" id="onboardingBack" hidden>Zpět</button><button class="button button-primary" type="button" id="onboardingNext">Pokračovat</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-narrow" id="shareDialog\" aria-labelledby="shareDialogTitle">
     <form method="dialog" id="shareForm">
       <div class="modal-head"><div><p class="eyebrow">Společná nástěnka</p><h2 id="shareDialogTitle">Sdílet s komunitou</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
       <div class="share-summary"><?= icon('share') ?><div><strong id="shareSummaryTitle"></strong><small id="shareSummaryText"></small></div></div>
@@ -887,7 +1066,9 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <dialog class="lightbox" id="lightbox"><button class="icon-button" id="closeLightbox" aria-label="Zavřít">×</button><img id="lightboxImage" alt="Screenshot grafu"><p id="lightboxCaption"></p></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="<?= asset_url('static/tradingview-export.js') ?>" defer></script>
+  <script src="<?= asset_url('static/dinapoli.js') ?>" defer></script>
   <script src="<?= asset_url('static/wall.js') ?>" defer></script>
+  <script src="<?= asset_url('static/settings.js') ?>" defer></script>
   <script src="<?= asset_url('static/members.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
