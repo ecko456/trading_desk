@@ -18,6 +18,8 @@ Deník obchodů a denní příprava pro Market Profile a Volume Profile.
 
 Po prvním nastavení už appku spouštíš jedním kliknutím.
 
+**První spuštění:** aplikace ještě nemá žádný účet, a tak se na přihlašovací stránce ukáže *Založení správce*. Chce jednorázový kód, který vypíše instalace (Windows, Linux), okno Terminálu (Mac) nebo terminál Codespace. Správce pak schvaluje registrace dalších členů. Pokud už aplikaci používáš, tvůj dosavadní deník převezme právě tenhle první účet.
+
 ---
 
 ## Varianta A — Windows
@@ -136,10 +138,12 @@ Až se to dokončí, aplikace se sama otevře v nové záložce. Když se to nes
 
 Příště stačí stejný odkaz: `quickstart=1` otevře tvůj existující Codespace, nevytváří nový.
 
+Při prvním spuštění vypíše terminál dole v Codespace **kód pro založení správce**. Zadej ho na přihlašovací stránce.
+
 ### Na co si dát pozor
 
 - **Zálohuj se.** Data jsou uvnitř Codespace ve složce `data/`. Když Codespace zastavíš, zůstanou. GitHub ale ve výchozím nastavení **smaže Codespace, který 30 dní nepoužiješ**, a data s ním. Stahuj proto pravidelně ZIP v sekci **Záloha**.
-- **Port nech soukromý.** Ve výchozím stavu na adresu aplikace vidíš jen ty po přihlášení na GitHub. Nepřepínej port na *Public*: aplikace nemá přihlašování a kdokoli s odkazem by viděl a měnil tvůj deník.
+- **Port nech soukromý.** Ve výchozím stavu na adresu aplikace vidíš jen ty po přihlášení na GitHub. Aplikace má vlastní přihlašování, ale Codespace není stavěný jako veřejný server.
 - **Data nepatří do gitu.** Repozitář je veřejný. Soubor `.gitignore` databázi i screenshoty z commitů vynechává, i kdybys omylem kliknul na commit.
 - **Čas zdarma je omezený.** Osobní účet má každý měsíc zdarma kvótu hodin Codespaces. Codespace se sám zastaví po 30 minutách nečinnosti, takže běží jen, když ho používáš.
 
@@ -158,20 +162,21 @@ git clone https://github.com/ecko456/trading_desk.git && cd trading_desk
 sudo bash deploy/install.sh
 ```
 
-### 2. Heslo
+Instalace na konci vypíše kód pro založení správce.
+
+### 2. Správce a členové
+
+Otevři aplikaci, zadej kód a založ účet správce. Další lidé se zaregistrují sami a ty je schválíš v sekci **Členové**. Každý má vlastní deník; na společné nástěnce je jen to, co kdo sdílí. Kdo chce, zvolí si šifrovaný deník s přístupovým klíčem místo hesla.
+
+Když kód ztratíš, vypíšeš ho znovu:
 
 ```bash
-sudo htpasswd -c -B /etc/apache2/trading-journal.htpasswd tvoje_jmeno
-sudo apache2ctl configtest && sudo systemctl reload apache2
+sudo -u www-data TRADING_DATA_DIR=/var/lib/trading-journal php /var/www/trading-journal/bin/setup-token.php
 ```
-
-Jakmile soubor s hesly existuje, Apache pustí do aplikace, API, záloh i screenshotů jen po přihlášení. Aktualizace přes `install.sh` heslo nevypne. Další člověk se přidá stejným příkazem bez `-c`; všichni pak vidí a mění **tentýž** deník.
-
-Aplikace navíc odmítá zápisy, které nepřišly z její vlastní stránky, takže cizí web nemůže v přihlášeném prohlížeči nic změnit.
 
 ### 3. Než ji začneš používat
 
-- **HTTPS.** Bez něj jde heslo po síti čitelně. Bez domény se dá použít buď certifikát vystavený pro adresu typu `<IP s pomlčkami>.sslip.io`, nebo vlastní certifikát, u kterého prohlížeč jednou ukáže varování.
+- **HTTPS.** Bez něj jde heslo, přístupový klíč i přihlášení po síti čitelně. Bez domény se dá použít buď certifikát vystavený pro adresu typu `<IP s pomlčkami>.sslip.io`, nebo vlastní certifikát, u kterého prohlížeč jednou ukáže varování.
 - **Firewall** jen pro SSH, HTTP a HTTPS a automatické bezpečnostní aktualizace.
 - **Zálohy mimo server.** ZIP ze sekce **Záloha** stahuj i k sobě.
 
@@ -181,8 +186,10 @@ Aplikace navíc odmítá zápisy, které nepřišly z její vlastní stránky, t
 
 | Varianta | Databáze | Screenshoty |
 |---|---|---|
-| Windows (WSL) a Linux | `/var/lib/trading-journal/trading.sqlite3` | `/var/lib/trading-journal/uploads/` |
-| Mac | `data/trading.sqlite3` ve složce aplikace | `data/uploads/` |
+| Windows (WSL) a Linux | `/var/lib/trading-journal/users/<id>/` | `/var/lib/trading-journal/users/<id>/uploads/` |
+| Mac a Codespace | `data/users/<id>/` ve složce aplikace | `data/users/<id>/uploads/` |
+
+Každý člen má vlastní složku `users/<id>/`. Nešifrovaný deník je soubor `trading.sqlite3`, šifrovaný `trading.sqlite3.sealed`. Členové a nástěnka jsou v `app.sqlite3`.
 
 Databáze je jeden soubor. Adresář s daty není z webu dostupný a obrázky se zobrazují jen přes kontrolovaný odkaz uvnitř aplikace.
 
@@ -244,6 +251,6 @@ Otevři `start-macos.command` v textovém editoru a změň `PORT=8420` na jiné 
 
 ## Bezpečnost — přečti si to
 
-Aplikace je stavěná pro jeden počítač a **nemá žádné přihlašování**. To je v pořádku, dokud běží jen u tebe na `localhost`, protože se k ní odjinud nikdo nedostane.
+Aplikace má účty: každý člen se přihlašuje a vidí jen svůj deník, registrace schvaluje správce a přihlášení je chráněné proti hádání hesel.
 
-**Nezpřístupňuj ji do internetu ani do domácí sítě** tak, jak je. Kdokoli, kdo by se na ni dostal, by viděl a mohl měnit celý tvůj deník. Kdyby to někdy bylo potřeba, musí se doplnit přihlašování a HTTPS.
+**Na internet ji dávej jen s HTTPS** (varianta E). Bez něj jde heslo i přihlášení po síti čitelně. Na `localhost` a v Codespace to potřeba není.

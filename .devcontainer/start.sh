@@ -20,6 +20,10 @@ for _ in $(seq 1 30); do
   if curl -fsS "${HEALTH}" >/dev/null 2>&1; then
     echo "Trading Desk běží. Otevři kartu PORTS a port ${PORT} (Trading Desk)."
     echo "Data: $(pwd)/data"
+    CODE="$(php bin/setup-token.php 2>/dev/null || true)"
+    if [[ -n "${CODE}" && "${CODE}" != *"existuje"* ]]; then
+      echo "Kód pro založení správce: ${CODE}"
+    fi
     exit 0
   fi
   sleep 0.5

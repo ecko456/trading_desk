@@ -31,7 +31,10 @@ const viewLabels = {
   calendar: ['Kalendář', 'Měsíc v kostce'],
   psyche: ['Psychika a disciplína', 'Proč k chybě došlo'],
   accounts: ['Účty a Money audit', 'Kontrola evidence'],
-  backup: ['Záloha a export', 'Data na tvém počítači'],
+  backup: ['Záloha a export', 'Tvůj deník v jednom souboru'],
+  wall: ['Nástěnka', 'Komunita'],
+  admin: ['Členové', 'Správa'],
+  profile: ['Profil', 'Můj účet'],
 };
 
 const strategyStyleLabels = { trend: 'Trendový', reversal: 'Reversal', both: 'Trendový i reversal' };
@@ -106,6 +109,11 @@ async function api(action, options = {}) {
   });
   const type = response.headers.get('content-type') || '';
   const payload = type.includes('application/json') ? await response.json() : { error: await response.text() };
+  if (response.status === 401 && payload.auth) {
+    // Relace vypršela nebo ji správce ukončil: zpět na přihlášení.
+    location.replace('./');
+    throw new Error(payload.error);
+  }
   if (!response.ok) throw new Error(payload.error || 'Server operaci nedokončil.');
   return payload;
 }
@@ -137,6 +145,8 @@ function activateView(name) {
   if (name === 'strategies') refreshStrategyStats();
   if (name === 'calendar') refreshCalendar();
   if (name === 'psyche') { refreshProfile(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
+  if (name === 'wall') { refreshWall(); refreshMembers(); }
+  if (name === 'admin') refreshAdmin();
 }
 
 function closeQuickPlanMenu() {
@@ -161,7 +171,7 @@ function currentTheme() {
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem('td-theme', theme); } catch (error) { /* vzhled se jen nezapamatuje */ }
-  $('meta[name="theme-color"]').setAttribute('content', theme === 'light' ? '#f4f6f9' : '#0b0e13');
+  $('meta[name="theme-color"]').setAttribute('content', theme === 'light' ? '#f4f0e7' : '#07080b');
 }
 
 function formObject(form) {
@@ -1470,13 +1480,28 @@ function signedR(value) {
   return `${number > 0 ? '+' : ''}${displayNumber(number)}R`;
 }
 
-const seriesColors = ['#5b8cff', '#f5b451', '#35c2a8', '#c08cf0', '#3fcf8e', '#ff6b7a', '#5fd0ea', '#f39a5f'];
+// Barvy řad jsou v CSS (--series-1 až 8, ověřené pro barvoslepé v obou režimech).
+// Pořadí je pevné; devátá a další strategie se sečtou do řady Ostatní, nikdy se barvy necyklí.
+const MAX_CHART_SERIES = 8;
+
+function foldChartSeries(series) {
+  if (series.length <= MAX_CHART_SERIES) return series.map((item, index) => ({ ...item, slot: String(index + 1) }));
+  const kept = series.slice(0, MAX_CHART_SERIES - 1).map((item, index) => ({ ...item, slot: String(index + 1) }));
+  const rest = series.slice(MAX_CHART_SERIES - 1);
+  const points = rest[0].points.map((_, index) => {
+    const values = rest.map(item => item.points[index]).filter(point => point !== null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  });
+  const total = rest.reduce((sum, item) => sum + Number(item.total_r || 0), 0);
+  return [...kept, { name: `Ostatní (${rest.length})`, points, total_r: total, slot: 'other' }];
+}
 
 function renderStrategyChart(chart) {
   const root = $('#strategyChart');
   const legend = $('#strategyLegend');
   const dates = chart?.dates || [];
-  const series = (chart?.series || []).filter(item => item.points.some(point => point !== null));
+  const visible = (chart?.series || []).filter(item => item.points.some(point => point !== null));
+  const series = foldChartSeries(visible);
 
   if (dates.length < 2 || !series.length) {
     root.innerHTML = '<div class="empty-state">Až budou obchody aspoň ze dvou dnů, uvidíš tady vývoj každé strategie v čase.</div>';
@@ -1498,8 +1523,7 @@ function renderStrategyChart(chart) {
   const toY = value => padTop + ((max - value) / range) * plot;
   const zeroY = toY(0);
 
-  const paths = series.map((item, order) => {
-    const color = seriesColors[order % seriesColors.length];
+  const paths = series.map(item => {
     const segments = [];
     let current = [];
     item.points.forEach((point, index) => {
@@ -1512,8 +1536,8 @@ function renderStrategyChart(chart) {
     });
     if (current.length) segments.push(current);
     const line = segments.map(segment => segment.length === 1
-      ? `<circle cx="${segment[0].split(',')[0]}" cy="${segment[0].split(',')[1]}" r="3" fill="${color}"/>`
-      : `<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+      ? `<circle cx="${segment[0].split(',')[0]}" cy="${segment[0].split(',')[1]}" r="4" data-series="${item.slot}"/>`
+      : `<polyline points="${segment.join(' ')}" fill="none" data-series="${item.slot}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join('');
     return line;
   }).join('');
 
@@ -1527,12 +1551,8 @@ function renderStrategyChart(chart) {
     ${paths}${labels}
   </svg>`;
 
-  legend.innerHTML = series.map((item, order) => {
-    const color = seriesColors[order % seriesColors.length];
-    return `<span class="legend-item"><i data-color="${color}"></i>${escapeHtml(item.name)} <strong class="${item.total_r >= 0 ? 'value-positive' : 'value-negative'}">${signedR(item.total_r)}</strong></span>`;
-  }).join('');
-  $$('#strategyLegend .legend-item i').forEach(dot => { dot.style.background = dot.dataset.color; });
-  $('#strategyChartCaption').textContent = `${series.length} strategií · ${dates.length} obchodních dnů`;
+  legend.innerHTML = series.map(item => `<span class="legend-item"><i data-series="${item.slot}"></i>${escapeHtml(item.name)} <strong class="${item.total_r >= 0 ? 'value-positive' : 'value-negative'}">${signedR(item.total_r)}</strong></span>`).join('');
+  $('#strategyChartCaption').textContent = `${visible.length} strategií · ${dates.length} obchodních dnů`;
 }
 
 async function refreshStrategyStats() {
@@ -1569,7 +1589,7 @@ async function refreshStrategyStats() {
         <td>${adherence === null ? '—' : `${displayNumber(adherence, 0)} %`}</td>
         <td>${execution === null ? '—' : `${displayNumber(execution, 1)} / 5`}</td>
         <td>${escapeHtml(item.last_trade || '—')}</td>
-        <td><button class="mini-button" type="button" data-strategy-trades="${escapeHtml(item.name)}">Obchody</button></td>
+        <td><button class="mini-button" type="button" data-strategy-trades="${escapeHtml(item.name)}">Obchody</button>${Number(item.strategy_id) > 0 ? shareButton('strategy', item.strategy_id) : ''}</td>
       </tr>`;
     }).join('') || '<tr><td colspan="11" class="muted">Zatím nejsou zapsané žádné obchody.</td></tr>';
   } catch (error) { toast(error.message, 'error'); }
@@ -2092,6 +2112,7 @@ async function openStrategyDialog(id = null) {
   }
   $('#strategyDialogTitle').textContent = state.currentStrategy ? 'Upravit strategii / setup' : 'Přidat strategii / setup';
   $('#deleteStrategy').hidden = !state.currentStrategy;
+  $('#shareStrategy').hidden = !state.currentStrategy;
   renderStrategyGallery();
   $('#strategyDialog').showModal();
 }
@@ -2436,7 +2457,7 @@ function filteredTrades() {
 
 function renderTradeTable() {
   const rows = filteredTrades();
-  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td><td>${escapeHtml(trade.strategy || '—')}</td><td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${displayNumber(trade.entry_price)} / ${displayNumber(trade.exit_price)}</td><td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td><td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td><td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td><td><button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button><button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Žádné obchody odpovídající filtru.</td></tr>';
+  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td><td>${escapeHtml(trade.strategy || '—')}</td><td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${displayNumber(trade.entry_price)} / ${displayNumber(trade.exit_price)}</td><td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td><td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td><td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td><td>${sharedMark('trade', trade.id)}<button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button>${shareButton('trade', trade.id)}<button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Žádné obchody odpovídající filtru.</td></tr>';
 }
 
 async function refreshTrades() {
@@ -2523,7 +2544,7 @@ function renderArchive() {
       <strong class="archive-market">${escapeHtml(plan.market)}</strong>
       <span class="badge direction-${escapeHtml(plan.bias)}">${directionLabel(plan.bias)}</span>
       <div class="archive-summary"><div class="bias-chips">${chips}</div><p>${escapeHtml(plan.bias_description || 'Bez popisu trhu')}</p></div>
-      <div class="archive-actions"><span class="muted">${Number(plan.zone_count || 0)} zón</span><button class="mini-button" type="button" data-export-plan-pdf="${plan.id}">PDF</button><button class="mini-button" type="button" data-load-plan="${plan.id}">Otevřít</button><button class="mini-button danger" type="button" data-delete-plan="${plan.id}">Smazat</button></div>
+      <div class="archive-actions">${sharedMark('plan', plan.id)}<span class="muted">${Number(plan.zone_count || 0)} zón</span><button class="mini-button" type="button" data-export-plan-pdf="${plan.id}">PDF</button>${shareButton('plan', plan.id)}<button class="mini-button" type="button" data-load-plan="${plan.id}">Otevřít</button><button class="mini-button danger" type="button" data-delete-plan="${plan.id}">Smazat</button></div>
     </article>`;
   }).join('') || '<div class="empty-state">Zatím nejsou uložené žádné náhledy. Začni týdenním náhledem o víkendu a denním ráno před session.</div>';
 }
@@ -2988,13 +3009,17 @@ function openLightbox(id, source = state.currentScreenshots) {
 
 async function init() {
   bindEvents();
+  bindWallEvents();
+  bindMemberEvents();
+  applyHues(document);
   resetPlan({ type: 'daily' });
   // Pole otevření se odemykají podle času, i když necháš náhled otevřený.
   setInterval(() => {
     if ($('#view-plan').classList.contains('is-active')) { applySessionLocks(); updatePlanProgress(); }
   }, 30000);
   await checkHealth();
-  await Promise.all([refreshDashboard(), refreshPlans(), refreshTrades(), refreshStrategies(), refreshAccounts()]);
+  await refreshShares();
+  await Promise.all([refreshDashboard(), refreshPlans(), refreshTrades(), refreshStrategies(), refreshAccounts(), refreshMe()]);
 }
 
 init();

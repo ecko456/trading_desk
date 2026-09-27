@@ -644,12 +644,18 @@ final class JournalStore
         }
         ensure_directory($this->directory() . DIRECTORY_SEPARATOR . 'uploads');
         if (!$this->encrypted()) {
+            // Sdílený zámek: souběžné požadavky nevadí, ale zapnutí šifrování počká, až doběhnou.
+            $this->acquireLock(LOCK_SH);
+            register_shutdown_function([$this, 'close']);
+            if (is_file($this->sealedPath())) {
+                throw new RuntimeException('Deník se mezitím zašifroval. Přihlas se prosím znovu.');
+            }
             $pdo = new PDO('sqlite:' . $this->plainPath());
             $this->configure($pdo, 'WAL', 'NORMAL');
             return $this->pdo = $pdo;
         }
 
-        $this->acquireLock();
+        $this->acquireLock(LOCK_EX);
         $plain = '';
         if (is_file($this->sealedPath())) {
             $plain = vault_open((string)file_get_contents($this->sealedPath()), $this->dataKey, 'journal|user:' . $this->userId);
@@ -683,13 +689,13 @@ final class JournalStore
         migrate_schema($pdo);
     }
 
-    private function acquireLock(): void
+    private function acquireLock(int $mode): void
     {
         if ($this->lock !== null) {
             return;
         }
         $this->lock = fopen($this->directory() . DIRECTORY_SEPARATOR . 'journal.lock', 'c');
-        if ($this->lock === false || !flock($this->lock, LOCK_EX)) {
+        if ($this->lock === false || !flock($this->lock, $mode)) {
             throw new RuntimeException('Deník je právě zamčený jiným požadavkem.');
         }
     }
@@ -790,7 +796,12 @@ function current_journal(): JournalStore
         throw new RuntimeException('Deník je dostupný jen přihlášenému uživateli.');
     }
     if (!($store instanceof JournalStore) || $owner !== (int)$user['id']) {
-        $store = new JournalStore((int)$user['id'], (bool)$user['encrypted'] ? current_user_key() : null);
+        $key = (bool)$user['encrypted'] ? current_user_key() : null;
+        if ((bool)$user['encrypted'] && $key === null) {
+            // Šifrovaný deník bez klíče se nikdy nesmí otevřít jako nešifrovaný.
+            throw new RuntimeException('Šifrovaný deník nejde odemknout bez přístupového klíče.');
+        }
+        $store = new JournalStore((int)$user['id'], $key);
         $owner = (int)$user['id'];
         $GLOBALS['td_journal'] = $store;
     }

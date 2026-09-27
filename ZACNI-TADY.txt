@@ -36,5 +36,6 @@ Zálohuj se. V aplikaci je sekce "Záloha", kde jedním kliknutím stáhneš
 ZIP s databází i screenshoty. Jednu kopii měj mimo tenhle počítač.
 Když se rozbije disk, data nikde jinde nejsou.
 
-Aplikace nemá přihlašování, protože běží jen u tebe na localhost.
-Nezpřístupňuj ji do internetu ani do domácí sítě.
+Při prvním spuštění založíš účet správce kódem, který vypíše instalace.
+Další lidé se zaregistrují sami a ty je schválíš. Kdo chce, má deník
+šifrovaný přístupovým klíčem. Na internet aplikaci dávej jen s HTTPS.

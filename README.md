@@ -4,6 +4,10 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 
 ## Co umí
 
+- **účty se schvalováním**: registraci každého člena schvaluje správce, každý má vlastní, oddělený deník,
+- **šifrovaný deník na přání**: místo hesla přístupový klíč, deník i screenshoty jsou na disku zašifrované a správce je nepřečte,
+- **společná nástěnka**: sdílení náhledů, obchodů a strategií, vlastní příspěvky s grafy, komentáře a reakce,
+- **správa členů**: schvalování, blokace, role správce, obnova hesla, uzavření registrací,
 - **týdenní i denní náhled** trhu postavený pro Market Profile: bias z price action (Monthly, Weekly, Daily) a z MP/VP (Weekly, Daily), tvar profilu P, b, D, B, poloha close vůči value, reference na dojetí (single prints, poor high/low, naked POC…),
 - pole o otevření trhu (Globex, EU, RTH, typ otevření, Initial Balance) jsou zamčená, dokud jejich čas nenastane; o víkendu se náhled sám nastaví na pondělí,
 - zóny se směrem long, short nebo obojí a s definicí, co se musí splnit pro vstup a kdy obchod nebrat, zvlášť pro každý směr,
@@ -29,7 +33,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - tmavý i světlý vzhled s většími a čitelnějšími popisky,
 - kompletní ZIP záloha SQLite databáze a screenshotů plus JSON export.
 
-Data nejsou ukládána do `localStorage`. Zdroj pravdy je SQLite na Ubuntu a adresář screenshotů.
+Data nejsou ukládána do `localStorage`. Zdroj pravdy je SQLite na serveru a adresář screenshotů, pro každého člena zvlášť.
 
 ## Instalace
 
@@ -39,7 +43,7 @@ Návod pro Windows, Mac i Linux psaný pro netechnické uživatele je v souboru 
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ecko456/trading_desk?quickstart=1)
 
-Aplikace potřebuje PHP server, takže na GitHub Pages běžet nemůže. Spustí se ale v GitHub Codespaces, tedy v soukromém počítači v cloudu, který patří jen tobě. Konfigurace je v `.devcontainer/`: při prvním vytvoření se nainstaluje PHP a knihovny pro PDF a při každém startu se sama spustí aplikace na portu 8420. Postup krok za krokem a na co si dát pozor je v [INSTALL.md](INSTALL.md), varianta D.
+Aplikace potřebuje PHP server, takže na GitHub Pages běžet nemůže. Spustí se ale v GitHub Codespaces, tedy v soukromém počítači v cloudu, který patří jen tobě. Konfigurace je v `.devcontainer/`: při prvním vytvoření se nainstaluje PHP a knihovny pro PDF a při každém startu se sama spustí aplikace na portu 8420. Kód pro založení správce vypíše terminál. Postup krok za krokem a na co si dát pozor je v [INSTALL.md](INSTALL.md), varianta D.
 
 ## Nasazení na Ubuntu
 
@@ -63,11 +67,16 @@ Instalátor pouze přidá Apache alias `/trading/`. Existující aplikace na `/`
 Výchozí produkční umístění:
 
 ```text
-/var/lib/trading-journal/trading.sqlite3
-/var/lib/trading-journal/uploads/
+/var/lib/trading-journal/app.sqlite3                       členové, relace, nástěnka
+/var/lib/trading-journal/users/<id>/trading.sqlite3        deník člena bez šifrování
+/var/lib/trading-journal/users/<id>/trading.sqlite3.sealed deník člena se šifrováním
+/var/lib/trading-journal/users/<id>/uploads/               screenshoty člena
+/var/lib/trading-journal/wall/                             obrázky sdílené na nástěnce
 ```
 
-Apache do adresáře zapisuje jako `www-data`. Data nejsou veřejně dostupná; obrázky se čtou přes `file.php` podle databázového ID.
+Apache do adresáře zapisuje jako `www-data`. Data nejsou veřejně dostupná; obrázky se čtou přes `file.php`, a to jen z deníku přihlášeného člena nebo z nástěnky.
+
+Deník z verze 16 a starší (`trading.sqlite3` přímo v datovém adresáři) si při založení převezme první správce. Když si při tom zvolí šifrování, deník se rovnou zašifruje.
 
 ## Ruční Apache konfigurace
 
@@ -82,7 +91,45 @@ sudo systemctl reload apache2
 
 ## Zálohování
 
-V aplikaci otevři záložku **Záloha** a stáhni kompletní ZIP. Obsahuje konzistentní SQLite snapshot, všechny screenshoty a manifest.
+V aplikaci otevři záložku **Záloha** a stáhni kompletní ZIP. Obsahuje konzistentní snapshot tvého deníku, tvoje screenshoty a manifest. U šifrovaného deníku je ZIP odemčený, aby šel otevřít i bez aplikace, takže ho ulož na bezpečné místo.
+
+Správce serveru zálohuje celý adresář `/var/lib/trading-journal`. Šifrované deníky v něm zůstávají zapečetěné a bez klíčů jejich majitelů jsou nečitelné.
+
+## Účty, šifrování a nástěnka
+
+### První správce
+
+Po instalaci aplikace nemá žádný účet. Na přihlašovací stránce se ukáže **Založení správce**, které chce jednorázový kód. Kód leží jen na disku serveru a do prohlížeče se nikdy neposílá. Vypíše ho instalátor, terminál Codespace i spouštěč na Macu, případně:
+
+```bash
+sudo -u www-data TRADING_DATA_DIR=/var/lib/trading-journal php /var/www/trading-journal/bin/setup-token.php
+```
+
+Po založení správce kód přestane platit.
+
+### Registrace a schválení
+
+Kdo zná adresu, může se zaregistrovat. Přihlásí se ale až po schválení správcem v sekci **Členové**. Tam správce také blokuje a maže účty, uděluje práva správce, obnovuje zapomenuté heslo (vygeneruje dočasné, které si člen po přihlášení změní) a může registrace úplně uzavřít. Obsah deníků správce nevidí, jen jméno, e-mail, stav a velikost dat.
+
+Přihlášení je chráněné proti hádání: po osmi neúspěšných pokusech na jeden účet se další zkoušky na čtvrt hodiny odmítnou, stejně jako nadměrný počet registrací z jedné adresy.
+
+### Šifrovaný deník
+
+Při registraci, nebo později v **Profilu**, jde místo hesla zvolit **šifrovaný deník**. Aplikace vygeneruje přístupový klíč (160 bitů, osm skupin po čtyřech znacích), který se ukáže jen jednou. Deník i všechny screenshoty se pak ukládají zašifrované (libsodium, XChaCha20-Poly1305):
+
+- náhodný datový klíč deníku je na disku zabalený klíčem odvozeným z přístupového klíče,
+- po přihlášení se datový klíč zabalí ještě tokenem relace, který má jen prohlížeč v cookie,
+- při každém požadavku se deník odemkne jen do paměti a po uložení se znovu zapečetí.
+
+Bez aktivní relace člena tak deník neotevře nikdo, ani s přístupem k disku nebo zálohám serveru. **Ztracený klíč nejde obnovit** a správce ho resetovat nemůže. Nový klíč si člen vydá v profilu; data se nepřešifrovávají, jen se vymění zámek.
+
+Co šifrování nechrání: správce serveru, který by upravil kód aplikace a zachytil klíč při přihlášení. Proti tomu by pomohlo jen šifrování přímo v prohlížeči.
+
+### Společná nástěnka
+
+Náhled, obchod nebo strategii sdílíš tlačítkem **Sdílet** v náhledu, deníku, historii nebo u strategie, případně na nástěnce přes **Sdílet z deníku**. Na nástěnku se uloží **snímek** v okamžiku sdílení: šifrovaný deník zůstane šifrovaný a na nástěnce je jen to, co jsi výslovně zveřejnil. U obchodu se částky v dolarech a poznámky s emocemi sdílí, jen když je zaškrtneš; jinak ostatní vidí výsledek v R. Opětovné sdílení snímek aktualizuje a komentáře zůstanou.
+
+Na nástěnku jde psát i vlastní příspěvky s až šesti grafy. Pod každým příspěvkem jsou komentáře a reakce (Líbí se, Silné, Přesné, Zajímavé). Autor může mazat komentáře pod svým příspěvkem, správce moderuje celou nástěnku. V menu se ukazuje počet nových příspěvků od poslední návštěvy.
 
 ## Náhled trhu: týdenní a denní
 
@@ -318,4 +365,6 @@ Doporučení: alespoň jednu kopii uchovávej mimo disk Ubuntu serveru.
 
 ## Bezpečnost
 
-Aplikace je navržená pro osobní localhost. Pokud ji zpřístupníš do domácí sítě nebo internetu, zapni heslo a nastav HTTPS podle [INSTALL.md](INSTALL.md), varianta E. Zápisy z cizích stránek API odmítá vždy.
+Aplikace má vlastní účty, schvalování registrací a ochranu proti hádání hesel. API odmítá zápisy, které nepřišly z její vlastní stránky (ochrana proti CSRF), relace běží v cookie s příznaky HttpOnly a SameSite a bezpečnostní hlavičky zakazují cizí skripty i vkládání do rámů.
+
+Na serveru dostupném z internetu je ale **HTTPS povinné**: bez něj jdou heslo, přístupový klíč i cookie relace po síti čitelně. Postup je v [INSTALL.md](INSTALL.md), varianta E.

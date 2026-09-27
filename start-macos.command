@@ -50,6 +50,12 @@ echo "   Tvoje data jsou v podadresáři  data/"
 echo "   Zálohu stáhneš přímo v aplikaci v sekci \"Záloha\"."
 echo
 
+CODE="$("${PHP_BIN}" bin/setup-token.php 2>/dev/null || true)"
+if [[ -n "${CODE}" && "${CODE}" != *"existuje"* ]]; then
+  echo "   První spuštění: správce založíš kódem  ${CODE}"
+  echo
+fi
+
 ( sleep 2; open "http://localhost:${PORT}/" ) &
 
 exec "${PHP_BIN}" -d upload_max_filesize=20M -d post_max_size=22M -S "localhost:${PORT}" router.php

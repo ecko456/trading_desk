@@ -324,11 +324,30 @@ class StaticAppTests(unittest.TestCase):
         self.assertIn("HTTP_SEC_FETCH_SITE", bootstrap)
         self.assertIn("HTTP_ORIGIN", bootstrap)
 
-    def test_password_survives_reinstall(self):
+    def test_libraries_are_not_served(self):
         conf = (ROOT / "deploy" / "apache-trading.conf").read_text(encoding="utf-8")
-        self.assertIn("<IfFile /etc/apache2/trading-journal.htpasswd>", conf)
-        self.assertIn("Require valid-user", conf)
-        self.assertIn("<IfFile !/etc/apache2/trading-journal.htpasswd>", conf)
+        router = (ROOT / "router.php").read_text(encoding="utf-8")
+        self.assertIn('(data|lib|bin)', conf)
+        self.assertIn("lib|bin", router)
+        for directory in ("lib", "bin", "data"):
+            self.assertIn("Require all denied", (ROOT / directory / ".htaccess").read_text(encoding="utf-8"))
+
+    def test_app_requires_login_and_has_community_views(self):
+        html = (ROOT / "index.php").read_text(encoding="utf-8")
+        self.assertIn("lib/auth-page.php", html)
+        self.assertLess(html.index("current_user()"), html.index("<!doctype html>"))
+        for view in ("view-wall", "view-profile", "view-admin"):
+            self.assertIn(f'id="{view}"', html)
+        self.assertLess(html.index("static/wall.js"), html.index("static/app.js"))
+        self.assertLess(html.index("static/members.js"), html.index("static/app.js"))
+
+    def test_chart_colors_come_from_validated_tokens(self):
+        javascript = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        css = (ROOT / "static" / "styles.css").read_text(encoding="utf-8")
+        self.assertNotIn("seriesColors", javascript)
+        self.assertIn("foldChartSeries", javascript)
+        for slot in range(1, 9):
+            self.assertIn(f"--series-{slot}:", css)
 
 
 if __name__ == "__main__":

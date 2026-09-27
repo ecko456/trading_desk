@@ -20,6 +20,17 @@ function icon(string $name): string
         'plus' => '<path d="M12 5v14M5 12h14"/>',
         'download' => '<path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 19.5h14"/>',
         'lock' => '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+        'key' => '<circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16.5 7l2.5 2.5M14.5 9l2 2"/>',
+        'wall' => '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z"/><path d="M8 8.5h8M8 12h5"/>',
+        'shield' => '<path d="M12 3.5l7 2.8v5.2c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6.3z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+        'users' => '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.5 14.3a4.5 4.5 0 0 1 5 5.2"/>',
+        'logout' => '<path d="M14 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H14"/><path d="M10 12h10M16.5 8.5 20 12l-3.5 3.5"/>',
+        'share' => '<circle cx="17.5" cy="6" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="m8.7 10.8 6.6-3.6M8.7 13.2l6.6 3.6"/>',
+        'comment' => '<path d="M5 17.5 3.5 21l4.2-1.8A8.5 8.5 0 1 0 5 17.5z"/>',
+        'image' => '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-8 8.5"/>',
+        'send' => '<path d="M4 12 20 4l-4.5 16-3.5-6.5z"/><path d="m12 13.5 8-9.5"/>',
+        'user' => '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
+        'trash' => '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>',
     ];
     return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$name] ?? '') . '</svg>';
 }
@@ -42,6 +53,16 @@ $shapes = [
     ['trend', 'Trend', 'Protažený profil, iniciativa jedné strany', [5, 6, 7, 6, 5, 7, 6, 5, 6]],
 ];
 $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</option><option value="above">Nad VA</option><option value="below">Pod VA</option><option value="outside">Mimo range</option>';
+
+// Bez přihlášení se ukáže jen přihlašovací stránka; deník se vůbec neotevře.
+$viewer = current_user();
+if ($viewer === null) {
+    require __DIR__ . '/lib/auth-page.php';
+    exit;
+}
+$viewerIsAdmin = is_admin($viewer);
+$viewerName = htmlspecialchars((string)$viewer['display_name'], ENT_QUOTES);
+$viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn(string $part): string => mb_substr($part, 0, 1), array_slice(preg_split('/\s+/u', trim((string)$viewer['display_name'])) ?: [], 0, 2)))), ENT_QUOTES);
 ?>
 <!doctype html>
 <html lang="cs">
@@ -49,12 +70,14 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#0b0e13">
+  <meta name="theme-color" content="#07080b">
   <title>Trading Desk</title>
   <script src="<?= asset_url('static/theme.js') ?>"></script>
+  <link rel="preload" href="static/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="static/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="<?= asset_url('static/styles.css') ?>">
 </head>
-<body>
+<body data-user-id="<?= (int)$viewer['id'] ?>" data-user-hue="<?= (int)$viewer['avatar_hue'] ?>" data-user-role="<?= htmlspecialchars((string)$viewer['role']) ?>" data-user-encrypted="<?= $viewer['encrypted'] ? '1' : '0' ?>" data-must-change="<?= $viewer['must_change_secret'] ? '1' : '0' ?>">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -62,6 +85,8 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
         <span><strong>Trading Desk</strong><small>Market Profile journal</small></span>
       </div>
       <nav class="nav" aria-label="Hlavní navigace">
+        <p class="nav-group">Komunita</p>
+        <button class="nav-item" type="button" data-view="wall"><?= icon('wall') ?><span>Nástěnka</span><em class="nav-flag is-gold" id="navWallFlag" hidden></em></button>
         <p class="nav-group">Příprava</p>
         <button class="nav-item is-active" type="button" data-view="dashboard"><?= icon('dashboard') ?><span>Přehled</span></button>
         <button class="nav-item" type="button" data-view="plan"><?= icon('plan') ?><span>Náhled trhu</span></button>
@@ -75,10 +100,23 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
         <button class="nav-item" type="button" data-view="accounts"><?= icon('accounts') ?><span>Účty a audit</span><em class="nav-flag" id="navAuditFlag" hidden>Money audit</em></button>
         <p class="nav-group">Data</p>
         <button class="nav-item" type="button" data-view="backup"><?= icon('backup') ?><span>Záloha a export</span></button>
+        <?php if ($viewerIsAdmin): ?>
+        <p class="nav-group">Správa</p>
+        <button class="nav-item" type="button" data-view="admin"><?= icon('users') ?><span>Členové</span><em class="nav-flag is-gold" id="navAdminFlag" hidden></em></button>
+        <?php endif; ?>
       </nav>
       <div class="sidebar-foot">
-        <div class="server-state"><span class="status-dot" id="serverDot"></span><span><strong id="serverStatus">Ověřuji server</strong><small>data zůstávají u tebe v PC</small></span></div>
-        <button class="icon-button theme-toggle" type="button" id="themeToggle" aria-label="Přepnout světlý a tmavý vzhled" title="Světlý / tmavý vzhled"><?= icon('moon') ?><?= icon('sun') ?></button>
+        <div class="user-chip">
+          <button class="user-chip-main" type="button" data-open-view="profile" title="Můj profil">
+            <span class="avatar<?= $viewerIsAdmin ? ' is-admin' : '' ?>" data-hue="<?= (int)$viewer['avatar_hue'] ?>" id="chipAvatar"><?= $viewerInitials ?></span>
+            <span><strong id="chipName"><?= $viewerName ?></strong><small><?= $viewerIsAdmin ? 'Správce' : 'Člen' ?> · <?= $viewer['encrypted'] ? icon('lock') . ' šifrovaný deník' : 'deník bez šifrování' ?></small></span>
+          </button>
+          <button class="icon-button" type="button" id="logoutButton" aria-label="Odhlásit se" title="Odhlásit se"><?= icon('logout') ?></button>
+        </div>
+        <div class="sidebar-foot-row">
+          <div class="server-state"><span class="status-dot" id="serverDot"></span><span><strong id="serverStatus">Ověřuji server</strong><small><?= $viewer['encrypted'] ? 'deník se odemyká jen tobě' : 'data na tomto serveru' ?></small></span></div>
+          <button class="icon-button theme-toggle" type="button" id="themeToggle" aria-label="Přepnout světlý a tmavý vzhled" title="Světlý / tmavý vzhled"><?= icon('moon') ?><?= icon('sun') ?></button>
+        </div>
       </div>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
@@ -163,6 +201,7 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
                 <div class="plan-progress" id="planProgress" title="Jak kompletní je náhled"><span><i id="planProgressBar"></i></span><em id="planProgressText">0 %</em></div>
                 <button class="button button-ghost" type="button" id="newPlan">Vyčistit</button>
                 <button class="button button-ghost" type="button" id="exportPlanPdf"><?= icon('download') ?>PDF</button>
+                <button class="button button-ghost" type="button" id="sharePlan"><?= icon('share') ?>Sdílet</button>
                 <button class="button button-primary" type="submit">Uložit náhled</button>
               </div>
             </div>
@@ -432,8 +471,134 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
             <section class="surface backup-intro"><p class="eyebrow">Kompletní záloha</p><h2>SQLite + všechny screenshoty</h2><p>ZIP obsahuje konzistentní kopii databáze, obrázky a manifest. Ulož jej také mimo disk počítače.</p><a class="button button-primary" href="backup.php"><?= icon('download') ?>Stáhnout kompletní ZIP</a></section>
             <section class="surface backup-intro"><p class="eyebrow">Přenositelný export</p><h2>Data ve formátu JSON</h2><p>Vhodné pro další analýzu, audit nebo budoucí migraci bez screenshotů.</p><a class="button button-ghost" href="api.php?action=export" download="trading-export.json"><?= icon('download') ?>Stáhnout JSON</a></section>
           </div>
-          <section class="surface backup-notes"><h2>Kam se data ukládají</h2><dl><div><dt>Databáze</dt><dd><code>data/trading.sqlite3</code></dd></div><div><dt>Screenshoty</dt><dd><code>data/uploads/</code></dd></div><div><dt>Adresa aplikace</dt><dd><code>/trading/</code></dd></div></dl><p>Adresář <code>data</code> je webově uzavřený; screenshoty se zobrazují pouze přes kontrolovaný PHP endpoint.</p></section>
+          <section class="surface backup-notes"><h2>Kam se tvá data ukládají</h2><dl><div><dt>Deník</dt><dd><code>users/<?= (int)$viewer['id'] ?>/<?= $viewer['encrypted'] ? 'trading.sqlite3.sealed' : 'trading.sqlite3' ?></code></dd></div><div><dt>Screenshoty</dt><dd><code>users/<?= (int)$viewer['id'] ?>/uploads/</code></dd></div><div><dt>Šifrování</dt><dd><?= $viewer['encrypted'] ? 'Zapnuté. Soubory jsou zapečetěné tvým klíčem.' : 'Vypnuté. Zapneš ho v profilu.' ?></dd></div></dl><p>Datový adresář je webově uzavřený a každý člen má vlastní deník. ZIP záloha obsahuje jen tvůj deník a je odemčená, ať jde otevřít i bez aplikace. Ulož ji proto na bezpečné místo.</p></section>
         </section>
+
+        <!-- NÁSTĚNKA -->
+        <section class="view" id="view-wall">
+          <div class="wall-layout">
+            <div class="wall-feed">
+              <section class="surface composer">
+                <form id="composerForm">
+                  <div class="composer-row">
+                    <span class="avatar" data-hue="<?= (int)$viewer['avatar_hue'] ?>"><?= $viewerInitials ?></span>
+                    <textarea name="body" id="composerText" rows="2" maxlength="4000" placeholder="Co se děje na trhu? Postřeh, otázka nebo graf…"></textarea>
+                  </div>
+                  <div class="composer-previews" id="composerPreviews"></div>
+                  <div class="composer-foot">
+                    <label class="attach-button"><?= icon('image') ?>Graf<input type="file" id="composerImages" accept="image/png,image/jpeg,image/webp" multiple></label>
+                    <button class="attach-button" type="button" id="openSharePicker"><?= icon('share') ?>Sdílet z deníku</button>
+                    <span class="spacer"></span>
+                    <small id="composerCount"></small>
+                    <button class="button button-primary button-small" type="submit"><?= icon('send') ?>Publikovat</button>
+                  </div>
+                </form>
+              </section>
+              <div class="wall-filters" id="wallFilters" role="group" aria-label="Filtr příspěvků">
+                <button class="chip is-on" type="button" data-wall-kind="">Vše</button>
+                <button class="chip" type="button" data-wall-kind="plan">Náhledy</button>
+                <button class="chip" type="button" data-wall-kind="trade">Obchody</button>
+                <button class="chip" type="button" data-wall-kind="strategy">Strategie</button>
+                <button class="chip" type="button" data-wall-kind="note">Příspěvky</button>
+              </div>
+              <div class="wall-filter-note" id="wallAuthorNote" hidden><span id="wallAuthorText"></span><button class="mini-button" type="button" id="clearWallAuthor">Zobrazit všechny</button></div>
+              <div class="wall-feed" id="wallPosts"><div class="skeleton"></div><div class="skeleton"></div></div>
+              <button class="button button-ghost wall-more" type="button" id="wallMore" hidden>Načíst starší příspěvky</button>
+            </div>
+            <aside class="wall-rail">
+              <section class="surface rail-card">
+                <p class="eyebrow">Tvoje soukromí</p>
+                <h3>Co vidí ostatní</h3>
+                <p>Na nástěnce je jen to, co sám sdílíš: snímek náhledu, obchodu nebo strategie v okamžiku sdílení. Zbytek deníku vidíš jen ty.<?= $viewer['encrypted'] ? ' Tvůj deník je šifrovaný; sdílený snímek je pro členy čitelný.' : '' ?></p>
+              </section>
+              <section class="surface rail-card">
+                <p class="eyebrow">Komunita</p>
+                <h3>Členové</h3>
+                <div class="member-list" id="memberList"></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <!-- PROFIL -->
+        <section class="view" id="view-profile">
+          <div class="profile-layout">
+            <section class="surface profile-card">
+              <div class="identity-hero">
+                <span class="avatar avatar-xl<?= $viewerIsAdmin ? ' is-admin' : '' ?>" data-hue="<?= (int)$viewer['avatar_hue'] ?>" id="profileAvatar"><?= $viewerInitials ?></span>
+                <div><p class="eyebrow"><?= $viewerIsAdmin ? 'Správce' : 'Člen komunity' ?></p><h2 id="profileName"><?= $viewerName ?></h2><p>@<?= htmlspecialchars((string)$viewer['login']) ?> · člen od <?= htmlspecialchars(substr((string)$viewer['created_at'], 0, 10)) ?></p></div>
+              </div>
+              <form class="profile-form" id="accountProfileForm">
+                <label>Zobrazované jméno<input name="display_name" required maxlength="60" value="<?= $viewerName ?>"></label>
+                <label><span>E-mail <small class="optional">vidí ho jen správce</small></span><input name="email" type="email" maxlength="120" value="<?= htmlspecialchars((string)($viewer['email'] ?? '')) ?>"></label>
+                <label>Barva avatara<input class="hue-range" type="range" name="avatar_hue" min="0" max="359" value="<?= (int)$viewer['avatar_hue'] ?>" id="hueRange"></label>
+                <button class="button button-primary" type="submit">Uložit profil</button>
+              </form>
+            </section>
+
+            <section class="surface profile-card">
+              <div class="section-heading"><div><p class="eyebrow">Zabezpečení</p><h2>Přístup a šifrování</h2></div></div>
+              <?php if ($viewer['encrypted']): ?>
+              <div class="security-state is-encrypted"><?= icon('shield') ?><div><strong>Deník je šifrovaný</strong><p>Deník i screenshoty jsou na disku zapečetěné tvým klíčem. Odemknou se jen během tvého požadavku. Klíč nikdo neobnoví, ani správce.</p></div></div>
+              <div class="profile-form">
+                <p class="calc-hint">Nový klíč vydej, když máš podezření, že starý někdo viděl. Data se nepřešifrovávají, jen se vymění zámek; ostatní zařízení se odhlásí.</p>
+                <button class="button button-ghost" type="button" id="rotateKey"><?= icon('key') ?>Vydat nový přístupový klíč</button>
+              </div>
+              <?php else: ?>
+              <div class="security-state"><?= icon('shield') ?><div><strong>Deník bez šifrování</strong><p>Deník leží na serveru jako běžná databáze. Kdo má přístup k disku serveru, může ho přečíst. Šifrování to změní.</p></div></div>
+              <form class="profile-form" id="passwordForm">
+                <div class="field-grid three">
+                  <label>Současné heslo<input name="current" type="password" autocomplete="current-password" required></label>
+                  <label>Nové heslo<input name="next" type="password" autocomplete="new-password" minlength="10" required></label>
+                  <label>Nové heslo znovu<input name="again" type="password" autocomplete="new-password" required></label>
+                </div>
+                <button class="button button-ghost" type="submit">Změnit heslo</button>
+              </form>
+              <div class="profile-form">
+                <p class="calc-hint"><strong>Zapnout šifrování:</strong> heslo nahradí přístupový klíč. Celý deník i screenshoty se zašifrují a bez klíče je nepřečte nikdo, ani správce. Ztracený klíč nejde obnovit.</p>
+                <button class="button button-primary" type="button" id="enableEncryption"><?= icon('lock') ?>Zapnout šifrování deníku</button>
+              </div>
+              <?php endif; ?>
+              <div class="switch-row"><div><strong>Ostatní zařízení</strong><small>Ukončí všechna přihlášení kromě tohoto.</small></div><button class="button button-ghost button-small" type="button" id="logoutOthers">Odhlásit ostatní</button></div>
+            </section>
+          </div>
+          <section class="surface profile-card privacy-card">
+            <div class="section-heading"><div><p class="eyebrow">Soukromí</p><h2>Kdo co vidí</h2></div></div>
+            <ul class="privacy-list">
+              <li><?= icon('lock') ?><span><strong>Tvůj deník vidíš jen ty.</strong> Každý člen má vlastní databázi; aplikace cizí deník vůbec neotevře.</span></li>
+              <li><?= icon('wall') ?><span><strong>Nástěnku vidí všichni schválení členové.</strong> Je na ní jen to, co sdílíš, jako snímek v okamžiku sdílení. Částky v dolarech a poznámky se sdílí jen, když je zaškrtneš.</span></li>
+              <li><?= icon('users') ?><span><strong>Správce vidí seznam členů,</strong> jejich e-mail a velikost dat, ale ne obsah deníků.</span></li>
+              <li><?= icon('shield') ?><span><strong>Šifrovaný deník</strong> chrání data na disku i v zálohách serveru. Proti správci, který by upravil kód aplikace, by pomohlo jen šifrování přímo v prohlížeči.</span></li>
+            </ul>
+          </section>
+        </section>
+<?php if ($viewerIsAdmin): ?>
+
+        <!-- SPRÁVA ČLENŮ -->
+        <section class="view" id="view-admin">
+          <div class="metric-strip four">
+            <article><span>Čeká na schválení</span><strong id="adminPendingCount">0</strong><small>nové registrace</small></article>
+            <article><span>Aktivní členové</span><strong id="adminActiveCount">0</strong><small>mohou se přihlásit</small></article>
+            <article><span>Šifrované deníky</span><strong id="adminEncryptedCount">0</strong><small>obsah nevidí ani správce</small></article>
+            <article><span>Zablokovaní</span><strong id="adminBlockedCount">0</strong><small>bez přístupu</small></article>
+          </div>
+          <div class="admin-top">
+            <section class="surface table-surface">
+              <div class="section-heading"><div><p class="eyebrow">Ke schválení</p><h2>Nové registrace</h2></div><span id="pendingCaption"></span></div>
+              <div class="pending-list" id="pendingList"></div>
+            </section>
+            <section class="surface settings-card">
+              <div class="section-heading"><div><p class="eyebrow">Nastavení</p><h2>Přístup do aplikace</h2></div></div>
+              <div class="switch-row"><div><strong>Otevřené registrace</strong><small>Kdokoli s adresou se může zaregistrovat; přihlásí se až po tvém schválení.</small></div><label class="switch" aria-label="Otevřené registrace"><input type="checkbox" id="registrationOpen"><i></i></label></div>
+              <div class="switch-row"><div><strong>Šifrované deníky</strong><small>Členům se šifrováním nejde obnovit heslo ani přečíst deník. Můžeš je jen zablokovat nebo smazat.</small></div></div>
+            </section>
+          </div>
+          <section class="surface table-surface">
+            <div class="section-heading"><div><p class="eyebrow">Přehled</p><h2>Všichni členové</h2></div><span>Obsah deníků správce nevidí</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Člen</th><th>Stav</th><th>Role</th><th>Deník</th><th>Registrace</th><th>Naposledy</th><th class="num">Příspěvky</th><th class="num">Data</th><th></th></tr></thead><tbody id="memberTable"></tbody></table></div>
+          </section>
+        </section>
+<?php endif; ?>
       </main>
     </div>
   </div>
@@ -523,7 +688,7 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
       <label>Pravidla a poznámky<textarea name="notes" rows="4" placeholder="Podmínky vstupu, invalidace, řízení pozice…"></textarea></label>
       <label class="trade-upload">Screenshoty strategie<input type="file" id="strategyScreenshots" accept="image/png,image/jpeg,image/webp" multiple><span id="strategyScreenshotNames">Vlož ukázkové grafy setupu.</span></label>
       <div class="screenshot-grid" id="strategyGallery"></div>
-      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="deleteStrategy" hidden>Smazat strategii</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button><button class="button button-primary" type="submit" value="default">Uložit strategii</button></div>
+      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="deleteStrategy" hidden>Smazat strategii</button><button class="button button-ghost" type="button" id="shareStrategy" hidden><?= icon('share') ?>Sdílet</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button><button class="button button-primary" type="submit" value="default">Uložit strategii</button></div>
     </form>
   </dialog>
 
@@ -654,9 +819,76 @@ $vaOptions = '<option value="">—</option><option value="inside">Uvnitř VA</op
     </div>
   </dialog>
 
+  <dialog class="modal modal-narrow" id="shareDialog" aria-labelledby="shareDialogTitle">
+    <form method="dialog" id="shareForm">
+      <div class="modal-head"><div><p class="eyebrow">Společná nástěnka</p><h2 id="shareDialogTitle">Sdílet s komunitou</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <div class="share-summary"><?= icon('share') ?><div><strong id="shareSummaryTitle"></strong><small id="shareSummaryText"></small></div></div>
+      <div class="share-options" id="shareOptions"></div>
+      <label>Komentář k příspěvku<textarea name="note" rows="3" maxlength="4000" placeholder="Co na tom stojí za pozornost? Co bys udělal jinak?"></textarea></label>
+      <p class="share-warning" id="shareWarning">Na nástěnku se uloží snímek v tomto okamžiku. Pozdější úpravy v deníku se projeví, až dáš Aktualizovat. Sdílený obsah vidí všichni schválení členové a není šifrovaný.</p>
+      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="unshareButton" hidden>Odebrat z nástěnky</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button><button class="button button-primary" type="submit" value="default" id="shareSubmit"><?= icon('share') ?>Sdílet</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-narrow" id="sharePickerDialog" aria-labelledby="sharePickerTitle">
+    <form method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">Z tvého deníku</p><h2 id="sharePickerTitle">Co chceš sdílet?</h2></div><button class="icon-button" value="cancel" type="submit" aria-label="Zavřít">×</button></div>
+      <div class="auth-tabs picker-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-picker-tab="plan">Náhledy</button>
+        <button type="button" role="tab" aria-selected="false" data-picker-tab="trade">Obchody</button>
+        <button type="button" role="tab" aria-selected="false" data-picker-tab="strategy">Strategie</button>
+      </div>
+      <div class="picker-list" id="pickerList"></div>
+      <div class="modal-actions"><button class="button button-ghost" value="cancel" type="submit">Zavřít</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-narrow" id="secretDialog" aria-labelledby="secretDialogTitle">
+    <form method="dialog" id="secretForm">
+      <div class="modal-head"><div><p class="eyebrow" id="secretDialogEyebrow">Šifrování</p><h2 id="secretDialogTitle">Zapnout šifrování deníku</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít" id="secretDialogClose">×</button></div>
+      <div id="secretAsk">
+        <p class="calc-hint" id="secretIntro"></p>
+        <label id="secretLabel">Současné heslo<input name="current" type="password" autocomplete="current-password" required spellcheck="false"></label>
+      </div>
+      <div class="key-card" id="appKeyCard" hidden>
+        <span class="key-card-label"><?= icon('key') ?>Tvůj nový přístupový klíč</span>
+        <output class="key-value" id="appKeyValue"></output>
+        <div class="key-actions"><button class="button button-ghost" type="button" id="appCopyKey">Kopírovat</button><button class="button button-ghost" type="button" id="appDownloadKey"><?= icon('download') ?>Stáhnout</button></div>
+        <p>Od teď se přihlašuješ tímto klíčem místo hesla. <strong>Server ho nikde neuchovává</strong> a bez něj deník neotevře nikdo, ani správce.</p>
+        <label class="key-confirm"><input type="checkbox" id="appKeySaved"><span>Klíč mám bezpečně uložený</span></label>
+      </div>
+      <div class="modal-actions"><button class="button button-ghost" value="cancel" type="submit" formnovalidate id="secretCancel">Zrušit</button><button class="button button-primary" type="submit" value="default" id="secretSubmit">Pokračovat</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-narrow" id="forcePasswordDialog" aria-labelledby="forcePasswordTitle">
+    <form method="dialog" id="forcePasswordForm">
+      <div class="modal-head"><div><p class="eyebrow">Dočasné heslo</p><h2 id="forcePasswordTitle">Nastav si nové heslo</h2></div></div>
+      <p class="calc-hint">Správce ti obnovil přístup dočasným heslem. Než budeš pokračovat, nastav si vlastní.</p>
+      <div class="field-grid three">
+        <label>Dočasné heslo<input name="current" type="password" autocomplete="current-password" required></label>
+        <label>Nové heslo<input name="next" type="password" autocomplete="new-password" minlength="10" required></label>
+        <label>Nové heslo znovu<input name="again" type="password" autocomplete="new-password" required></label>
+      </div>
+      <div class="modal-actions"><button class="button button-ghost" type="button" id="forceLogout">Odhlásit se</button><span class="spacer"></span><button class="button button-primary" type="submit" value="default">Uložit heslo</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-narrow" id="adminResultDialog" aria-labelledby="adminResultTitle">
+    <form method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">Správa</p><h2 id="adminResultTitle">Dočasné heslo</h2></div><button class="icon-button" value="cancel" type="submit" aria-label="Zavřít">×</button></div>
+      <p class="calc-hint" id="adminResultText"></p>
+      <output class="temp-secret" id="adminResultSecret"></output>
+      <p class="share-warning">Předej ho členovi bezpečnou cestou. Po přihlášení si ho musí změnit. Heslo se ukazuje jen teď.</p>
+      <div class="modal-actions"><button class="button button-primary" value="default" type="submit">Hotovo</button></div>
+    </form>
+  </dialog>
+
   <dialog class="lightbox" id="lightbox"><button class="icon-button" id="closeLightbox" aria-label="Zavřít">×</button><img id="lightboxImage" alt="Screenshot grafu"><p id="lightboxCaption"></p></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="<?= asset_url('static/tradingview-export.js') ?>" defer></script>
+  <script src="<?= asset_url('static/wall.js') ?>" defer></script>
+  <script src="<?= asset_url('static/members.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>

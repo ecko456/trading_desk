@@ -72,11 +72,19 @@ else
   PDF_STATUS="NEDOSTUPNÝ (chybí reportlab nebo pillow, zbytek aplikace funguje)"
 fi
 
+# Dokud nemá aplikace správce, vypíše se jednorázový kód pro jeho založení.
+SETUP_CODE="$(sudo -u www-data env TRADING_DATA_DIR="${DATA_DIR}" php "${TARGET_DIR}/bin/setup-token.php" 2>/dev/null || true)"
+
 echo
 echo "Trading Desk je připravený na: http://localhost/trading/"
 echo "Data: ${DATA_DIR}"
 echo "PDF export: ${PDF_STATUS}"
 echo "Kontrola: curl -fsS 'http://localhost/trading/api.php?action=health'"
+if [[ -n "${SETUP_CODE}" && "${SETUP_CODE}" != *"existuje"* ]]; then
+  echo
+  echo "První spuštění: otevři aplikaci a založ správce tímto kódem:"
+  echo "  ${SETUP_CODE}"
+fi
 if [[ "${IS_WSL}" -eq 1 ]]; then
   echo
   echo "Běžíš ve WSL. Pokud jsi teď měnil /etc/wsl.conf, zavři Ubuntu a ve Windows"
