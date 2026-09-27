@@ -8,6 +8,12 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (!in_array($method, ['GET', 'HEAD'], true)) {
     require_same_origin();
 }
+// Když je požadavek větší než post_max_size, PHP zahodí celé tělo i soubory a bez
+// téhle kontroly by přišla matoucí hláška, že soubor chybí.
+if ($method === 'POST' && $_POST === [] && $_FILES === [] && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
+    && str_starts_with(strtolower((string)($_SERVER['CONTENT_TYPE'] ?? '')), 'multipart/form-data')) {
+    json_response(['error' => 'Soubory jsou dohromady větší, než server dovolí (' . ini_get('post_max_size') . '). Nahraj je po menších částech.'], 413);
+}
 
 try {
     if ($action === 'health' && $method === 'GET') {
@@ -397,7 +403,7 @@ try {
         }
         $upload = $_FILES['file'];
         if (($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            json_response(['error' => 'Nahrání souboru selhalo.'], 422);
+            json_response(['error' => upload_error_message((int)($upload['error'] ?? UPLOAD_ERR_NO_FILE))], 422);
         }
         $size = (int)($upload['size'] ?? 0);
         if ($size <= 0 || $size > MAX_UPLOAD_BYTES) {
@@ -421,6 +427,15 @@ try {
         if ($planId === null && $tradeId === null && $strategyId === null && $auditId === null) {
             json_response(['error' => 'Screenshot musí patřit k náhledu, obchodu, strategii nebo auditu.'], 422);
         }
+        foreach (['plans' => $planId, 'trades' => $tradeId, 'strategies' => $strategyId, 'account_audits' => $auditId] as $table => $ownerId) {
+            if ($ownerId !== null && fetch_one("SELECT id FROM $table WHERE id = ?", [$ownerId]) === null) {
+                json_response(['error' => 'Položka, ke které screenshot patří, už neexistuje. Obnov stránku.'], 422);
+            }
+        }
+        $role = substr(preg_replace('/[^a-z_]/', '', strtolower((string)($_POST['role'] ?? ''))) ?? '', 0, 20) ?: 'plan';
+        $caption = mb_substr(mb_scrub(trim((string)($_POST['caption'] ?? '')), 'UTF-8'), 0, 300, 'UTF-8');
+        // Název souboru pochází z počítače uživatele; neplatné UTF-8 by rozbilo JSON odpovědi.
+        $originalName = mb_substr(mb_scrub(basename((string)($upload['name'] ?? '')), 'UTF-8'), 0, 200, 'UTF-8') ?: 'screenshot';
         $id = bin2hex(random_bytes(16));
         $fileName = $id . '.' . $extensions[$mime];
         $destination = upload_dir() . DIRECTORY_SEPARATOR . $fileName;
@@ -429,9 +444,9 @@ try {
         try {
             $statement = db()->prepare('INSERT INTO screenshots (id, plan_id, trade_id, strategy_id, audit_id, role, file_name, original_name, mime_type, size_bytes, caption, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $statement->execute([
-                $id, $planId, $tradeId, $strategyId, $auditId, (string)($_POST['role'] ?? 'plan'), $fileName,
-                basename((string)($upload['name'] ?? 'screenshot')), $mime, $size,
-                (string)($_POST['caption'] ?? ''), utc_now()
+                $id, $planId, $tradeId, $strategyId, $auditId, $role, $fileName,
+                $originalName, $mime, $size,
+                $caption, utc_now()
             ]);
         } catch (Throwable $error) {
             @unlink($destination);

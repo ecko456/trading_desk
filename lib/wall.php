@@ -157,7 +157,7 @@ function wall_share(array $user, string $kind, int $sourceId, array $options): a
     }
     $built = build_share_snapshot($kind, $sourceId, $options);
     $body = clean_text($options['note'] ?? '', WALL_NOTE_MAX);
-    $encoded = json_encode($built['snapshot'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    $encoded = json_encode($built['snapshot'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
     $now = utc_now();
     $pdo = app_db();
     $pdo->beginTransaction();
@@ -210,7 +210,7 @@ function uploaded_images(string $field, int $max): array
             continue;
         }
         if ($error !== UPLOAD_ERR_OK) {
-            throw new InvalidArgumentException('Nahrání obrázku selhalo.');
+            throw new InvalidArgumentException(upload_error_message($error));
         }
         $size = (int)((array)$files['size'])[$index];
         if ($size <= 0 || $size > MAX_UPLOAD_BYTES) {

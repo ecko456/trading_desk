@@ -92,7 +92,7 @@ register_shutdown_function(static function () use ($jsonPath, $pdfPath): void {
     @unlink($pdfPath);
 });
 
-$encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+$encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
 if (file_put_contents($jsonPath, $encoded, LOCK_EX) === false) {
     pdf_error('Server nemohl zapsat podklady pro PDF.');
 }

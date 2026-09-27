@@ -353,6 +353,21 @@ function verify_user_secret(array $user, string $secret): bool
     return password_verify($candidate, (string)$user['secret_hash']);
 }
 
+/**
+ * Ověří současné heslo nebo klíč před citlivou změnou účtu. Hádání se brzdí stejně
+ * jako u přihlášení, aby ukradená relace nestačila k vyzkoušení tisíců hesel.
+ */
+function verify_current_secret(array $user, string $secret): bool
+{
+    $login = (string)$user['login'];
+    throttle_login($login);
+    if (verify_user_secret($user, $secret)) {
+        return true;
+    }
+    record_attempt('login_fail', $login);
+    return false;
+}
+
 /** Datový klíč šifrovaného uživatele odemčený jeho přístupovým klíčem. */
 function unwrap_user_key(array $user, string $accessKey): string
 {
@@ -440,6 +455,10 @@ function start_session(array $user, ?string $dataKey): void
     $statement->bindValue(7, substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250));
     $statement->bindValue(8, client_ip());
     $statement->execute();
+    // Prošlé relace se jinak smažou, jen když s nimi někdo znovu přijde.
+    if (random_int(1, 20) === 1) {
+        app_execute('DELETE FROM sessions WHERE expires_at < ?', [utc_now()]);
+    }
     app_execute('UPDATE users SET last_login_at = ? WHERE id = ?', [utc_now(), (int)$user['id']]);
     set_session_cookie($token, $now + SESSION_DAYS * 86400);
     $GLOBALS['td_auth'] = ['user' => find_user((int)$user['id']), 'key' => $dataKey, 'session' => $id, 'token' => $token];
@@ -991,7 +1010,7 @@ function change_password(array $user, string $current, string $next): array
     if ((bool)$user['encrypted']) {
         throw new InvalidArgumentException('Šifrovaný účet nemá heslo, přihlašuje se přístupovým klíčem.');
     }
-    if (!verify_user_secret($user, $current)) {
+    if (!verify_current_secret($user, $current)) {
         json_response(['error' => 'Současné heslo nesedí.'], 403);
     }
     validate_password($next, (string)$user['login']);
@@ -1007,7 +1026,7 @@ function enable_encryption(array $user, string $current): string
     if ((bool)$user['encrypted']) {
         throw new InvalidArgumentException('Deník už je šifrovaný.');
     }
-    if (!verify_user_secret($user, $current)) {
+    if (!verify_current_secret($user, $current)) {
         json_response(['error' => 'Současné heslo nesedí.'], 403);
     }
     $accessKey = generate_access_key();
@@ -1032,7 +1051,7 @@ function rotate_access_key(array $user, string $currentKey): string
     if (!(bool)$user['encrypted']) {
         throw new InvalidArgumentException('Účet nemá šifrování.');
     }
-    if (!verify_user_secret($user, $currentKey)) {
+    if (!verify_current_secret($user, $currentKey)) {
         json_response(['error' => 'Současný přístupový klíč nesedí.'], 403);
     }
     $dataKey = unwrap_user_key($user, $currentKey);

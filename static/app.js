@@ -2468,7 +2468,13 @@ function roundedFieldValue(value, digits = 2) {
 
 function displayAmount(value, currency = 'USD') {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString('cs-CZ', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }) : '—';
+  if (!Number.isFinite(number)) return '—';
+  try {
+    return number.toLocaleString('cs-CZ', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 });
+  } catch (error) {
+    // Starší účet s neplatným kódem měny nesmí shodit celý přehled účtů.
+    return `${number.toLocaleString('cs-CZ', { maximumFractionDigits: 0 })} ${currency}`;
+  }
 }
 
 function ensureOption(select, value, label) {

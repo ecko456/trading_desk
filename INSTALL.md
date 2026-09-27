@@ -237,6 +237,10 @@ Po aktualizaci dej v prohlížeči Ctrl+Shift+R (na Macu Cmd+Shift+R), ať se na
 
 ## Když něco nefunguje
 
+**Screenshot se nenahraje, protože je prý moc velký**
+
+Aplikace bere obrázky do 20 MB. Na Ubuntu to nastavuje konfigurace Apache z instalace; po aktualizaci na starší instalaci proto spusť znovu `sudo bash deploy/install.sh`. Velké PNG z 4K monitoru pomůže uložit jako JPEG.
+
 **Prohlížeč hlásí, že se nelze připojit**
 
 Windows: otevři Ubuntu a spusť `sudo service apache2 start`.

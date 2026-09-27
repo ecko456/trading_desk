@@ -998,7 +998,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
     </form>
   </dialog>
 
-  <dialog class="modal modal-narrow" id="shareDialog\" aria-labelledby="shareDialogTitle">
+  <dialog class="modal modal-narrow" id="shareDialog" aria-labelledby="shareDialogTitle">
     <form method="dialog" id="shareForm">
       <div class="modal-head"><div><p class="eyebrow">Společná nástěnka</p><h2 id="shareDialogTitle">Sdílet s komunitou</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
       <div class="share-summary"><?= icon('share') ?><div><strong id="shareSummaryTitle"></strong><small id="shareSummaryText"></small></div></div>

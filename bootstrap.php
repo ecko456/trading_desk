@@ -644,6 +644,9 @@ function security_headers(): void
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: no-referrer');
     header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'");
+    if (request_is_https()) {
+        header('Strict-Transport-Security: max-age=15552000');
+    }
 }
 
 /**
@@ -690,15 +693,21 @@ function json_response(mixed $payload, int $status = 200): never
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
+const MAX_JSON_BYTES = 8 * 1024 * 1024;
+
 function request_json(): array
 {
-    $raw = file_get_contents('php://input');
+    // Deník posílá jen text; větší tělo by jen zbytečně zabralo paměť serveru.
+    $raw = file_get_contents('php://input', false, null, 0, MAX_JSON_BYTES + 1);
     if ($raw === false || $raw === '') {
         return [];
+    }
+    if (strlen($raw) > MAX_JSON_BYTES) {
+        json_response(['error' => 'Požadavek je příliš velký.'], 413);
     }
     $decoded = json_decode($raw, true);
     if (!is_array($decoded)) {
@@ -725,10 +734,11 @@ function row_has_content(array $row, array $keys): bool
 
 function nullable_float(mixed $value): ?float
 {
-    if ($value === null || $value === '') {
+    if ($value === null || $value === '' || !is_numeric($value)) {
         return null;
     }
-    return is_numeric($value) ? (float)$value : null;
+    $number = (float)$value;
+    return is_finite($number) ? $number : null;
 }
 
 function nullable_int(mixed $value): ?int
@@ -1109,9 +1119,9 @@ function calculate_trade(array $data): array
     }
     $resolvedPointValue = $pointValue;
     $quantity = $quantity !== null && $quantity > 0 ? $quantity : 1.0;
-    $resultUsd = $resultUsd === null ? null : round($resultUsd, 2);
-    $resultR = $resultR === null ? null : round($resultR, 2);
-    return [$resultR, $resultUsd, round($quantity, 4), $resolvedPointValue];
+    $resultUsd = $resultUsd === null || !is_finite($resultUsd) ? null : round($resultUsd, 2);
+    $resultR = $resultR === null || !is_finite($resultR) ? null : round($resultR, 2);
+    return [$resultR, $resultUsd, is_finite($quantity) ? round($quantity, 4) : 1.0, $resolvedPointValue];
 }
 
 function strategy_payload(int $id): ?array
@@ -1528,13 +1538,14 @@ function save_account(array $data): array
         $openedAt = gmdate('Y-m-d');
     }
     $currency = strtoupper(trim((string)value($data, 'currency', 'USD')));
+    $currency = preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
 
     $pdo = db();
     $statement = $pdo->prepare('INSERT INTO accounts (name, broker, currency, starting_balance, daily_risk, opened_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     $statement->execute([
         $name,
         trim((string)value($data, 'broker', '')),
-        $currency !== '' ? $currency : 'USD',
+        $currency,
         $balance,
         nullable_float(value($data, 'daily_risk')),
         $openedAt,
@@ -2497,6 +2508,15 @@ function save_psych_check(array $data): array
     $saved['rules_lines'] = $result['rules_lines'];
     $saved['share'] = $result['share'];
     return $saved;
+}
+
+/** Srozumitelná hláška pro chybu nahrávání; nejčastěji jde o limit velikosti na serveru. */
+function upload_error_message(int $error): string
+{
+    if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+        return 'Obrázek je větší, než server dovolí (' . ini_get('upload_max_filesize') . '). Zmenši ho nebo ulož jako JPEG.';
+    }
+    return $error === UPLOAD_ERR_PARTIAL ? 'Obrázek se nahrál jen zčásti. Zkus to znovu.' : 'Nahrání obrázku selhalo.';
 }
 
 function delete_screenshot_file(array $screenshot): void

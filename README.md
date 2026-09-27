@@ -407,4 +407,6 @@ Doporučení: alespoň jednu kopii uchovávej mimo disk Ubuntu serveru.
 
 Aplikace má vlastní účty, schvalování registrací a ochranu proti hádání hesel. API odmítá zápisy, které nepřišly z její vlastní stránky (ochrana proti CSRF), relace běží v cookie s příznaky HttpOnly a SameSite a bezpečnostní hlavičky zakazují cizí skripty i vkládání do rámů.
 
+Hádání hesla brzdí i změna hesla, zapnutí šifrování a výměna přístupového klíče, ne jen přihlášení. Z webu jsou dostupné jen stránky aplikace a soubory ve `static/`; historie gitu, dokumentace, Python převodník a datový adresář ne. Přes HTTPS posílá aplikace hlavičku HSTS, takže prohlížeč už pak na nešifrované spojení nespadne.
+
 Na serveru dostupném z internetu je ale **HTTPS povinné**: bez něj jdou heslo, přístupový klíč i cookie relace po síti čitelně. Postup je v [INSTALL.md](INSTALL.md), varianta E.

@@ -58,4 +58,4 @@ fi
 
 ( sleep 2; open "http://localhost:${PORT}/" ) &
 
-exec "${PHP_BIN}" -d upload_max_filesize=20M -d post_max_size=22M -S "localhost:${PORT}" router.php
+exec "${PHP_BIN}" -d upload_max_filesize=20M -d post_max_size=64M -S "localhost:${PORT}" router.php

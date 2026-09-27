@@ -35,6 +35,17 @@ class StaticAppTests(unittest.TestCase):
         self.assertEqual(parser.inline_handlers, [])
         self.assertEqual(parser.inline_styles, [])
 
+    def test_every_id_used_by_scripts_exists(self):
+        # Překlep v id (třeba id="shareDialog\") by potichu vypnul celou funkci.
+        pages = "".join((ROOT / name).read_text(encoding="utf-8") for name in ("index.php", "lib/auth-page.php"))
+        scripts = "".join(path.read_text(encoding="utf-8") for path in (ROOT / "static").glob("*.js"))
+        known = set(re.findall(r'\sid="([^"$<]+)"', pages)) | set(re.findall(r'\sid="([^"$<]+)"', scripts))
+        malformed = [value for value in known if not re.fullmatch(r"[A-Za-z][\w-]*", value)]
+        self.assertEqual(malformed, [])
+        used = set(re.findall(r"""\$\(\s*['"`]#([A-Za-z][\w-]*)['"`]""", scripts))
+        self.assertGreater(len(used), 200)
+        self.assertEqual(sorted(used - known), [])
+
     def test_required_assets_exist(self):
         self.assertTrue((ROOT / "static" / "styles.css").is_file())
         self.assertTrue((ROOT / "static" / "app.js").is_file())
@@ -327,7 +338,7 @@ class StaticAppTests(unittest.TestCase):
     def test_libraries_are_not_served(self):
         conf = (ROOT / "deploy" / "apache-trading.conf").read_text(encoding="utf-8")
         router = (ROOT / "router.php").read_text(encoding="utf-8")
-        self.assertIn('(data|lib|bin)', conf)
+        self.assertIn('|data|lib|bin|', conf)
         self.assertIn("lib|bin", router)
         for directory in ("lib", "bin", "data"):
             self.assertIn("Require all denied", (ROOT / directory / ".htaccess").read_text(encoding="utf-8"))

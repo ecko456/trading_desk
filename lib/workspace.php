@@ -87,6 +87,7 @@ const CUSTOM_FIELD_KINDS = [
 ];
 
 const DN_PATTERNS = ['Double Repo', 'Single Penetration', 'Railroad Tracks', 'Failure', 'Bread & Butter', 'Minesweeper A', 'Minesweeper B', 'Fib Node'];
+const DN_MAX_SWINGS = 40;
 const DN_RETRACEMENTS = ['F3' => 0.382, 'F5' => 0.618];
 const DN_EXPANSIONS = ['COP' => 0.618, 'OP' => 1.0, 'XOP' => 1.618];
 
@@ -672,7 +673,7 @@ function save_plan_extras(PDO $pdo, int $planId, array $data, string $storedCust
 {
     $pdo->prepare('DELETE FROM plan_dn_swings WHERE plan_id = ?')->execute([$planId]);
     $statement = $pdo->prepare('INSERT INTO plan_dn_swings (plan_id, sort_order, label, price_a, price_b, price_c, note) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    foreach (array_values((array)($data['dn_swings'] ?? [])) as $index => $swing) {
+    foreach (array_slice(array_values((array)($data['dn_swings'] ?? [])), 0, DN_MAX_SWINGS) as $index => $swing) {
         if (!is_array($swing) || !row_has_content($swing, ['label', 'price_a', 'price_b', 'price_c', 'note'])) {
             continue;
         }
