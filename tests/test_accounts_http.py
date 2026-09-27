@@ -344,6 +344,20 @@ class AccountsHttpTests(unittest.TestCase):
         self.assertEqual(content_type, "application/pdf")
         self.assertTrue(pdf.startswith(b"%PDF"))
 
+    def test_login_is_normalized_and_forgiving(self):
+        client = Client(self.server)
+        status, result = client.api("POST", "register", {"login": " Kateřina Nováková ", "display_name": "Kateřina", "secret_mode": "password", "password": "heslo.s.tečkami-123!"})
+        self.assertEqual(status, 201, result)
+        self.assertEqual(result["user"]["login"], "katerina.novakova")
+        self.admin.api("POST", "admin_user", {"id": result["user"]["id"], "op": "approve"})
+        for typed in ("KATEŘINA NOVÁKOVÁ", "katerina.novakova"):
+            self.assertEqual(Client(self.server).api("POST", "login", {"login": typed, "secret": "heslo.s.tečkami-123!"})[0], 200, typed)
+        status, result = Client(self.server).api("POST", "register", {"login": "Trader@Example.com", "display_name": "Mail", "secret_mode": "password", "password": "0123456789"})
+        self.assertEqual((status, result["user"]["login"]), (201, "trader@example.com"))
+        status, result = Client(self.server).api("POST", "register", {"login": "ab", "display_name": "Krátký", "secret_mode": "password", "password": "0123456789"})
+        self.assertEqual(status, 422)
+        self.assertIn("aspoň 3 znaky", result["error"])
+
     def test_cross_site_writes_are_rejected(self):
         status, _ = self.admin.request("POST", "/api.php?action=trade", {"trade_date": "2026-09-28", "market": "ES", "direction": "long"}, headers={"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(status, 403)

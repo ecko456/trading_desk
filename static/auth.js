@@ -22,6 +22,62 @@
     return payload;
   }
 
+  // Stejná úprava jako na serveru (normalize_login v lib/accounts.php).
+  const LOGIN_TRANSLIT = { 'á': 'a', 'ä': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'å': 'a', 'ą': 'a', 'č': 'c', 'ć': 'c', 'ç': 'c', 'ď': 'd', 'đ': 'd', 'é': 'e', 'ě': 'e', 'ë': 'e', 'è': 'e', 'ê': 'e', 'ę': 'e', 'í': 'i', 'ï': 'i', 'ì': 'i', 'î': 'i', 'ĺ': 'l', 'ľ': 'l', 'ł': 'l', 'ň': 'n', 'ń': 'n', 'ñ': 'n', 'ó': 'o', 'ö': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ő': 'o', 'ø': 'o', 'ŕ': 'r', 'ř': 'r', 'š': 's', 'ś': 's', 'ť': 't', 'ú': 'u', 'ů': 'u', 'ü': 'u', 'ù': 'u', 'û': 'u', 'ű': 'u', 'ý': 'y', 'ÿ': 'y', 'ž': 'z', 'ź': 'z', 'ż': 'z', 'ß': 'ss', 'æ': 'ae', 'œ': 'oe' };
+
+  function normalizeLogin(value) {
+    return [...String(value || '').trim().toLowerCase()].map(char => LOGIN_TRANSLIT[char] ?? char).join('').replace(/\s+/g, '.');
+  }
+
+  function loginProblem(login) {
+    if (!login) return 'Vyplň přihlašovací jméno.';
+    if (login.length < 3) return 'Přihlašovací jméno musí mít aspoň 3 znaky.';
+    if (login.length > 64) return 'Přihlašovací jméno může mít nejvýš 64 znaků.';
+    if (!/^[a-z0-9][a-z0-9._@+-]*$/.test(login)) return 'Přihlašovací jméno může obsahovat písmena, číslice a znaky . _ - @ + a musí začínat písmenem nebo číslicí.';
+    return '';
+  }
+
+  /** Pod polem ukáže, pod jakým jménem se člověk bude přihlašovat, nebo co je špatně. */
+  function updateLoginHint(form) {
+    const input = $('input[name="login"]', form);
+    const hint = $('[data-login-hint]', form);
+    if (!input || !hint) return;
+    const login = normalizeLogin(input.value);
+    const problem = input.value.trim() ? loginProblem(login) : '';
+    input.classList.toggle('is-invalid', Boolean(problem));
+    hint.classList.toggle('is-error', Boolean(problem));
+    hint.textContent = problem || (login ? `Budeš se přihlašovat jako: ${login}` : 'Bez mezer a diakritiky, třeba jan.novak nebo e-mail. Háčky a mezery upravíme sami.');
+  }
+
+  /** Návrh přihlašovacího jména ze zobrazovaného, dokud ho člověk nezačne psát sám. */
+  function suggestLogin(form) {
+    const input = $('input[name="login"]', form);
+    if (!input || input.dataset.touched) return;
+    input.value = normalizeLogin($('input[name="display_name"]', form)?.value || '').replace(/[^a-z0-9._@+-]/g, '');
+    updateLoginHint(form);
+  }
+
+  const FIELD_BY_MESSAGE = [
+    ['Přihlašovací jméno', 'login'],
+    ['Toto přihlašovací jméno', 'login'],
+    ['Zobrazované jméno', 'display_name'],
+    ['E-mail', 'email'],
+    ['Hesla se neshodují', 'password_again'],
+    ['Heslo', 'password'],
+    ['Kód', 'token'],
+  ];
+
+  /** Chybu napíše pod formulář a zvýrazní pole, kterého se týká. */
+  function markField(form, message) {
+    $$('.is-invalid', form).forEach(input => { if (input.name !== 'login') input.classList.remove('is-invalid'); });
+    const match = FIELD_BY_MESSAGE.find(([prefix]) => message.startsWith(prefix));
+    const input = match ? $(`input[name="${match[1]}"]`, form) : null;
+    if (input) {
+      input.classList.add('is-invalid');
+      input.focus();
+    }
+  }
+
   function formData(form) {
     return Object.fromEntries(new FormData(form).entries());
   }
@@ -31,6 +87,7 @@
     if (!box) return;
     box.textContent = message;
     box.hidden = !message;
+    if (message) markField(form, message);
   }
 
   function setBusy(form, busy) {
@@ -47,6 +104,8 @@
   }
 
   function checkPasswords(data) {
+    const problem = loginProblem(normalizeLogin(data.login));
+    if (problem) return problem;
     if ((data.secret_mode || 'password') !== 'password') return '';
     if ((data.password || '').length < 10) return 'Heslo musí mít aspoň 10 znaků.';
     if (data.password !== data.password_again) return 'Hesla se neshodují.';
@@ -125,6 +184,12 @@
   $$('.auth-form').forEach(form => {
     $$('input[name="secret_mode"]', form).forEach(input => input.addEventListener('change', () => syncSecretMode(form)));
     syncSecretMode(form);
+    if (form.id === 'loginForm') return;
+    const login = $('input[name="login"]', form);
+    login?.addEventListener('input', () => { login.dataset.touched = login.value ? '1' : ''; updateLoginHint(form); });
+    $('input[name="display_name"]', form)?.addEventListener('input', () => suggestLogin(form));
+    $$('input', form).forEach(input => input.addEventListener('input', () => { if (input.name !== 'login') input.classList.remove('is-invalid'); }));
+    updateLoginHint(form);
   });
 
   $$('.secret-toggle').forEach(button => button.addEventListener('click', () => {

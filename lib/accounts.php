@@ -202,9 +202,39 @@ function find_user(int $id): ?array
     return app_fetch_one('SELECT * FROM users WHERE id = ?', [$id]);
 }
 
+const LOGIN_TRANSLIT = ['á' => 'a', 'ä' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a', 'ą' => 'a', 'č' => 'c', 'ć' => 'c', 'ç' => 'c', 'ď' => 'd', 'đ' => 'd', 'é' => 'e', 'ě' => 'e', 'ë' => 'e', 'è' => 'e', 'ê' => 'e', 'ę' => 'e', 'í' => 'i', 'ï' => 'i', 'ì' => 'i', 'î' => 'i', 'ĺ' => 'l', 'ľ' => 'l', 'ł' => 'l', 'ň' => 'n', 'ń' => 'n', 'ñ' => 'n', 'ó' => 'o', 'ö' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ő' => 'o', 'ø' => 'o', 'ŕ' => 'r', 'ř' => 'r', 'š' => 's', 'ś' => 's', 'ť' => 't', 'ú' => 'u', 'ů' => 'u', 'ü' => 'u', 'ù' => 'u', 'û' => 'u', 'ű' => 'u', 'ý' => 'y', 'ÿ' => 'y', 'ž' => 'z', 'ź' => 'z', 'ż' => 'z', 'ß' => 'ss', 'æ' => 'ae', 'œ' => 'oe'];
+
+/**
+ * Sjednotí přihlašovací jméno: malá písmena, bez diakritiky, mezery jako tečka.
+ * Stejně se upraví při registraci i při přihlášení, takže „Tomáš Král“ i „tomas.kral“
+ * vedou na tentýž účet.
+ */
+function normalize_login(string $value): string
+{
+    $login = strtr(mb_strtolower(trim($value), 'UTF-8'), LOGIN_TRANSLIT);
+    return preg_replace('/\s+/u', '.', $login) ?? $login;
+}
+
+function login_problem(string $login): ?string
+{
+    if ($login === '') {
+        return 'Vyplň přihlašovací jméno.';
+    }
+    if (strlen($login) < 3) {
+        return 'Přihlašovací jméno musí mít aspoň 3 znaky.';
+    }
+    if (strlen($login) > 64) {
+        return 'Přihlašovací jméno může mít nejvýš 64 znaků.';
+    }
+    if (!preg_match('/^[a-z0-9][a-z0-9._@+-]*$/', $login)) {
+        return 'Přihlašovací jméno může obsahovat písmena, číslice a znaky . _ - @ + a musí začínat písmenem nebo číslicí.';
+    }
+    return null;
+}
+
 function find_user_by_login(string $login): ?array
 {
-    return app_fetch_one('SELECT * FROM users WHERE login = ?', [strtolower(trim($login))]);
+    return app_fetch_one('SELECT * FROM users WHERE login = ?', [normalize_login($login)]);
 }
 
 /** Údaje o uživateli, které smí vidět prohlížeč. Nikdy ne hash ani klíče. */
@@ -242,9 +272,10 @@ function is_admin(?array $user): bool
 
 function validate_registration(array $data): array
 {
-    $login = strtolower(trim((string)($data['login'] ?? '')));
-    if (!preg_match('/^[a-z0-9][a-z0-9._-]{2,31}$/', $login)) {
-        throw new InvalidArgumentException('Přihlašovací jméno musí mít 3 až 32 znaků: písmena bez diakritiky, číslice, tečka, podtržítko nebo pomlčka.');
+    $login = normalize_login((string)($data['login'] ?? ''));
+    $problem = login_problem($login);
+    if ($problem !== null) {
+        throw new InvalidArgumentException($problem);
     }
     $displayName = trim(preg_replace('/\s+/u', ' ', (string)($data['display_name'] ?? '')) ?? '');
     if (mb_strlen($displayName, 'UTF-8') < 2 || mb_strlen($displayName, 'UTF-8') > 60) {
@@ -861,7 +892,7 @@ function seal_user_storage(int $userId, string $dataKey): void
 
 function perform_login(string $login, string $secret): array
 {
-    $login = strtolower(trim($login));
+    $login = normalize_login($login);
     throttle_login($login);
     $user = $login === '' ? null : find_user_by_login($login);
     // Stejná práce i pro neexistující účet, ať délka odpovědi neprozradí, kdo je registrovaný.
