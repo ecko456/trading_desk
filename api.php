@@ -11,16 +11,147 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
 
 try {
     if ($action === 'health' && $method === 'GET') {
-        $integrity = fetch_one('PRAGMA integrity_check');
+        $integrity = app_db()->query('PRAGMA quick_check')->fetchColumn();
         json_response([
             'ok' => true,
-            'app' => 'Trading Journal',
+            'app' => 'Trading Desk',
             'version' => APP_VERSION,
             'base' => APP_BASE,
-            'database' => array_values($integrity ?? ['ok'])[0] ?? 'ok',
+            'database' => (string)$integrity,
+            'encryption' => vault_available(),
             'time' => utc_now(),
         ]);
     }
+
+    /* ---------- bez přihlášení */
+
+    if ($action === 'auth_state' && $method === 'GET') {
+        json_response(auth_state());
+    }
+
+    if ($action === 'login' && $method === 'POST') {
+        $data = request_json();
+        json_response(['user' => perform_login((string)($data['login'] ?? ''), (string)($data['secret'] ?? ''))]);
+    }
+
+    if ($action === 'register' && $method === 'POST') {
+        json_response(perform_registration(request_json()), 201);
+    }
+
+    if ($action === 'setup' && $method === 'POST') {
+        json_response(perform_setup(request_json()), 201);
+    }
+
+    if ($action === 'logout' && $method === 'POST') {
+        end_current_session();
+        json_response(['ok' => true]);
+    }
+
+    $user = require_user();
+
+    /* ---------- profil */
+
+    if ($action === 'me' && $method === 'GET') {
+        $pending = is_admin($user) ? (int)(app_fetch_one("SELECT COUNT(*) AS total FROM users WHERE status = 'pending'")['total'] ?? 0) : 0;
+        json_response(['user' => public_user($user), 'wall_unseen' => wall_unseen_count($user), 'pending_users' => $pending]);
+    }
+
+    if ($action === 'profile' && $method === 'POST') {
+        json_response(['user' => update_profile($user, request_json())]);
+    }
+
+    if ($action === 'password' && $method === 'POST') {
+        $data = request_json();
+        json_response(['user' => change_password($user, (string)($data['current'] ?? ''), (string)($data['next'] ?? ''))]);
+    }
+
+    if ($action === 'encryption' && $method === 'POST') {
+        $accessKey = enable_encryption($user, (string)(request_json()['current'] ?? ''));
+        json_response(['access_key' => $accessKey, 'user' => public_user(current_user())]);
+    }
+
+    if ($action === 'access_key' && $method === 'POST') {
+        json_response(['access_key' => rotate_access_key($user, (string)(request_json()['current'] ?? ''))]);
+    }
+
+    if ($action === 'sessions' && $method === 'DELETE') {
+        revoke_sessions((int)$user['id'], current_session_id());
+        json_response(['ok' => true]);
+    }
+
+    /* ---------- nástěnka */
+
+    if ($action === 'wall' && $method === 'GET') {
+        json_response(wall_feed($user, $_GET));
+    }
+
+    if ($action === 'wall_post' && $method === 'GET') {
+        json_response(wall_post($user, (int)($_GET['id'] ?? 0), true));
+    }
+
+    if ($action === 'wall_post' && $method === 'POST') {
+        json_response(wall_create_note($user, (string)($_POST['body'] ?? ''), uploaded_images('images', 6)), 201);
+    }
+
+    if ($action === 'wall_post' && $method === 'DELETE') {
+        wall_delete_post($user, (int)($_GET['id'] ?? 0));
+        json_response(['ok' => true]);
+    }
+
+    if ($action === 'share' && $method === 'POST') {
+        $data = request_json();
+        json_response(wall_share($user, (string)($data['kind'] ?? ''), (int)($data['id'] ?? 0), (array)($data['options'] ?? [])), 201);
+    }
+
+    if ($action === 'share' && $method === 'DELETE') {
+        wall_unshare($user, (string)($_GET['kind'] ?? ''), (int)($_GET['id'] ?? 0));
+        json_response(['ok' => true]);
+    }
+
+    if ($action === 'shares' && $method === 'GET') {
+        json_response(['items' => wall_my_shares($user)]);
+    }
+
+    if ($action === 'comment' && $method === 'POST') {
+        $data = request_json();
+        json_response(wall_add_comment($user, (int)($data['post_id'] ?? 0), (string)($data['body'] ?? '')), 201);
+    }
+
+    if ($action === 'comment' && $method === 'DELETE') {
+        json_response(wall_delete_comment($user, (int)($_GET['id'] ?? 0)));
+    }
+
+    if ($action === 'react' && $method === 'POST') {
+        $data = request_json();
+        $kind = isset($data['kind']) && $data['kind'] !== null ? (string)$data['kind'] : null;
+        json_response(wall_react($user, (int)($data['post_id'] ?? 0), $kind));
+    }
+
+    if ($action === 'members' && $method === 'GET') {
+        json_response(['items' => wall_members()]);
+    }
+
+    /* ---------- správa */
+
+    if ($action === 'admin_users' && $method === 'GET') {
+        require_admin();
+        json_response(['items' => admin_users(), 'registration_open' => registration_open()]);
+    }
+
+    if ($action === 'admin_user' && $method === 'POST') {
+        $admin = require_admin();
+        $data = request_json();
+        json_response(admin_user_action($admin, (int)($data['id'] ?? 0), (string)($data['op'] ?? '')));
+    }
+
+    if ($action === 'admin_settings' && $method === 'POST') {
+        require_admin();
+        $data = request_json();
+        save_setting('registration_open', !empty($data['registration_open']) ? '1' : '0');
+        json_response(['registration_open' => registration_open()]);
+    }
+
+    /* ---------- deník přihlášeného uživatele */
 
     if ($action === 'plans' && $method === 'GET') {
         $market = strtoupper(trim((string)($_GET['market'] ?? '')));
@@ -264,10 +395,7 @@ try {
         $id = bin2hex(random_bytes(16));
         $fileName = $id . '.' . $extensions[$mime];
         $destination = upload_dir() . DIRECTORY_SEPARATOR . $fileName;
-        if (!move_uploaded_file($temporary, $destination)) {
-            json_response(['error' => 'Screenshot nelze uložit na disk.'], 500);
-        }
-        @chmod($destination, 0660);
+        current_journal()->storeUpload($temporary, $fileName);
 
         try {
             $statement = db()->prepare('INSERT INTO screenshots (id, plan_id, trade_id, strategy_id, audit_id, role, file_name, original_name, mime_type, size_bytes, caption, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -280,7 +408,7 @@ try {
             @unlink($destination);
             throw $error;
         }
-        json_response(['id' => $id, 'url' => APP_BASE . '/file.php?id=' . rawurlencode($id)], 201);
+        json_response(['id' => $id, 'url' => 'file.php?id=' . rawurlencode($id)], 201);
     }
 
     if ($action === 'upload' && $method === 'DELETE') {
@@ -331,6 +459,8 @@ try {
     }
 
     json_response(['error' => 'Neznámá API operace.'], 404);
+} catch (InvalidArgumentException $error) {
+    json_response(['error' => $error->getMessage()], 422);
 } catch (Throwable $error) {
     error_log($error->__toString());
     json_response(['error' => 'Server operaci nedokončil.', 'detail' => getenv('TRADING_DEBUG') === '1' ? $error->getMessage() : null], 500);

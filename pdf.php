@@ -15,6 +15,10 @@ function pdf_error(string $message, int $status = 500): never
     exit;
 }
 
+if (current_user() === null) {
+    pdf_error('Nejdřív se přihlas.', 401);
+}
+
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
@@ -27,28 +31,44 @@ if ($plan === null) {
     pdf_error('Denní náhled nebyl nalezen.', 404);
 }
 
-$uploadRoot = realpath(upload_dir());
+// Grafy dostane převodník jako soubory. Šifrované se odemknou do dočasných
+// souborů v RAM a po vytvoření PDF se smažou.
+$journal = current_journal();
+$temporaryImages = [];
+register_shutdown_function(static function () use (&$temporaryImages): void {
+    foreach ($temporaryImages as $path) {
+        @unlink($path);
+    }
+});
 $screenshots = [];
-if ($uploadRoot !== false) {
-    $rows = fetch_all(
-        'SELECT file_name, original_name, caption, mime_type, created_at FROM screenshots WHERE plan_id = ? ORDER BY created_at, id LIMIT 12',
-        [$id]
-    );
-    $prefix = rtrim($uploadRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    foreach ($rows as $row) {
-        $fileName = basename((string)$row['file_name']);
-        $realPath = realpath($prefix . $fileName);
-        if ($realPath === false || !is_file($realPath) || strncmp($realPath, $prefix, strlen($prefix)) !== 0) {
+$rows = fetch_all(
+    'SELECT file_name, original_name, caption, mime_type, created_at FROM screenshots WHERE plan_id = ? ORDER BY created_at, id LIMIT 12',
+    [$id]
+);
+foreach ($rows as $row) {
+    $fileName = basename((string)$row['file_name']);
+    if ($journal->encrypted()) {
+        $contents = $journal->readUpload($fileName);
+        if ($contents === null) {
             continue;
         }
-        $screenshots[] = [
-            'path' => $realPath,
-            'original_name' => (string)$row['original_name'],
-            'caption' => (string)($row['caption'] ?? ''),
-            'mime_type' => (string)$row['mime_type'],
-            'created_at' => (string)$row['created_at'],
-        ];
+        $path = vault_temp_dir() . DIRECTORY_SEPARATOR . bin2hex(random_bytes(10)) . '-' . $fileName;
+        file_put_contents($path, $contents);
+        @chmod($path, 0600);
+        $temporaryImages[] = $path;
+    } else {
+        $path = $journal->uploadPath($fileName);
+        if (!is_file($path)) {
+            continue;
+        }
     }
+    $screenshots[] = [
+        'path' => $path,
+        'original_name' => (string)$row['original_name'],
+        'caption' => (string)($row['caption'] ?? ''),
+        'mime_type' => (string)$row['mime_type'],
+        'created_at' => (string)$row['created_at'],
+    ];
 }
 
 $payload = [
@@ -62,7 +82,7 @@ $payload = [
     'generated_at' => utc_now(),
 ];
 
-$jsonPath = tempnam(sys_get_temp_dir(), 'trading-plan-');
+$jsonPath = tempnam(vault_temp_dir(), 'trading-plan-');
 if ($jsonPath === false) {
     pdf_error('Server nemohl připravit dočasný soubor pro PDF.');
 }
@@ -76,6 +96,9 @@ $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 if (file_put_contents($jsonPath, $encoded, LOCK_EX) === false) {
     pdf_error('Server nemohl zapsat podklady pro PDF.');
 }
+
+// Deník už není potřeba; uvolní se zámek, ať ostatní požadavky nečekají na PDF.
+$journal->close();
 
 $python = resolve_python();
 $generator = __DIR__ . DIRECTORY_SEPARATOR . 'export_plan.py';

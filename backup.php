@@ -3,39 +3,72 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 
+// Záloha obsahuje jen deník přihlášeného uživatele. U šifrovaného deníku je ZIP
+// odemčený, aby šel otevřít i bez aplikace; soubory vznikají v soukromém
+// dočasném adresáři a hned po odeslání se mažou.
+$temporary = [];
+register_shutdown_function(static function () use (&$temporary): void {
+    foreach ($temporary as $path) {
+        @unlink($path);
+    }
+});
+
 try {
+    $user = current_user();
+    if ($user === null) {
+        http_response_code(401);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Nejdřív se přihlas.';
+        exit;
+    }
     if (!class_exists('ZipArchive')) {
         throw new RuntimeException('Na serveru chybí PHP rozšíření zip.');
     }
-    ensure_storage();
+    $journal = current_journal();
     $stamp = gmdate('Ymd-His');
-    $temporaryDb = data_dir() . DIRECTORY_SEPARATOR . 'backup-' . $stamp . '.sqlite3';
-    $pdo = db();
-    $pdo->exec('VACUUM INTO ' . $pdo->quote($temporaryDb));
+    $directory = vault_temp_dir();
+    $temporaryDb = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '.sqlite3';
+    $temporary[] = $temporaryDb;
+    $journal->snapshotTo($temporaryDb);
 
-    $temporaryZip = data_dir() . DIRECTORY_SEPARATOR . 'trading-backup-' . $stamp . '.zip';
+    $temporaryZip = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '.zip';
+    $temporary[] = $temporaryZip;
     $zip = new ZipArchive();
     if ($zip->open($temporaryZip, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
         throw new RuntimeException('Záložní ZIP nelze vytvořit.');
     }
     $zip->addFile($temporaryDb, 'trading.sqlite3');
     foreach (fetch_all('SELECT file_name FROM screenshots ORDER BY created_at, id') as $row) {
-        $file = upload_dir() . DIRECTORY_SEPARATOR . basename((string)$row['file_name']);
-        if (is_file($file)) {
-            $zip->addFile($file, 'uploads/' . basename($file));
+        $fileName = basename((string)$row['file_name']);
+        if ($journal->encrypted()) {
+            $contents = $journal->readUpload($fileName);
+            if ($contents === null) {
+                continue;
+            }
+            $plainCopy = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '-' . $fileName;
+            file_put_contents($plainCopy, $contents);
+            $temporary[] = $plainCopy;
+            $zip->addFile($plainCopy, 'uploads/' . $fileName);
+        } elseif (is_file($journal->uploadPath($fileName))) {
+            $zip->addFile($journal->uploadPath($fileName), 'uploads/' . $fileName);
         }
     }
-    $manifest = json_encode(['version' => 1, 'created_at' => utc_now(), 'base_path' => APP_BASE], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    $manifest = json_encode([
+        'version' => 2,
+        'created_at' => utc_now(),
+        'user' => (string)$user['login'],
+        'encrypted_account' => (bool)$user['encrypted'],
+        'note' => 'Obsah ZIPu je odemčený. Ulož ho na bezpečné místo.',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     $zip->addFromString('manifest.json', $manifest ?: '{}');
     $zip->close();
-    @unlink($temporaryDb);
+    $journal->close();
 
     header('Content-Type: application/zip');
     header('Content-Length: ' . filesize($temporaryZip));
-    header('Content-Disposition: attachment; filename="trading-backup-' . $stamp . '.zip"');
+    header('Content-Disposition: attachment; filename="trading-backup-' . preg_replace('/[^a-z0-9._-]/', '', (string)$user['login']) . '-' . $stamp . '.zip"');
     header('Cache-Control: no-store');
     readfile($temporaryZip);
-    @unlink($temporaryZip);
 } catch (Throwable $error) {
     error_log($error->__toString());
     http_response_code(500);

@@ -2,51 +2,35 @@
 declare(strict_types=1);
 
 const APP_BASE = '/trading';
-const APP_VERSION = '16';
+const APP_VERSION = '17';
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const AUDIT_INTERVAL_DAYS = 30;
 const AUDIT_WARNING_DAYS = 3;
 
+require_once __DIR__ . '/lib/vault.php';
+require_once __DIR__ . '/lib/accounts.php';
+require_once __DIR__ . '/lib/wall.php';
+
+/** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
 {
-    $configured = getenv('TRADING_DATA_DIR');
-    return $configured !== false && $configured !== ''
-        ? rtrim($configured, DIRECTORY_SEPARATOR)
-        : __DIR__ . DIRECTORY_SEPARATOR . 'data';
+    return current_journal()->directory();
 }
 
 function upload_dir(): string
 {
-    return data_dir() . DIRECTORY_SEPARATOR . 'uploads';
+    return current_journal()->directory() . DIRECTORY_SEPARATOR . 'uploads';
 }
 
 function ensure_storage(): void
 {
-    foreach ([data_dir(), upload_dir()] as $directory) {
-        if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
-            throw new RuntimeException('Nelze vytvořit datový adresář: ' . $directory);
-        }
-    }
+    ensure_directory(storage_root());
 }
 
+/** Databáze deníku přihlášeného uživatele; každý má vlastní soubor. */
 function db(): PDO
 {
-    static $pdo = null;
-    if ($pdo instanceof PDO) {
-        return $pdo;
-    }
-
-    ensure_storage();
-    $pdo = new PDO('sqlite:' . data_dir() . DIRECTORY_SEPARATOR . 'trading.sqlite3');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->exec('PRAGMA foreign_keys = ON');
-    $pdo->exec('PRAGMA journal_mode = WAL');
-    $pdo->exec('PRAGMA synchronous = NORMAL');
-    $pdo->exec('PRAGMA busy_timeout = 5000');
-    initialize_schema($pdo);
-    migrate_schema($pdo);
-    return $pdo;
+    return current_journal()->pdo();
 }
 
 function initialize_schema(PDO $pdo): void
@@ -693,6 +677,14 @@ function require_same_origin(): void
 
 function json_response(mixed $payload, int $status = 200): never
 {
+    // Šifrovaný deník se zapečetí dřív, než klient dostane odpověď.
+    try {
+        journal_flush();
+    } catch (Throwable $error) {
+        error_log('Trading journal flush failed: ' . $error->__toString());
+        $payload = ['error' => 'Deník se nepodařilo bezpečně uložit. Změna se neprovedla.'];
+        $status = 500;
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
