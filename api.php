@@ -5,6 +5,9 @@ require __DIR__ . '/bootstrap.php';
 
 $action = (string)($_GET['action'] ?? 'health');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if (!in_array($method, ['GET', 'HEAD'], true)) {
+    require_same_origin();
+}
 
 try {
     if ($action === 'health' && $method === 'GET') {

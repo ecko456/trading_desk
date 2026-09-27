@@ -316,6 +316,20 @@ class StaticAppTests(unittest.TestCase):
         self.assertIn("refreshCalibration()", block)
         self.assertIn(".calibration-suggestion", css)
 
+    def test_writes_are_rejected_from_foreign_pages(self):
+        api = (ROOT / "api.php").read_text(encoding="utf-8")
+        bootstrap = (ROOT / "bootstrap.php").read_text(encoding="utf-8")
+        self.assertIn("require_same_origin();", api)
+        self.assertLess(api.index("require_same_origin();"), api.index("try {"))
+        self.assertIn("HTTP_SEC_FETCH_SITE", bootstrap)
+        self.assertIn("HTTP_ORIGIN", bootstrap)
+
+    def test_password_survives_reinstall(self):
+        conf = (ROOT / "deploy" / "apache-trading.conf").read_text(encoding="utf-8")
+        self.assertIn("<IfFile /etc/apache2/trading-journal.htpasswd>", conf)
+        self.assertIn("Require valid-user", conf)
+        self.assertIn("<IfFile !/etc/apache2/trading-journal.htpasswd>", conf)
+
 
 if __name__ == "__main__":
     unittest.main()

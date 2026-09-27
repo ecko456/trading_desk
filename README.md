@@ -318,4 +318,4 @@ Doporučení: alespoň jednu kopii uchovávej mimo disk Ubuntu serveru.
 
 ## Bezpečnost
 
-Aplikace je navržená pro osobní localhost. Pokud ji později zpřístupníš do domácí sítě nebo internetu, je nutné přidat autentizaci a HTTPS.
+Aplikace je navržená pro osobní localhost. Pokud ji zpřístupníš do domácí sítě nebo internetu, zapni heslo a nastav HTTPS podle [INSTALL.md](INSTALL.md), varianta E. Zápisy z cizích stránek API odmítá vždy.

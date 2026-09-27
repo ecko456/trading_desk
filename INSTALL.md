@@ -14,6 +14,7 @@ Deník obchodů a denní příprava pro Market Profile a Volume Profile.
 | **Mac** | Varianta B — PHP přes Homebrew | ~10 minut, jednou |
 | **Ubuntu / Linux** | Varianta C | ~5 minut |
 | **Jen prohlížeč, bez instalace** | Varianta D — GitHub Codespaces | ~3 minuty |
+| **Vlastní server (VPS) na internetu** | Varianta E | ~15 minut |
 
 Po prvním nastavení už appku spouštíš jedním kliknutím.
 
@@ -141,6 +142,38 @@ Příště stačí stejný odkaz: `quickstart=1` otevře tvůj existující Code
 - **Port nech soukromý.** Ve výchozím stavu na adresu aplikace vidíš jen ty po přihlášení na GitHub. Nepřepínej port na *Public*: aplikace nemá přihlašování a kdokoli s odkazem by viděl a měnil tvůj deník.
 - **Data nepatří do gitu.** Repozitář je veřejný. Soubor `.gitignore` databázi i screenshoty z commitů vynechává, i kdybys omylem kliknul na commit.
 - **Čas zdarma je omezený.** Osobní účet má každý měsíc zdarma kvótu hodin Codespaces. Codespace se sám zastaví po 30 minutách nečinnosti, takže běží jen, když ho používáš.
+
+---
+
+## Varianta E — vlastní server (VPS) na internetu
+
+Server na internetu najdou automatické skenery během pár minut, i když nemá doménu a znáš jen jeho IP adresu. Aplikace proto musí mít heslo a HTTPS dřív, než ji začneš používat.
+
+### 1. Instalace
+
+Na serveru s Ubuntu stejně jako ve variantě C:
+
+```bash
+git clone https://github.com/ecko456/trading_desk.git && cd trading_desk
+sudo bash deploy/install.sh
+```
+
+### 2. Heslo
+
+```bash
+sudo htpasswd -c -B /etc/apache2/trading-journal.htpasswd tvoje_jmeno
+sudo apache2ctl configtest && sudo systemctl reload apache2
+```
+
+Jakmile soubor s hesly existuje, Apache pustí do aplikace, API, záloh i screenshotů jen po přihlášení. Aktualizace přes `install.sh` heslo nevypne. Další člověk se přidá stejným příkazem bez `-c`; všichni pak vidí a mění **tentýž** deník.
+
+Aplikace navíc odmítá zápisy, které nepřišly z její vlastní stránky, takže cizí web nemůže v přihlášeném prohlížeči nic změnit.
+
+### 3. Než ji začneš používat
+
+- **HTTPS.** Bez něj jde heslo po síti čitelně. Bez domény se dá použít buď certifikát vystavený pro adresu typu `<IP s pomlčkami>.sslip.io`, nebo vlastní certifikát, u kterého prohlížeč jednou ukáže varování.
+- **Firewall** jen pro SSH, HTTP a HTTPS a automatické bezpečnostní aktualizace.
+- **Zálohy mimo server.** ZIP ze sekce **Záloha** stahuj i k sobě.
 
 ---
 

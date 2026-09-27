@@ -660,6 +660,37 @@ function security_headers(): void
     header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'");
 }
 
+/**
+ * Zapisovat smí jen stránka aplikace. Na serveru s heslem by jinak cizí web mohl
+ * v prohlížeči přihlášeného uživatele potichu měnit data (CSRF). Prohlížeče posílají
+ * Sec-Fetch-Site, starší jen Origin; požadavek bez obou není z prohlížeče.
+ */
+function require_same_origin(): void
+{
+    $site = strtolower((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? ''));
+    if ($site !== '') {
+        if ($site !== 'same-origin') {
+            json_response(['error' => 'Požadavek z cizí stránky byl odmítnut.'], 403);
+        }
+        return;
+    }
+
+    $origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
+    if ($origin === '') {
+        return;
+    }
+    $host = (string)parse_url($origin, PHP_URL_HOST);
+    $port = parse_url($origin, PHP_URL_PORT);
+    $authority = strtolower($host . ($port !== null ? ':' . $port : ''));
+    $allowed = array_filter(array_map('strtolower', [
+        (string)($_SERVER['HTTP_HOST'] ?? ''),
+        (string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ''),
+    ]));
+    if ($host === '' || !in_array($authority, $allowed, true)) {
+        json_response(['error' => 'Požadavek z cizí stránky byl odmítnut.'], 403);
+    }
+}
+
 function json_response(mixed $payload, int $status = 200): never
 {
     http_response_code($status);
