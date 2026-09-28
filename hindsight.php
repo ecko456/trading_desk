@@ -66,6 +66,7 @@ $isAdmin = is_admin($viewer);
         <button type="button" class="hs-btn hs-toggle" data-idea-mode="long" aria-pressed="false" title="Potenciální long: podrž L a klikni do grafu, nebo zapni tady">+ Long <kbd>L</kbd></button>
         <button type="button" class="hs-btn hs-toggle" data-idea-mode="short" aria-pressed="false" title="Potenciální short: podrž S a klikni do grafu, nebo zapni tady">+ Short <kbd>S</kbd></button>
       </div>
+      <button type="button" class="hs-btn hs-toggle" id="hsPanelToggle" aria-pressed="false" aria-controls="hsPanel" title="Vyhodnocení zón, biasu a obchodů (E)">Vyhodnocení <kbd>E</kbd></button>
       <button type="button" class="hs-btn hs-icon" id="hsHelp" title="Ovládání" aria-label="Ovládání"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.3M12 16.6v.2"/></svg></button>
 <?php if ($isAdmin): ?>
       <button type="button" class="hs-btn hs-toggle hs-backfill" id="hsBackfill" aria-pressed="false" title="Zpětné doplňování (jen správce): úpravy minulých dnů se berou, jako by byly před otevřením NY, a neoznačí se jako dodatečné. Pro prezentaci.">Zpětně</button>
@@ -82,6 +83,33 @@ $isAdmin = is_admin($viewer);
       <div class="hs-empty" id="hsEmpty" hidden></div>
       <div class="hs-loading" id="hsLoading" hidden>Načítám svíčky…</div>
     </div>
+    <aside class="hs-panel" id="hsPanel" aria-label="Vyhodnocení" aria-hidden="true">
+      <header class="hs-panel-head">
+        <h2>Vyhodnocení</h2>
+        <select id="hsPeriod" aria-label="Období">
+          <option value="view">Co je v grafu</option>
+          <option value="20">Posledních 20 dní</option>
+          <option value="60">Posledních 60 dní</option>
+          <option value="all">Vše načtené</option>
+        </select>
+        <button type="button" class="hs-btn hs-icon" id="hsPanelClose" aria-label="Zavřít vyhodnocení">×</button>
+      </header>
+      <div class="hs-panel-body" id="hsPanelBody"></div>
+      <details class="hs-rules">
+        <summary>Pravidla vyhodnocení</summary>
+        <form id="hsRulesForm">
+          <label>Zóny sledovat<select name="window"><option value="day">celý obchodní den</option><option value="rth">jen RTH</option></select></label>
+          <div class="hs-row">
+            <label>Držela: odraz o (b.)<input class="hs-mono" type="number" name="bounce" step="0.25" min="0.25" max="500"></label>
+            <label>Proražená: close za zónou o víc než (b.)<input class="hs-mono" type="number" name="breakBy" step="0.25" min="0" max="500"></label>
+          </div>
+          <label class="hs-check"><input type="checkbox" name="includeLater"> Počítat i dodatečné zóny (přidané nebo změněné po otevření NY)</label>
+          <label>Neutral bias je správně, když se RTH pohne o méně než (b.; 0 = nehodnotit)<input class="hs-mono" type="number" name="neutralBand" step="0.25" min="0" max="500"></label>
+          <label>Potenciální obchod, svíčka se stopem i cílem<select name="sameBar"><option value="stop">stop (horší případ)</option><option value="target">cíl (lepší případ)</option></select></label>
+          <div class="hs-pop-actions"><button type="button" class="hs-btn" data-rules-reset>Výchozí</button><span class="hs-grow"></span><button type="submit" class="hs-btn hs-primary">Použít</button></div>
+        </form>
+      </details>
+    </aside>
     <div class="hs-foot">
       <div class="hs-minimap" id="hsMinimapWrap" title="Rok na jedné čáře: klikni nebo táhni okno">
         <canvas id="hsMinimap" aria-label="Přehled celého období"></canvas>
@@ -107,8 +135,10 @@ $isAdmin = is_admin($viewer);
         <dt>Klik na hlavičku dne</dt><dd>bias dne a poznámka</dd>
         <dt>Minimapa dole</dt><dd>klik nebo tažení okna = skok v roce</dd>
         <dt>Kolotoč</dt><dd>na obrazovce vždy přesně jeden obchodní den</dd>
+        <dt><kbd>E</kbd></dt><dd>panel vyhodnocení: drží zóny, sedí bias, co zůstalo na stole</dd>
       </dl>
       <p class="hs-note">Zámek: zóny a bias denního náhledu se zamknou při otevření NY (9:30 New York, v Praze 15:30 nebo 14:30). Pozdější změna ceny, typu zóny nebo biasu se uloží jako dodatečná verze a v grafu je označená (tečkovaná zóna, ✎ u biasu); vyhodnocení bere verzi z otevření. Poznámky, platnost zóny a potenciální obchody jde měnit kdykoli.</p>
+      <p class="hs-note">Zóna v každém dni své platnosti: první dotek, strana podle toho, odkud cena přišla (shora = má podržet jako support, zdola jako resistance). Držela = odraz aspoň o 8 bodů od okraje zóny dřív, než 5m svíčka zavře za zónou o víc než 4 body; jinak proražená, nebo bez rozhodnutí. Bias: RTH close proti RTH open. Hodnoty jdou změnit v panelu vyhodnocení.</p>
       <p class="hs-note">Potenciální obchod se vyhodnotí proti svíčkám: od času vstupu čeká na dotek vstupní ceny, pak rozhodne, jestli přišel dřív stop, nebo cíl (svíčka se stopem i cílem se počítá jako stop). Bez obojího se počítá k poslední svíčce dne.</p>
       <p class="hs-note">Časy jsou v pražském čase. Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET), letní čas se posouvá sám. Zóny a bias jsou stejné jako v denním náhledu.</p>
       <p class="hs-credit">Graf: TradingView Lightweight Charts™, Copyright (c) 2026 TradingView, Inc., <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">tradingview.com</a> (Apache 2.0). Písma Inter a JetBrains Mono (SIL OFL).</p>
@@ -162,6 +192,7 @@ $isAdmin = is_admin($viewer);
 
   <script src="<?= asset_url('static/hindsight/vendor/lightweight-charts.js') ?>"></script>
   <script src="<?= asset_url('static/hindsight/time.js') ?>"></script>
+  <script src="<?= asset_url('static/hindsight/evaluate.js') ?>"></script>
   <script src="<?= asset_url('static/hindsight/hindsight.js') ?>"></script>
 </body>
 </html>

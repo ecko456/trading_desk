@@ -9,8 +9,9 @@
  */
 (function startHindsight() {
   const T = window.HsTime;
+  const E = window.HsEval;
   const LWC = window.LightweightCharts;
-  if (!T || !LWC) return;
+  if (!T || !E || !LWC) return;
 
   /** Všechny barvy grafu na jednom místě (rozhraní: :root v hindsight.css). */
   const COLORS = {
@@ -120,6 +121,7 @@
     draft: null,
     hover: null,
     zoneRects: [],
+    zoneMarks: [],
     newsMarks: [],
     ideaKey: null,
     ideaMode: null,
@@ -354,61 +356,70 @@
     return `Den je zamčený od otevření NY (${at}). Změna se uloží jako dodatečná verze, vyhodnocení použije verzi z otevření.`;
   }
 
+  /** Vyšel bias dne (verze z otevření)? true, false, nebo null = nehodnotí se. */
   function verdict(day, info) {
-    const bias = officialBias(info);
-    if (!day || (bias !== 'long' && bias !== 'short')) return null;
-    if (day.rthOpen === null || day.rthLast === null || day.rthLast < day.rthEnd - BAR) return null;
-    const move = day.rthClose - day.rthOpen;
-    if (move === 0) return false;
-    return bias === 'long' ? move > 0 : move < 0;
+    if (!day) return null;
+    const result = E.biasDay(rthOf(day), officialBias(info), evalConfig());
+    return result ? result.result === 'right' : null;
   }
 
-  /**
-   * Potenciální obchod proti svíčkám: od času vstupu (bez času od začátku dne) čeká na dotek
-   * vstupní ceny, pak rozhodne, co přišlo dřív, stop, nebo cíl. Svíčka, která zasáhne obojí,
-   * se počítá jako stop (horší případ). Bez stopu i cíle se počítá k poslední svíčce dne.
-   */
-  function evaluateIdea(idea) {
-    const key = `${idea.id}|${idea.date}|${idea.direction}|${idea.entry}|${idea.stop}|${idea.target}|${idea.entry_ts}|${state.ts.length}`;
+  /* Vyhodnocení (pravidla v static/hindsight/evaluate.js, nastavitelná v panelu). */
+  let evalRaw;
+  let evalCfg = null;
+  function evalConfig() {
+    if (!evalCfg || evalRaw !== state.prefs.eval) {
+      evalRaw = state.prefs.eval;
+      evalCfg = E.config(evalRaw);
+      evalCfg.key = E.configKey(evalCfg);
+    }
+    return evalCfg;
+  }
+
+  function cached(key, compute) {
     if (!state.evalCache.has(key)) {
-      if (state.evalCache.size > 800) state.evalCache.clear();
-      state.evalCache.set(key, computeIdea(idea));
+      if (state.evalCache.size > 50000) state.evalCache.clear();
+      state.evalCache.set(key, compute());
     }
     return state.evalCache.get(key);
   }
 
-  function computeIdea(idea) {
-    const day = state.dayMap.get(idea.date);
-    if (!day) return { state: 'nodata' };
-    const bars = state.bars;
-    const long = idea.direction === 'long';
-    const risk = Math.abs(idea.entry - idea.stop);
-    let start = day.first;
-    if (idea.entry_ts !== null && idea.entry_ts !== undefined) {
-      const index = barAtOrBefore(idea.entry_ts);
-      if (index > day.last) return { state: 'nodata' };
-      start = Math.max(day.first, index);
-    }
-    let fill = -1;
-    for (let k = start; k <= day.last; k++) {
-      if (bars[k].low <= idea.entry && bars[k].high >= idea.entry) {
-        fill = k;
-        break;
+  /** Potenciální obchod: od času vstupu (bez času od začátku dne) do konce dne. */
+  function evaluateIdea(idea) {
+    const cfg = evalConfig();
+    return cached(`i|${idea.id}|${idea.date}|${idea.direction}|${idea.entry}|${idea.stop}|${idea.target}|${idea.entry_ts}|${cfg.key}|${state.ts.length}`, () => {
+      const day = state.dayMap.get(idea.date);
+      if (!day) return { state: 'nodata' };
+      let start = day.first;
+      if (idea.entry_ts !== null && idea.entry_ts !== undefined) {
+        const index = barAtOrBefore(idea.entry_ts);
+        if (index > day.last) return { state: 'nodata' };
+        start = Math.max(day.first, index);
       }
-    }
-    if (fill < 0) return { state: 'unfilled', start };
-    const hitsStop = bar => (long ? bar.low <= idea.stop : bar.high >= idea.stop);
-    const hitsTarget = bar => (long ? bar.high >= idea.target : bar.low <= idea.target);
-    const finish = (name, end, points, ambiguous = false) => ({ state: name, start, fill, end, points, r: risk > 0 ? points / risk : 0, ambiguous });
-    if (hitsStop(bars[fill])) return finish('sl', fill, -risk, true);
-    for (let k = fill + 1; k <= day.last; k++) {
-      const stop = hitsStop(bars[k]);
-      if (stop) return finish('sl', k, -risk, hitsTarget(bars[k]));
-      if (hitsTarget(bars[k])) return finish('tp', k, Math.abs(idea.target - idea.entry));
-    }
-    const close = bars[day.last].close;
-    return finish('open', day.last, long ? close - idea.entry : idea.entry - close);
+      return E.idea(state.bars, start, day.last, idea, cfg);
+    });
   }
+
+  function rthOf(day) {
+    return { open: day.rthOpen, close: day.rthClose, complete: day.rthLast !== null && day.rthLast >= day.rthEnd - BAR };
+  }
+
+  /** Zóna platí od dne náhledu do konce platnosti (otevřená do posledního dne dat). */
+  function zoneSpan(zone) {
+    return [zone.valid_from, zone.valid_to === 'open' ? state.lastDate : (zone.valid_to || zone.valid_from)];
+  }
+
+  /** Počítá se zóna do vyhodnocení? Dodatečné jen s nastavením; odstraněné po otevření ano. */
+  function zoneCounts(zone) {
+    return !zone.later || evalConfig().includeLater;
+  }
+
+  function zoneResult(zone, day) {
+    const cfg = evalConfig();
+    return cached(`z|${zone.id}|${zone.price_low}|${zone.price_high}|${zone.type}|${day.date}|${cfg.key}|${state.ts.length}`,
+      () => E.zoneDay(state.bars, day.first, day.last, zone, cfg, { start: day.rthStart, end: day.rthEnd }));
+  }
+
+  const ZONE_RESULTS = { held: 'držela', broken: 'proražená', undecided: 'zasažená bez rozhodnutí', untouched: 'nezasažená' };
 
   function signed(value, digits = 1) {
     return `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(digits)}`;
@@ -493,15 +504,58 @@
             ctx.textAlign = 'left';
           }
         }
-        if (layers.zones) drawZones(ctx, width, height);
+        if (layers.zones) drawZones(ctx, width, days);
         state.ideaRects = [];
         if (layers.ideas) drawIdeas(ctx, width);
       });
     },
   };
 
-  function drawZones(ctx, width) {
+  /** Značka vyhodnocení zóny v dni: ✓ odraz, ✗ průraz; kroužek = první dotek. */
+  function drawZoneMarks(ctx, zone, days, yHigh, yLow) {
+    const [from, to] = zoneSpan(zone);
+    const color = COLORS.zones[zone.type] || COLORS.zones.other;
+    for (const day of days) {
+      if (day.date < from || day.date > to) continue;
+      if (xOf(edgeOf(day.next)) - xOf(edgeOf(day.start)) < 70) continue;
+      const result = zoneResult(zone, day);
+      if (result.result === 'untouched') continue;
+      const above = result.side === 'above';
+      ctx.strokeStyle = rgba(color, 0.9);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(xOf(result.touch), above ? yHigh : yLow, 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      if (result.result !== 'held' && result.result !== 'broken') continue;
+      const held = result.result === 'held';
+      // Značka jde nad svíčky (kreslí ji popředí), tady se jen zapamatuje.
+      state.zoneMarks.push({ held, x: xOf(result.decide), y: held ? (above ? yHigh - 11 : yLow + 11) : (above ? yLow + 11 : yHigh - 11) });
+    }
+  }
+
+  function paintZoneMarks(ctx) {
+    ctx.font = `700 9px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const mark of state.zoneMarks) {
+      ctx.fillStyle = mark.held ? COLORS.up : COLORS.down;
+      ctx.strokeStyle = COLORS.background;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(mark.x, mark.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = COLORS.background;
+      ctx.fillText(mark.held ? '✓' : '✗', mark.x, mark.y + 0.5);
+    }
+    ctx.textAlign = 'left';
+    ctx.lineWidth = 1;
+  }
+
+  function drawZones(ctx, width, days) {
     state.zoneRects = [];
+    state.zoneMarks = [];
     if (!state.days.length) return;
     const lastEdge = xOf(state.ts.length - 0.5);
     for (const zone of state.ann.zones) {
@@ -544,6 +598,7 @@
       ctx.textBaseline = h >= 16 ? 'top' : 'bottom';
       ctx.fillText(label, Math.max(x0, 0) + 8, h >= 16 ? top + 3 : top - 2);
       state.zoneRects.push({ zone, x0, x1, top, bottom: top + h });
+      if (zoneCounts(zone)) drawZoneMarks(ctx, zone, days, top, top + h);
     }
   }
 
@@ -746,6 +801,7 @@
             state.newsMarks.push({ item, x });
           }
         }
+        if (state.prefs.layers.zones) paintZoneMarks(ctx);
         state.tradeMarks = [];
         if (state.prefs.layers.trades) drawTrades(ctx, width);
         drawIdeaDraft(ctx, width);
@@ -844,6 +900,7 @@
     redraw();
     renderHeaders();
     renderMinimap();
+    scheduleSummary(0);
   }
 
   async function loadOlder() {
@@ -864,6 +921,7 @@
       }
       renderHeaders();
       renderMinimap();
+      scheduleSummary(300);
       return true;
     } finally {
       state.loadingOlder = false;
@@ -945,6 +1003,8 @@
     renderLegend(state.bars[state.bars.length - 1]);
     renderHeaders();
     renderMinimap();
+    fillRules();
+    setPanel(Boolean(state.prefs.panel), false);
     loadRest();
   }
 
@@ -1167,6 +1227,8 @@
         state.zoneKey = true;
         syncZoneMode();
       }
+    } else if ((event.key === 'e' || event.key === 'E') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      setPanel(!panelOpen());
     } else if (['l', 'L', 's', 'S'].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
       const direction = event.key.toLowerCase() === 'l' ? 'long' : 'short';
       if (state.ideaKey !== direction) {
@@ -1413,6 +1475,19 @@
     return `${czechDate(zone.valid_from)} – ${czechDate(zone.valid_to)}`;
   }
 
+  function zoneDayText(zone, x) {
+    if (!state.ts.length) return '';
+    updateFrame();
+    const day = dayOfIndex(clamp(Math.round(logicalAt(x)), 0, state.ts.length - 1));
+    const [from, to] = zoneSpan(zone);
+    if (!day || day.date < from || day.date > to) return '';
+    if (!zoneCounts(zone)) return `\n${T.dateLabel(day.date)}: nepočítá se (dodatečná zóna)`;
+    const result = zoneResult(zone, day);
+    const when = result.decide !== undefined && result.result !== 'undecided' ? ` v ${T.pragueTime(state.ts[result.decide])}` : '';
+    const side = result.side ? ` (${result.side === 'above' ? 'shora' : 'zdola'})` : '';
+    return `\n${T.dateLabel(day.date)}: ${ZONE_RESULTS[result.result]}${side}${when}`;
+  }
+
   function showTooltip(hit, point) {
     if (!hit) {
       tooltipEl.hidden = true;
@@ -1428,7 +1503,7 @@
       const zone = hit.zone;
       tooltipEl.innerHTML = `<strong>${escapeHtml(zone.name || ZONE_TYPES[zone.type])}</strong>`
         + `<span class="hs-mono">${escapeHtml(ZONE_TYPES[zone.type])} · ${price(zone.price_low)}–${price(zone.price_high)}</span>`
-        + `<p>${escapeHtml(validityText(zone))}${zone.note ? `\n${escapeHtml(zone.note)}` : ''}${zone.later ? '\nPřidaná nebo změněná po otevření NY (dodatečně), vyhodnocení ji nepočítá.' : ''}${zone.removed ? '\nPři otevření NY v náhledu byla, potom byla odstraněna. Vyhodnocení ji počítá.' : ''}</p>`;
+        + `<p>${escapeHtml(validityText(zone))}${zone.note ? `\n${escapeHtml(zone.note)}` : ''}${zone.later ? '\nPřidaná nebo změněná po otevření NY (dodatečně), vyhodnocení ji nepočítá.' : ''}${zone.removed ? '\nPři otevření NY v náhledu byla, potom byla odstraněna. Vyhodnocení ji počítá.' : ''}${escapeHtml(zoneDayText(zone, point.x))}</p>`;
     }
     tooltipEl.hidden = false;
     const width = chartEl.clientWidth;
@@ -2250,6 +2325,7 @@
       const input = $('#hsDate');
       if (day && document.activeElement !== input) input.value = day.date;
       updateInstrument(day);
+      if ((evalPrefs().period || 'all') === 'view') scheduleSummary(250);
     });
   }
 
@@ -2273,6 +2349,219 @@
     }
   }).observe(chartEl);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { redraw(); scheduleUi(); });
+
+  /* ------------------------------------------------------------------ panel vyhodnocení */
+
+  const panelEl = $('#hsPanel');
+  const panelBody = $('#hsPanelBody');
+  const periodSelect = $('#hsPeriod');
+  const rulesForm = $('#hsRulesForm');
+  const percent = value => (value === null || value === undefined ? '–' : `${Math.round(value * 100)} %`);
+  const plural = (count, one, few, many) => `${number.format(count)} ${count === 1 ? one : count >= 2 && count <= 4 ? few : many}`;
+
+  function evalPrefs() {
+    return state.prefs.eval || {};
+  }
+
+  function panelOpen() {
+    return document.body.classList.contains('panel-open');
+  }
+
+  function setPanel(open, save = true) {
+    document.body.classList.toggle('panel-open', open);
+    panelEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    panelEl.inert = !open;
+    $('#hsPanelToggle').setAttribute('aria-pressed', open ? 'true' : 'false');
+    if (save && Boolean(state.prefs.panel) !== open) {
+      state.prefs.panel = open;
+      savePrefs();
+    }
+    if (open) renderSummary();
+  }
+
+  $('#hsPanelToggle').addEventListener('click', () => setPanel(!panelOpen()));
+  $('#hsPanelClose').addEventListener('click', () => setPanel(false));
+
+  /** Dny období: co je v grafu, posledních N obchodních dní, nebo všechno načtené. */
+  function periodDays() {
+    const period = evalPrefs().period || 'all';
+    if (period === 'view') {
+      const span = visibleDateSpan();
+      return span ? state.days.filter(day => day.date >= span.from && day.date <= span.to) : [];
+    }
+    if (period === '20' || period === '60') return state.days.slice(-Number(period));
+    return state.days;
+  }
+
+  function collectEvaluation(days) {
+    const cfg = evalConfig();
+    const dates = new Set(days.map(day => day.date));
+    const zones = [];
+    let laterZones = 0;
+    for (const zone of state.ann.zones) {
+      const [from, to] = zoneSpan(zone);
+      const active = days.filter(day => day.date >= from && day.date <= to);
+      if (!active.length) continue;
+      if (!zoneCounts(zone)) {
+        laterZones++;
+        continue;
+      }
+      for (const day of active) {
+        const result = zoneResult(zone, day);
+        zones.push({ type: zone.type, result: result.result, zone, day, detail: result });
+      }
+    }
+    const bias = days.map(day => {
+      const info = state.ann.days.get(day.date);
+      const official = officialBias(info);
+      const result = E.biasDay(rthOf(day), official, cfg);
+      return { day, bias: official, result: result ? result.result : null, move: result ? result.move : null, changed: Boolean(info && info.bias_later) };
+    });
+    const ideas = state.ann.ideas.filter(idea => dates.has(idea.date)).map(idea => {
+      const result = evaluateIdea(idea);
+      const trade = idea.trade_id ? state.ann.trades.find(item => item.id === idea.trade_id) : null;
+      return { idea, outcome: idea.outcome, state: result.state, r: result.r, points: result.points, tradeR: trade && typeof trade.result_r === 'number' ? trade.result_r : undefined };
+    });
+    const trades = state.ann.trades.filter(trade => dates.has(trade.date));
+    return { zones, bias, ideas, trades, laterZones, summary: E.summarize({ zones, bias, ideas, trades }) };
+  }
+
+  function kpi(value, label, tone = '') {
+    return `<div class="hs-kpi${tone ? ` is-${tone}` : ''}"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`;
+  }
+
+  /** Vodorovný pruh z dílů [počet, třída]; šířky se nastaví přes CSSOM (CSP nepovolí style v HTML). */
+  function stack(parts) {
+    const total = parts.reduce((sum, [count]) => sum + count, 0) || 1;
+    return `<div class="hs-stack">${parts.map(([count, tone]) => `<i class="is-${tone}" data-w="${(count / total * 100).toFixed(2)}"></i>`).join('')}</div>`;
+  }
+
+  function dayLink(date, text, tone = '') {
+    return `<button type="button" class="hs-list-row hs-day-link ${tone}" data-go-date="${escapeHtml(date)}"><span class="hs-mono">${escapeHtml(T.dateLabel(date))}</span><span>${escapeHtml(text)}</span></button>`;
+  }
+
+  function renderSummary() {
+    if (!panelOpen()) return;
+    periodSelect.value = evalPrefs().period || 'all';
+    const days = periodDays();
+    if (!days.length) {
+      panelBody.innerHTML = '<p class="hs-muted">V tomhle období nejsou svíčky.</p>';
+      return;
+    }
+    const cfg = evalConfig();
+    const data = collectEvaluation(days);
+    const { zones, bias, ideas, trades } = data.summary;
+    const range = `${czechDate(days[0].date)} – ${czechDate(days[days.length - 1].date)} · ${plural(days.length, 'obchodní den', 'obchodní dny', 'obchodních dní')}${state.loadedFrom > state.firstDate ? ' · dočítám starší data…' : ''}`;
+
+    // Zóny
+    const types = Object.entries(ZONE_TYPES).filter(([type]) => zones.byType[type]).map(([type, label]) => {
+      const counts = zones.byType[type];
+      const rate = counts.held + counts.broken ? counts.held / (counts.held + counts.broken) : null;
+      return `<div class="hs-bar-row"><span>${escapeHtml(label)}</span>${stack([[counts.held, 'held'], [counts.broken, 'broken'], [counts.undecided, 'undecided']])}<em>${counts.held}/${counts.broken}${rate !== null ? ` · ${percent(rate)}` : ''}</em></div>`;
+    }).join('');
+    const decidedZones = data.zones.filter(item => item.result === 'held' || item.result === 'broken')
+      .sort((a, b) => (a.day.date < b.day.date ? 1 : -1)).slice(0, 6)
+      .map(item => dayLink(item.day.date, `${item.zone.name || ZONE_TYPES[item.zone.type]} ${price(item.zone.price_low)}–${price(item.zone.price_high)} · ${ZONE_RESULTS[item.result]} v ${T.pragueTime(state.ts[item.detail.decide])}`, item.result === 'held' ? 'is-up' : 'is-down')).join('');
+    const zoneSection = `<section class="hs-sec">
+      <h3>Drží moje zóny?</h3>
+      ${zones.total ? `<div class="hs-kpis">${kpi(percent(zones.holdRate), 'držely z rozhodnutých', zones.holdRate === null ? '' : zones.holdRate >= 0.5 ? 'up' : 'down')}${kpi(String(zones.held), 'držely', 'up')}${kpi(String(zones.broken), 'proražené', 'down')}</div>
+      <p class="hs-muted">Zasažené ${number.format(zones.touched)} z ${plural(zones.total, 'zóna-dne', 'zóna-dnů', 'zóna-dnů')}, bez rozhodnutí ${number.format(zones.undecided)}.${data.laterZones ? ` Dodatečné zóny (${number.format(data.laterZones)}) se ${cfg.includeLater ? 'počítají' : 'nepočítají'}.` : ''}</p>
+      ${types}
+      ${decidedZones ? `<p class="hs-sub">Poslední rozhodnuté</p><div class="hs-list">${decidedZones}</div>` : ''}` : '<p class="hs-muted">V tomhle období nejsou žádné zóny.</p>'}
+    </section>`;
+
+    // Bias
+    const wrong = data.bias.filter(item => item.result === 'wrong').sort((a, b) => (a.day.date < b.day.date ? 1 : -1)).slice(0, 6)
+      .map(item => dayLink(item.day.date, `${item.bias} · RTH ${signed(item.move, 2)} b.${item.changed ? ' · změněn po otevření' : ''}`, 'is-down')).join('');
+    const directional = ['long', 'short'].map(direction => {
+      const counts = bias[direction];
+      const total = counts.right + counts.wrong;
+      return total ? `<div class="hs-bar-row"><span>${direction === 'long' ? 'Long' : 'Short'}</span>${stack([[counts.right, 'held'], [counts.wrong, 'broken']])}<em>${counts.right}/${total} · ${percent(counts.right / total)}</em></div>` : '';
+    }).join('');
+    const biasSection = `<section class="hs-sec">
+      <h3>Sedí můj bias?</h3>
+      ${bias.scored ? `<div class="hs-kpis">${kpi(percent(bias.rate), 'správně', bias.rate >= 0.5 ? 'up' : 'down')}${kpi(String(bias.right), 'správně', 'up')}${kpi(String(bias.wrong), 'špatně', 'down')}</div>` : '<p class="hs-muted">Zatím žádný vyhodnocený den s biasem.</p>'}
+      ${directional}
+      <p class="hs-muted">RTH close proti RTH open, bias z otevření NY. Bez biasu ${plural(bias.none, 'den', 'dny', 'dní')}, neutral ${plural(bias.neutral.days, 'den', 'dny', 'dní')}${cfg.neutralBand > 0 ? ` (správně pod ${price(cfg.neutralBand)} b.)` : ' (nehodnotí se)'}.${bias.changed ? ` Po otevření změněn ${plural(bias.changed, 'den', 'dny', 'dní')} ✎.` : ''}</p>
+      ${wrong ? `<p class="hs-sub">Nevyšel</p><div class="hs-list">${wrong}</div>` : ''}
+    </section>`;
+
+    // Potenciální a realizované obchody
+    const outcomeRows = [['missed', 'Propáslé'], ['skipped', 'Nevzaté'], ['taken', 'Vzaté'], ['', 'Bez výsledku']].map(([key, label]) => {
+      const group = ideas.byOutcome[key];
+      if (!group.count) return '';
+      return `<div class="hs-bar-row"><span>${label}</span>${stack([[group.tp, 'held'], [group.sl, 'broken'], [group.count - group.tp - group.sl, 'undecided']])}<em>${group.count} · ${signed(group.r)}R</em></div>`;
+    }).join('');
+    const leftList = data.ideas.filter(item => (item.outcome === 'missed' || item.outcome === 'skipped') && item.r > 0)
+      .sort((a, b) => b.r - a.r).slice(0, 6)
+      .map(item => dayLink(item.idea.date, `${item.idea.direction === 'long' ? 'L' : 'S'} ${item.idea.name || price(item.idea.entry)} · ${OUTCOMES[item.outcome].toLowerCase()} · ${signed(item.r)}R`, 'is-up')).join('');
+    const tradeLine = trades.count ? `Realizované obchody ES: ${number.format(trades.count)}${trades.withR ? ` · ${signed(trades.r, 2)}R` : ''} · ${signed(trades.usd, 0)} $.` : 'V deníku nejsou obchody ES z tohoto období.';
+    const takenLine = ideas.taken.linked ? ` Vzaté a propojené s deníkem: potenciál ${signed(ideas.taken.potential)}R, reálně ${signed(ideas.taken.realized)}R.` : '';
+    const ideaSection = `<section class="hs-sec">
+      <h3>Kde nechávám obchody na stole?</h3>
+      ${ideas.total ? `<div class="hs-kpis">${kpi(`${signed(ideas.left.r)}R`, `na stole (${plural(ideas.left.count, 'obchod', 'obchody', 'obchodů')})`, ideas.left.r > 0 ? 'up' : '')}${kpi(`${ideas.saved.r.toFixed(1)}R`, `ušetřeno (${number.format(ideas.saved.count)} do stopu)`, '')}${kpi(String(ideas.total), 'potenciálních', '')}</div>
+      ${outcomeRows}
+      <p class="hs-muted">Proti svíčkám: ${number.format(ideas.tp)}× cíl, ${number.format(ideas.sl)}× stop, ${number.format(ideas.open)}× do konce dne, ${number.format(ideas.unfilled)}× vstup nezasažen.${takenLine}</p>
+      ${leftList ? `<p class="hs-sub">Zůstalo na stole</p><div class="hs-list">${leftList}</div>` : ''}` : '<p class="hs-muted">V tomhle období nejsou potenciální obchody. Přidej je v grafu přes L / S + klik.</p>'}
+      <p class="hs-muted">${escapeHtml(tradeLine)}</p>
+    </section>`;
+
+    panelBody.innerHTML = `<p class="hs-range">${escapeHtml(range)}</p>${zoneSection}${biasSection}${ideaSection}`;
+    $$('.hs-stack i', panelBody).forEach(el => { el.style.width = `${el.dataset.w}%`; });
+  }
+
+  let summaryTimer = 0;
+  function scheduleSummary(delay = 150) {
+    if (!panelOpen()) return;
+    clearTimeout(summaryTimer);
+    summaryTimer = setTimeout(renderSummary, delay);
+  }
+
+  panelBody.addEventListener('click', event => {
+    const link = event.target.closest('[data-go-date]');
+    if (link) goToDate(link.dataset.goDate);
+  });
+
+  periodSelect.addEventListener('change', () => {
+    state.prefs.eval = { ...evalPrefs(), period: periodSelect.value };
+    savePrefs();
+    renderSummary();
+  });
+
+  function fillRules() {
+    const cfg = evalConfig();
+    rulesForm.window.value = cfg.window;
+    rulesForm.bounce.value = cfg.bounce;
+    rulesForm.breakBy.value = cfg.breakBy;
+    rulesForm.includeLater.checked = cfg.includeLater;
+    rulesForm.neutralBand.value = cfg.neutralBand;
+    rulesForm.sameBar.value = cfg.sameBar;
+  }
+
+  function applyRules(values) {
+    const cfg = E.config(values);
+    state.prefs.eval = { ...evalPrefs(), window: cfg.window, bounce: cfg.bounce, breakBy: cfg.breakBy, includeLater: cfg.includeLater, neutralBand: cfg.neutralBand, sameBar: cfg.sameBar };
+    savePrefs();
+    fillRules();
+    redraw();
+    renderHeaders();
+    renderMinimap();
+    renderSummary();
+  }
+
+  rulesForm.addEventListener('submit', event => {
+    event.preventDefault();
+    applyRules({
+      window: rulesForm.window.value,
+      bounce: rulesForm.bounce.value,
+      breakBy: rulesForm.breakBy.value,
+      includeLater: rulesForm.includeLater.checked,
+      neutralBand: rulesForm.neutralBand.value,
+      sameBar: rulesForm.sameBar.value,
+    });
+    showToast('Pravidla vyhodnocení jsou uložená.');
+  });
+  $('[data-rules-reset]').addEventListener('click', () => applyRules(E.DEFAULTS));
 
   /* ------------------------------------------------------------------ hlášky */
 

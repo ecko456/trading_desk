@@ -1483,7 +1483,29 @@ function hs_clean_prefs(array $data): array
     foreach (HS_LAYERS as $layer) {
         $layers[$layer] = !is_array($data['layers'] ?? null) || !array_key_exists($layer, $data['layers']) ? true : (bool)$data['layers'][$layer];
     }
-    return ['layers' => $layers, 'snap' => (bool)($data['snap'] ?? false), 'backfill' => (bool)($data['backfill'] ?? false)];
+    return [
+        'layers' => $layers,
+        'snap' => (bool)($data['snap'] ?? false),
+        'backfill' => (bool)($data['backfill'] ?? false),
+        'panel' => (bool)($data['panel'] ?? false),
+        'eval' => hs_clean_eval($data['eval'] ?? null),
+    ];
+}
+
+/** Pravidla vyhodnocení (stejné meze jako static/hindsight/evaluate.js) a období souhrnu. */
+function hs_clean_eval(mixed $raw): array
+{
+    $raw = is_array($raw) ? $raw : [];
+    $number = static fn(mixed $value, float $min, float $max, float $fallback): float => is_numeric($value) ? max($min, min($max, (float)$value)) : $fallback;
+    return [
+        'window' => ($raw['window'] ?? '') === 'rth' ? 'rth' : 'day',
+        'bounce' => $number($raw['bounce'] ?? null, 0.25, 500, 8),
+        'breakBy' => $number($raw['breakBy'] ?? null, 0, 500, 4),
+        'includeLater' => (bool)($raw['includeLater'] ?? false),
+        'neutralBand' => $number($raw['neutralBand'] ?? null, 0, 500, 0),
+        'sameBar' => ($raw['sameBar'] ?? '') === 'target' ? 'target' : 'stop',
+        'period' => in_array($raw['period'] ?? '', ['view', '20', '60', 'all'], true) ? (string)$raw['period'] : 'all',
+    ];
 }
 
 function hs_save_prefs(array $data): array

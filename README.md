@@ -280,7 +280,8 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 - **L / S + klik** (nebo tlačítka + Long / + Short) přidá potenciální long nebo short v místě kliknutí: vstup je cena a čas kliknutí, stop je dvojnásobek průměrného rozpětí svíčky toho dne a cíl 2R. Stop, vstup i cíl jde táhnout za čtverečky vpravo nebo přepsat v okénku; tam se zadá i výsledek *nevzatý / propáslý / vzatý* a propojení s obchodem z deníku,
 - klik na **box pozice** potenciální obchod upraví nebo smaže, klik na **šipku obchodu** ukáže detail a doplní časy vstupu a výstupu,
 - **vrstvy** (seance, news, zóny, bias, potenciální, realizované, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera,
-- zóny a bias se při otevření NY **zamknou**, pozdější změny jsou dodatečné verze (viz níže).
+- zóny a bias se při otevření NY **zamknou**, pozdější změny jsou dodatečné verze (viz níže),
+- **E** (nebo tlačítko Vyhodnocení) vysune panel s vyhodnocením: drží moje zóny, sedí můj bias, kde nechávám obchody na stole.
 
 ### Potenciální a realizované obchody
 
@@ -322,7 +323,19 @@ Zóny a bias denního náhledu ES/MES se **zamknou při otevření NY** (9:30 Ne
 
 Náhledy z doby před touto verzí nemají verze: za platný se bere stav při první úpravě po nasazení.
 
-Hotové jsou fáze 1 až 3 zadání (bez importu obchodů z CSV). Zbývá vyhodnocení zón, biasu a obchodů v souhrnném panelu (fáze 4) a import obchodů.
+### Vyhodnocení
+
+Panel **Vyhodnocení** (klávesa E) odpovídá na tři otázky za zvolené období: *co je v grafu*, *posledních 20* nebo *60 obchodních dní*, nebo *vše načtené* (až rok). Řádky v seznamech skočí na daný den. Volba období, otevřený panel i pravidla se pamatují pro každého tradera.
+
+- **Drží moje zóny?** Každá zóna se hodnotí v každém dni své platnosti. První dotek; strana podle toho, odkud cena přišla (close svíčky před dotekem nad zónou = má podržet jako support, pod ní = jako resistance; když leží v zóně, rozhodne typ zóny). **Držela** = odraz aspoň o 8 bodů od okraje zóny dřív, než 5m svíčka zavře za zónou o víc než 4 body (**proražená**). Jinak *zasažená bez rozhodnutí*, nebo *nezasažená*. Maximum svíčky je dřív než její close, takže odraz a průraz v jedné svíčce znamená „držela“; svíčka doteku se počítá jen svým close. Panel ukáže podíl držených z rozhodnutých, rozpad podle typu zóny a poslední případy. V grafu je u zóny kroužek v místě doteku a ✓ / ✗ tam, kde se rozhodlo; najetí myší na zónu napíše výsledek toho dne.
+- **Sedí můj bias?** RTH close proti RTH open s biasem z otevření NY; long a short zvlášť, seznam dnů, kdy nevyšel. Neutral se standardně nehodnotí.
+- **Kde nechávám obchody na stole?** Potenciální obchody podle výsledku (propáslé, nevzaté, vzaté): kolik R zůstalo na stole (propáslé a nevzaté, které skončily v zisku), kolik R ses ušetřil (šly do stopu), a u vzatých propojených s deníkem potenciál proti skutečnému výsledku. K tomu součet realizovaných obchodů ES.
+
+**Pravidla vyhodnocení** (dole v panelu) si každý nastaví sám: zóny sledovat celý obchodní den, nebo jen RTH; velikost odrazu a průrazu v bodech; jestli počítat i dodatečné zóny (přidané po otevření NY; standardně ne); pásmo, ve kterém je neutral bias správně (0 = nehodnotit); a jak brát svíčku, která zasáhne stop i cíl potenciálního obchodu (stop, nebo cíl). Pravidla platí pro panel, ✓/✗ v hlavičkách dnů, minimapu i značky v grafu.
+
+Pravidla jsou v `static/hindsight/evaluate.js` jako čisté funkce a mají vlastní testy (`tests/test_hindsight_eval.js`).
+
+Hotové jsou všechny čtyři fáze zadání. Chybí jen import realizovaných obchodů z CSV (dedup podle ID z platformy je připravený), až bude vzorový export.
 
 ## Psychika a disciplína
 

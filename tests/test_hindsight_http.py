@@ -255,6 +255,11 @@ class HindsightHttpTests(unittest.TestCase):
         self.assertEqual(prefs, saved["prefs"])
         self.assertEqual((prefs["layers"]["news"], prefs["layers"]["zones"], prefs["layers"]["sessions"], prefs["snap"]), (False, False, True, True))
         self.assertNotIn("cizí", prefs["layers"])
+        # Pravidla vyhodnocení a panel: hodnoty se očistí a omezí.
+        status, saved = client.api("POST", "hindsight_prefs", {"panel": True, "eval": {"window": "rth", "bounce": -3, "breakBy": "x", "includeLater": 1, "neutralBand": 9999, "sameBar": "cokoli", "period": "60", "navíc": 1}})
+        self.assertEqual(saved["prefs"]["eval"], {"window": "rth", "bounce": 0.25, "breakBy": 4.0, "includeLater": True, "neutralBand": 500.0, "sameBar": "stop", "period": "60"})
+        self.assertTrue(saved["prefs"]["panel"])
+        self.assertEqual(client.api("GET", "hindsight_range")[1]["prefs"]["eval"]["period"], "60")
 
     def test_5_page_requires_login(self):
         connection = http.client.HTTPConnection("127.0.0.1", self.server.port, timeout=10)
@@ -435,6 +440,10 @@ class HindsightHttpTests(unittest.TestCase):
 class HindsightTimeTests(unittest.TestCase):
     def test_sessions_and_contracts(self):
         result = subprocess.run(["node", "tests/test_hindsight_time.js"], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
+    def test_evaluation_rules(self):
+        result = subprocess.run(["node", "tests/test_hindsight_eval.js"], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
     def test_contract_periods(self):
