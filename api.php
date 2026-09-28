@@ -219,6 +219,7 @@ try {
     if ($action === 'plan' && $method === 'DELETE') {
         $id = (int)($_GET['id'] ?? 0);
         $screenshots = fetch_all('SELECT * FROM screenshots WHERE plan_id = ?', [$id]);
+        hs_lock_delete($id);
         $statement = db()->prepare('DELETE FROM plans WHERE id = ?');
         $statement->execute([$id]);
         foreach ($screenshots as $screenshot) {
@@ -327,6 +328,10 @@ try {
 
     if ($action === 'hindsight_trade_times' && $method === 'POST') {
         json_response(hs_save_trade_times(request_json()));
+    }
+
+    if ($action === 'hindsight_versions' && $method === 'GET') {
+        json_response(['date' => hs_date($_GET['date'] ?? ''), 'versions' => hs_versions(hs_date($_GET['date'] ?? ''))]);
     }
 
     if ($action === 'hindsight_bias' && $method === 'POST') {

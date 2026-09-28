@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import http.client
+import sqlite3
 import subprocess
 import unittest
 
@@ -348,6 +349,86 @@ class HindsightHttpTests(unittest.TestCase):
         self.assertEqual(client.request("DELETE", f"/api.php?action=hindsight_idea&id={weekly_idea}")[0], 404)
         by_name_id = by_name["Z náhledu"]["id"]
         self.assertEqual(client.request("DELETE", f"/api.php?action=hindsight_idea&id={by_name_id}")[0], 200)
+
+
+    def journal_path(self, login):
+        conn = sqlite3.connect(self.server.data / "app.sqlite3")
+        user_id = conn.execute("SELECT id FROM users WHERE login = ?", (login,)).fetchone()[0]
+        conn.close()
+        return self.server.data / "users" / str(user_id) / "trading.sqlite3"
+
+    def test_7_lock_at_ny_open_and_versions(self):
+        client = self.member("vera")
+        client.api("GET", "hindsight_range")  # deník existuje
+        # Náhled z doby před otevřením (zapsaný přímo, jako by vznikl ráno).
+        journal = sqlite3.connect(self.journal_path("vera"))
+        journal.execute("INSERT INTO plans (plan_type, plan_date, market, session, status, bias, bias_description, created_at, updated_at) VALUES ('daily', '2026-09-09', 'ES', 'intraday', 'ready', 'short', 'pod VAL', '2026-09-09T10:00:00Z', '2026-09-09T10:00:00Z')")
+        plan_id = journal.execute("SELECT id FROM plans WHERE plan_date = '2026-09-09'").fetchone()[0]
+        journal.execute("INSERT INTO zones (plan_id, sort_order, name, direction, price_low, price_high, status, valid_to) VALUES (?, 0, 'VAL', 'long', 6600, 6605, 'planned', 'open')", (plan_id,))
+        journal.execute("INSERT INTO zones (plan_id, sort_order, name, direction, price_low, price_high, status) VALUES (?, 1, 'ONH', 'short', 6650, 6655, 'planned')", (plan_id,))
+        journal.commit()
+        journal.close()
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-09", "to": "2026-09-09"})[1]
+        self.assertEqual([(z["name"], z["later"], z["removed"]) for z in notes["zones"]], [("VAL", False, False), ("ONH", False, False)])
+        self.assertEqual(notes["days"][0]["versions"], 0)
+        val_id = next(z["id"] for z in notes["zones"] if z["name"] == "VAL")
+
+        # Úprava po otevření: verze 1 = stav při otevření, verze 2 = dodatečná změna.
+        status, saved = client.request("PUT", "/api.php?action=hindsight_zone", {"id": val_id, "type": "support", "name": "VAL", "price_low": 6598, "price_high": 6604, "valid_to": "open"})
+        self.assertEqual((status, saved["later"]), (200, True))
+        status, bias = client.api("POST", "hindsight_bias", {"date": "2026-09-09", "bias": "long", "note": "přehodnoceno"})
+        self.assertTrue(bias["later"])
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-09", "to": "2026-09-09"})[1]
+        day = notes["days"][0]
+        self.assertEqual((day["bias"], day["bias_official"], day["bias_later"], day["versions"]), ("long", "short", True, 3))
+        zones = sorted((z["name"], z["price_low"], z["later"], z["removed"]) for z in notes["zones"])
+        self.assertEqual(zones, [("ONH", 6650.0, False, False), ("VAL", 6598.0, True, False), ("VAL", 6600.0, False, True)])
+        versions = client.api("GET", "hindsight_versions", date="2026-09-09")[1]["versions"]
+        self.assertEqual([(v["version"], v["kind"], v["bias"], len(v["zones"])) for v in versions], [(1, "locked", "short", 2), (2, "later", "short", 2), (3, "later", "long", 2)])
+        # Změna jen poznámek nebo platnosti zóny novou verzi nedělá.
+        client.request("PUT", "/api.php?action=hindsight_zone", {"id": val_id, "type": "support", "name": "VAL přejmenovaná", "note": "drží", "price_low": 6598, "price_high": 6604, "valid_to": "2026-09-20"})
+        client.api("POST", "hindsight_bias", {"date": "2026-09-09", "bias": "long", "note": "jiná poznámka"})
+        self.assertEqual(len(client.api("GET", "hindsight_versions", date="2026-09-09")[1]["versions"]), 3)
+
+        # Editor náhledu podléhá stejnému zámku.
+        plan = client.api("GET", "plan", id=plan_id)[1]
+        editor_zones = [{key: ("" if value is None else value) for key, value in zone.items() if key in ("name", "direction", "price_low", "price_high", "valid_to", "zone_type", "note", "status")} for zone in plan["zones"]]
+        status, _ = client.api("POST", "plan", {"id": plan_id, "plan_type": "daily", "plan_date": "2026-09-09", "market": "ES", "session": "Intraday", "bias": "long", "general_notes": "po obchodování", "zones": editor_zones})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(client.api("GET", "hindsight_versions", date="2026-09-09")[1]["versions"]), 3, "stejný obsah = žádná nová verze")
+        status, _ = client.api("POST", "plan", {"id": plan_id, "plan_type": "daily", "plan_date": "2026-09-09", "market": "ES", "session": "Intraday", "bias": "long", "zones": editor_zones + [{"name": "Nová", "direction": "short", "price_low": 6700, "price_high": 6702}]})
+        versions = client.api("GET", "hindsight_versions", date="2026-09-09")[1]["versions"]
+        self.assertEqual((len(versions), len(versions[-1]["zones"])), (4, 3))
+
+        # Smazaný náhled: verze z otevření zůstane a platí dál; nový náhled na ně naváže.
+        self.assertEqual(client.request("DELETE", f"/api.php?action=plan&id={plan_id}")[0], 200)
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-09", "to": "2026-09-09"})[1]
+        day = notes["days"][0]
+        self.assertEqual((day["bias_official"], day.get("deleted"), day["versions"]), ("short", True, 5))
+        self.assertEqual(sorted((z["name"], z["removed"]) for z in notes["zones"]), [("ONH", True), ("VAL", True)])
+        client.api("POST", "hindsight_bias", {"date": "2026-09-09", "bias": "short"})
+        versions = client.api("GET", "hindsight_versions", date="2026-09-09")[1]["versions"]
+        self.assertEqual([v["version"] for v in versions], [1, 2, 3, 4, 5, 6])
+        day = client.api("GET", "hindsight_annotations", **{"from": "2026-09-09", "to": "2026-09-09"})[1]["days"][0]
+        self.assertEqual((day["bias"], day["bias_official"], day["bias_later"]), ("short", "short", False))
+
+        # Budoucí den ještě zamčený není.
+        future = (datetime.now(timezone.utc) + timedelta(days=20)).strftime("%Y-%m-%d")
+        status, zone = client.api("POST", "hindsight_zone", {"date": future, "type": "support", "price_low": 6800, "price_high": 6805})
+        self.assertEqual((status, zone["later"]), (200, False))
+        self.assertEqual(client.api("GET", "hindsight_versions", date=future)[1]["versions"], [])
+
+        # Zpětné doplnění: jen správce; jeho úprava minulého dne je ta platná.
+        client.api("POST", "hindsight_prefs", {"backfill": True})
+        self.assertTrue(client.api("POST", "hindsight_bias", {"date": "2026-09-01", "bias": "long"})[1]["later"], "člen zpětně doplňovat nemůže")
+        self.admin.api("POST", "hindsight_prefs", {"backfill": True})
+        status, admin_bias = self.admin.api("POST", "hindsight_bias", {"date": "2026-09-02", "bias": "long", "note": "pro prezentaci"})
+        self.assertEqual((status, admin_bias["later"]), (200, False))
+        self.assertEqual(self.admin.api("GET", "hindsight_versions", date="2026-09-02")[1]["versions"], [])
+        day = self.admin.api("GET", "hindsight_annotations", **{"from": "2026-09-02", "to": "2026-09-02"})[1]["days"][0]
+        self.assertEqual((day["bias_official"], day["bias_later"]), ("long", False))
+        self.admin.api("POST", "hindsight_prefs", {"backfill": False})
+        self.assertTrue(self.admin.api("POST", "hindsight_bias", {"date": "2026-09-02", "bias": "short"})[1]["later"])
 
 
 @unittest.skipIf(PHP is None, "PHP není nainstalované")

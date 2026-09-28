@@ -494,6 +494,9 @@ function renderTiming(schedule, day, now) {
     text = 'Session už proběhla, všechna pole jsou odemčená.';
   }
   if (weekly) text += ' U týdenního náhledu se časy otevření vztahují k pondělí.';
+  if (!weekly && ['ES', 'MES'].includes(String($('#planMarket').value || '').trim().toUpperCase()) && now >= schedule.rth) {
+    text += ' Pro vyhodnocení jsou ale zóny a bias od otevření RTH zamčené: změna ceny zóny, jejího typu nebo biasu se uloží jako dodatečná verze a Hindsight počítá s verzí z otevření. Poznámky jde psát dál.';
+  }
 
   const phases = [['globex', 'Globex'], ['eu', 'EU open'], ['rth', 'RTH open'], ['ib', 'Initial Balance']];
   const nextKey = phases.find(([key]) => now < schedule[key])?.[0];
@@ -1535,7 +1538,8 @@ async function savePlan({ quiet = false } = {}) {
   renderScreenshots();
   schedulePlanRefresh();
   if (!quiet) {
-    const saved = plan.plan_type === 'weekly' ? 'Týdenní náhled je uložený.' : 'Denní náhled je uložený.';
+    let saved = plan.plan_type === 'weekly' ? 'Týdenní náhled je uložený.' : 'Denní náhled je uložený.';
+    if (plan.lock?.saved_later) saved += ' Změna zón nebo biasu po otevření RTH je uložená jako dodatečná verze.';
     toast(missing.length ? `${saved} U ${missing.length === 1 ? 'jedné zóny' : `${missing.length} směrů`} ještě chybí podmínky, jsou zvýrazněné.` : saved);
   }
   await Promise.all([refreshPlans(), refreshDashboard()]);

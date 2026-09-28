@@ -279,7 +279,8 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 - **Z + tažení** v grafu nakreslí zónu (nebo tlačítko + Zóna): typ support / resistance / VPOC / jiná, popisek, poznámka a platnost *jen tento den*, *do data* nebo *dokud ji neukončím*; klik na zónu ji upraví, ukončí k danému dni nebo smaže,
 - **L / S + klik** (nebo tlačítka + Long / + Short) přidá potenciální long nebo short v místě kliknutí: vstup je cena a čas kliknutí, stop je dvojnásobek průměrného rozpětí svíčky toho dne a cíl 2R. Stop, vstup i cíl jde táhnout za čtverečky vpravo nebo přepsat v okénku; tam se zadá i výsledek *nevzatý / propáslý / vzatý* a propojení s obchodem z deníku,
 - klik na **box pozice** potenciální obchod upraví nebo smaže, klik na **šipku obchodu** ukáže detail a doplní časy vstupu a výstupu,
-- **vrstvy** (seance, news, zóny, bias, potenciální, realizované, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera.
+- **vrstvy** (seance, news, zóny, bias, potenciální, realizované, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera,
+- zóny a bias se při otevření NY **zamknou**, pozdější změny jsou dodatečné verze (viz níže).
 
 ### Potenciální a realizované obchody
 
@@ -308,7 +309,20 @@ Opakovaný import stejného souboru nic nezdvojí, svíčky se jen přepíšou. 
 
 Graf kreslí [TradingView Lightweight Charts™](https://www.tradingview.com/) (Apache 2.0), písma jsou Inter a JetBrains Mono (SIL OFL). Vše je přibalené ve `static/hindsight/`, stránka nic nenačítá z cizích serverů.
 
-Hotové jsou fáze 1 a 2 zadání (bez importu obchodů z CSV). Další fáze: rok s minimapou a Kolotočem jsou hotové, zbývá zamykání zón a biasu k otevření NY s verzemi dodatečných úprav (správce bude moct doplňovat zpětně), vyhodnocení zón, biasu a obchodů v souhrnném panelu a import obchodů.
+### Zámek při otevření NY a verze
+
+Zóny a bias denního náhledu ES/MES se **zamknou při otevření NY** (9:30 New York, v Praze 15:30, v týdnech s rozdílným letním časem 14:30). Zamčený je směr biasu a zóny (ceny a typ). Poznámky, popisky, platnost zóny (ukončení zóny je běžná věc) a potenciální obchody jde měnit kdykoli.
+
+- První úprava po zamčení nejdřív uloží **verzi 1: jak náhled vypadal při otevření** (do té chvíle se nezměnil). Každá další změna zamčeného obsahu je **dodatečná verze** s časem. Platí to pro Hindsight i pro editor náhledu (ten to napíše i v časové ose a po uložení).
+- **Vyhodnocení bere verzi z otevření**: podbarvení a ✓/✗ dne počítá s biasem z otevření, minimapa taky. Změněný bias má v hlavičce dne ✎ (v nápovědě je, z čeho na co).
+- V grafu je zóna přidaná nebo změněná po otevření **tečkovaná** s popiskem *dodatečně*; zóna, která při otevření v náhledu byla a pak zmizela, zůstane jako **čárkovaný obrys** (*odstraněna po otevření*).
+- Klik na hlavičku dne ukáže **historii verzí** (1 při otevření NY, další dodatečně s časem).
+- Náhled vytvořený až po otevření má verzi z otevření prázdnou, takže všechno v něm je dodatečné. Když se zamčený náhled smaže, verze zůstanou a nový náhled na stejný den na ně naváže.
+- **Správce** má v Hindsightu přepínač **Zpětně** (pro prezentaci): dokud je zapnutý, jeho úpravy minulých dnů se berou, jako by byly před otevřením, nic se neoznačí a dosavadní verze toho náhledu se zahodí. Platí i pro editor náhledu. Ostatní tradeři tuhle možnost nemají.
+
+Náhledy z doby před touto verzí nemají verze: za platný se bere stav při první úpravě po nasazení.
+
+Hotové jsou fáze 1 až 3 zadání (bez importu obchodů z CSV). Zbývá vyhodnocení zón, biasu a obchodů v souhrnném panelu (fáze 4) a import obchodů.
 
 ## Psychika a disciplína
 

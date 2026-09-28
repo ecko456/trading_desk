@@ -785,6 +785,8 @@ function hs_annotations(string $from, string $to): array
         ];
     }
 
+    [$days, $zones] = hs_apply_versions($days, $zones, $from, $to);
+
     $news = [];
     foreach (fetch_all("SELECT id, event_date, title, time_label, impact FROM calendar_events WHERE kind = 'news' AND impact IN ('high', '') AND event_date BETWEEN ? AND ? ORDER BY event_date, time_label", [$from, $to]) as $row) {
         $ts = hs_event_ts((string)$row['event_date'], (string)($row['time_label'] ?? ''));
@@ -793,6 +795,99 @@ function hs_annotations(string $from, string $to): array
         }
     }
     return ['from' => $from, 'to' => $to, 'days' => array_values($days), 'zones' => $zones, 'news' => $news, 'ideas' => hs_ideas($from, $to), 'trades' => hs_trades($from, $to)];
+}
+
+/**
+ * Zámek v přehledu: bias a zóny z verze při otevření jsou platné. Zóna přidaná nebo
+ * změněná potom má „later“, zóna z otevření, která pak zmizela, se vrátí s „removed“.
+ */
+function hs_apply_versions(array $days, array $zones, string $from, string $to): array
+{
+    $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
+    $planDates = [];
+    foreach ($days as $day) {
+        if ($day['plan_id'] !== null) {
+            $planDates[(int)$day['plan_id']] = $day['date'];
+        }
+    }
+    foreach ($zones as $zone) {
+        $planDates[$zone['plan_id']] = $zone['valid_from'];
+    }
+    // Smazané náhledy: jejich verze z otevření platí dál.
+    $orphans = [];
+    foreach (fetch_all("SELECT DISTINCT plan_id, plan_date FROM plan_versions v WHERE plan_date BETWEEN ? AND ? AND market IN ($markets) AND NOT EXISTS (SELECT 1 FROM plans p WHERE p.id = v.plan_id)", [$from, $to, ...HS_PLAN_MARKETS]) as $row) {
+        $orphans[(int)$row['plan_id']] = (string)$row['plan_date'];
+        $planDates[(int)$row['plan_id']] = (string)$row['plan_date'];
+    }
+    $locked = hs_locked_versions(array_keys($planDates));
+
+    foreach ($days as $date => $day) {
+        $version = $day['plan_id'] !== null ? ($locked[(int)$day['plan_id']] ?? null) : null;
+        $official = $version !== null ? $version['bias'] : $day['bias'];
+        $days[$date]['bias_official'] = $official;
+        $days[$date]['bias_later'] = $version !== null && hs_bias_key($official) !== hs_bias_key($day['bias']);
+        $days[$date]['versions'] = $version['count'] ?? 0;
+    }
+    foreach ($orphans as $planId => $date) {
+        if (isset($days[$date]['plan_id']) || !isset($locked[$planId])) {
+            continue;
+        }
+        $days[$date] = ($days[$date] ?? ['date' => $date]) + ['plan_id' => null, 'bias' => '', 'bias_note' => ''];
+        $days[$date]['bias_official'] = $locked[$planId]['bias'];
+        $days[$date]['bias_later'] = hs_bias_key($locked[$planId]['bias']) !== 'neutral';
+        $days[$date]['versions'] = $locked[$planId]['count'];
+        $days[$date]['deleted'] = true;
+    }
+
+    $byPlan = [];
+    foreach ($zones as $index => $zone) {
+        $zones[$index]['later'] = false;
+        $zones[$index]['removed'] = false;
+        $byPlan[$zone['plan_id']][] = $index;
+    }
+    $removedId = 0;
+    foreach ($locked as $planId => $version) {
+        $remaining = $version['zones'];
+        foreach ($byPlan[$planId] ?? [] as $index) {
+            $key = hs_zone_key($zones[$index]);
+            $match = null;
+            foreach ($remaining as $position => $old) {
+                if (hs_zone_key($old) === $key) {
+                    $match = $position;
+                    break;
+                }
+            }
+            if ($match === null) {
+                $zones[$index]['later'] = true;
+            } else {
+                unset($remaining[$match]);
+            }
+        }
+        $date = $planDates[$planId];
+        foreach ($remaining as $old) {
+            $validTo = (string)($old['valid_to'] ?? '');
+            $visible = $date <= $to && ($validTo === 'open' || ($validTo === '' ? $date >= $from : $validTo >= $from));
+            if (!$visible) {
+                continue;
+            }
+            $zones[] = [
+                'id' => --$removedId,
+                'plan_id' => $planId,
+                'valid_from' => $date,
+                'valid_to' => $validTo,
+                'price_low' => (float)$old['price_low'],
+                'price_high' => (float)$old['price_high'],
+                'type' => (string)$old['type'],
+                'name' => (string)($old['name'] ?? ''),
+                'note' => (string)($old['note'] ?? ''),
+                'direction' => '',
+                'priority' => '',
+                'later' => false,
+                'removed' => true,
+            ];
+        }
+    }
+    return [$days, $zones];
 }
 
 /** Potenciální obchody = scénáře denního náhledu ES/MES se vstupem, stopem a cílem. */
@@ -1056,11 +1151,19 @@ function hs_zone_type(array $row): string
 /** Denní náhled ES pro datum; když ještě není, založí se prázdný (koncept). */
 function hs_plan_for(string $date): int
 {
+    return hs_find_plan($date) ?? hs_create_plan($date);
+}
+
+/** Denní náhled ES (jinak MES) pro datum, nebo null. */
+function hs_find_plan(string $date): ?int
+{
     $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
     $plan = fetch_one("SELECT id FROM plans WHERE plan_type = 'daily' AND plan_date = ? AND market IN ($markets) ORDER BY market = 'ES' DESC, session = 'intraday' DESC, id LIMIT 1", [$date, ...HS_PLAN_MARKETS]);
-    if ($plan !== null) {
-        return (int)$plan['id'];
-    }
+    return $plan !== null ? (int)$plan['id'] : null;
+}
+
+function hs_create_plan(string $date): int
+{
     $now = utc_now();
     // Bias zůstane nezadaný (''), dokud ho trader nezvolí; náhled ho ukáže jako Balance.
     db()->prepare("INSERT INTO plans (plan_type, plan_date, market, session, status, bias, created_at, updated_at) VALUES ('daily', ?, 'ES', 'intraday', 'draft', '', ?, ?)")->execute([$date, $now, $now]);
@@ -1115,36 +1218,43 @@ function hs_save_zone(array $data): array
             // Směr obchodu (a podmínky vstupu) nastavený v náhledu zůstane beze změny.
             unset($fields['direction']);
         }
+        $planId = (int)$row['plan_id'];
+        $lock = hs_lock_guard($planId, 'daily', (string)$row['plan_date'], 'ES');
         $sets = implode(', ', array_map(static fn(string $column): string => "$column = ?", array_keys($fields)));
         db()->prepare("UPDATE zones SET $sets WHERE id = ?")->execute([...array_values($fields), $id]);
-        db()->prepare('UPDATE plans SET updated_at = ? WHERE id = (SELECT plan_id FROM zones WHERE id = ?)')->execute([utc_now(), $id]);
-        return ['id' => $id];
+        db()->prepare('UPDATE plans SET updated_at = ? WHERE id = ?')->execute([utc_now(), $planId]);
+        return ['id' => $id, 'later' => hs_lock_commit($lock, $planId)];
     }
     $date = hs_date($data['date'] ?? '');
     $fields = hs_zone_fields($data, $date);
-    $planId = hs_plan_for($date);
+    $existing = hs_find_plan($date);
+    $lock = hs_lock_guard($existing, 'daily', $date, 'ES');
+    $planId = $existing ?? hs_create_plan($date);
     $order = (int)(fetch_one('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM zones WHERE plan_id = ?', [$planId])['next'] ?? 0);
     $columns = ['plan_id', 'sort_order', 'status', ...array_keys($fields)];
     $values = [$planId, $order, 'planned', ...array_values($fields)];
     db()->prepare('INSERT INTO zones (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')')->execute($values);
     $newId = (int)db()->lastInsertId();
     db()->prepare('UPDATE plans SET updated_at = ? WHERE id = ?')->execute([utc_now(), $planId]);
-    return ['id' => $newId, 'plan_id' => $planId];
+    return ['id' => $newId, 'plan_id' => $planId, 'later' => hs_lock_commit($lock, $planId)];
 }
 
 /** Zóna z denního náhledu ES/MES; jiné zóny (týdenní náhled, jiné trhy) Hindsight nemění. */
 function hs_zone_row(int $id): ?array
 {
     $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
-    return fetch_one("SELECT z.id, z.direction, p.plan_date FROM zones z JOIN plans p ON p.id = z.plan_id WHERE z.id = ? AND p.plan_type = 'daily' AND p.market IN ($markets)", [$id, ...HS_PLAN_MARKETS]);
+    return fetch_one("SELECT z.id, z.direction, z.plan_id, p.plan_date FROM zones z JOIN plans p ON p.id = z.plan_id WHERE z.id = ? AND p.plan_type = 'daily' AND p.market IN ($markets)", [$id, ...HS_PLAN_MARKETS]);
 }
 
 function hs_delete_zone(int $id): void
 {
-    if (hs_zone_row($id) === null) {
+    $row = hs_zone_row($id);
+    if ($row === null) {
         json_response(['error' => 'Zóna už neexistuje, načti graf znovu.'], 404);
     }
+    $lock = hs_lock_guard((int)$row['plan_id'], 'daily', (string)$row['plan_date'], 'ES');
     db()->prepare('DELETE FROM zones WHERE id = ?')->execute([$id]);
+    hs_lock_commit($lock, (int)$row['plan_id']);
 }
 
 function hs_save_bias(array $data): array
@@ -1154,10 +1264,205 @@ function hs_save_bias(array $data): array
     if (!in_array($bias, ['long', 'short', 'neutral'], true)) {
         json_response(['error' => 'Bias je long, short nebo neutral.'], 422);
     }
-    $planId = hs_plan_for($date);
+    $existing = hs_find_plan($date);
+    $lock = hs_lock_guard($existing, 'daily', $date, 'ES');
+    $planId = $existing ?? hs_create_plan($date);
     db()->prepare('UPDATE plans SET bias = ?, bias_description = ?, updated_at = ? WHERE id = ?')
         ->execute([$bias, mb_substr(trim((string)($data['note'] ?? '')), 0, 1000), utc_now(), $planId]);
-    return ['plan_id' => $planId, 'date' => $date, 'bias' => $bias];
+    return ['plan_id' => $planId, 'date' => $date, 'bias' => $bias, 'later' => hs_lock_commit($lock, $planId)];
+}
+
+/* ---------------------------------------------------------------- zámek a verze */
+
+/**
+ * Zóny a bias denního náhledu ES/MES se zamykají při otevření RTH (9:30 New York).
+ * Zamčený je směr biasu a zóny (ceny a typ); poznámky, platnost zóny a potenciální
+ * obchody jde psát i potom. První úprava po zamčení nejdřív uloží verzi 1, jak náhled
+ * vypadal při otevření (do té chvíle se nezměnil), a každá další změna zamčeného obsahu
+ * je dodatečná verze. Vyhodnocení bere verzi z otevření. Verze přežijí i smazání náhledu.
+ */
+function hs_lock_ts(string $date): int
+{
+    return (new DateTimeImmutable($date . ' 09:30:00', new DateTimeZone('America/New_York')))->getTimestamp();
+}
+
+function hs_lockable(string $type, string $market): bool
+{
+    return $type === 'daily' && in_array(strtoupper(trim($market)), HS_PLAN_MARKETS, true);
+}
+
+/** Správce se zapnutým „Zpětně“: úpravy minulých dnů se berou, jako by byly před otevřením. */
+function hs_backfill_mode(): bool
+{
+    return is_admin(current_user()) && (hs_prefs()['backfill'] ?? false);
+}
+
+/** Zamykaný obsah náhledu. */
+function hs_plan_state(int $planId): array
+{
+    $plan = fetch_one('SELECT bias FROM plans WHERE id = ?', [$planId]);
+    $zones = [];
+    foreach (fetch_all('SELECT * FROM zones WHERE plan_id = ? AND price_low IS NOT NULL AND price_high IS NOT NULL ORDER BY sort_order, id', [$planId]) as $row) {
+        $zones[] = [
+            'price_low' => round((float)$row['price_low'], 2),
+            'price_high' => round((float)$row['price_high'], 2),
+            'type' => hs_zone_type($row),
+            'name' => (string)($row['name'] ?? ''),
+            'valid_to' => (string)($row['valid_to'] ?? ''),
+            'note' => (string)($row['note'] ?? ''),
+        ];
+    }
+    return ['bias' => $plan === null ? '' : (string)$plan['bias'], 'zones' => $zones];
+}
+
+function hs_zone_key(array $zone): string
+{
+    return sprintf('%.2f|%.2f|%s', (float)$zone['price_low'], (float)$zone['price_high'], (string)$zone['type']);
+}
+
+/** Bias bez volby se v náhledu ukládá jako neutral (Balance): pro porovnání je to totéž. */
+function hs_bias_key(string $bias): string
+{
+    return $bias === '' ? 'neutral' : $bias;
+}
+
+function hs_fingerprint(array $state): string
+{
+    $keys = array_map('hs_zone_key', $state['zones']);
+    sort($keys);
+    return hash('sha256', hs_bias_key((string)$state['bias']) . '#' . implode(';', $keys));
+}
+
+function hs_insert_version(int $planId, string $date, string $market, string $kind, array $state): void
+{
+    $next = (int)(fetch_one('SELECT COALESCE(MAX(version), 0) + 1 AS next FROM plan_versions WHERE plan_id = ?', [$planId])['next'] ?? 1);
+    db()->prepare('INSERT INTO plan_versions (plan_id, plan_date, market, version, kind, saved_at, bias, zones, fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$planId, $date, $market, $next, $kind, utc_now(), (string)$state['bias'], json_encode($state['zones'], JSON_UNESCAPED_UNICODE), hs_fingerprint($state)]);
+}
+
+/**
+ * Volá se před úpravou náhledu. U zamčeného dne uloží verzi z otevření (jednou)
+ * a vrátí, co udělat po úpravě; null = den ještě není zamčený nebo se nezamyká.
+ */
+function hs_lock_guard(?int $planId, string $type, string $date, string $market): ?array
+{
+    if ($planId !== null) {
+        $stored = fetch_one('SELECT plan_type, plan_date, market FROM plans WHERE id = ?', [$planId]);
+        if ($stored === null) {
+            $planId = null;
+        } else {
+            [$type, $date, $market] = [(string)$stored['plan_type'], (string)$stored['plan_date'], (string)$stored['market']];
+        }
+    }
+    if (!hs_lockable($type, $market) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || time() < hs_lock_ts($date)) {
+        return null;
+    }
+    if (hs_backfill_mode()) {
+        return ['backfill' => true];
+    }
+    if ($planId !== null && fetch_one('SELECT id FROM plan_versions WHERE plan_id = ? LIMIT 1', [$planId]) === null) {
+        hs_insert_version($planId, $date, strtoupper($market), 'locked', hs_plan_state($planId));
+    }
+    return ['date' => $date, 'market' => strtoupper($market)];
+}
+
+/** Po úpravě: dodatečná verze, když se zamčený obsah změnil (vrací, jestli vznikla). */
+function hs_lock_commit(?array $lock, int $planId): bool
+{
+    if ($lock === null) {
+        return false;
+    }
+    if (!empty($lock['backfill'])) {
+        // Zpětné doplnění správcem: aktuální stav je ten platný.
+        db()->prepare('DELETE FROM plan_versions WHERE plan_id = ?')->execute([$planId]);
+        return false;
+    }
+    $plan = fetch_one('SELECT plan_date, market FROM plans WHERE id = ?', [$planId]);
+    $date = $plan !== null ? (string)$plan['plan_date'] : (string)$lock['date'];
+    $market = $plan !== null ? strtoupper((string)$plan['market']) : (string)$lock['market'];
+    if (fetch_one('SELECT id FROM plan_versions WHERE plan_id = ? LIMIT 1', [$planId]) === null) {
+        // Náhled vznikl až po otevření. Verze ze smazaného náhledu téhož dne platí dál,
+        // jinak byl při otevření prázdný.
+        $orphan = fetch_one('SELECT plan_id FROM plan_versions v WHERE plan_date = ? AND market = ? AND NOT EXISTS (SELECT 1 FROM plans p WHERE p.id = v.plan_id) ORDER BY id LIMIT 1', [$date, $market]);
+        if ($orphan !== null) {
+            db()->prepare('UPDATE plan_versions SET plan_id = ? WHERE plan_id = ?')->execute([$planId, (int)$orphan['plan_id']]);
+        } else {
+            hs_insert_version($planId, $date, $market, 'locked', ['bias' => '', 'zones' => []]);
+        }
+    }
+    $state = hs_plan_state($planId);
+    $last = fetch_one('SELECT fingerprint FROM plan_versions WHERE plan_id = ? ORDER BY version DESC LIMIT 1', [$planId]);
+    if ($last === null || (string)$last['fingerprint'] !== hs_fingerprint($state)) {
+        hs_insert_version($planId, $date, $market, 'later', $state);
+        return true;
+    }
+    return false;
+}
+
+/** Stav zámku náhledu pro editor: zamyká se, je zamčený, kolik má verzí. */
+function hs_plan_lock_info(array $plan): array
+{
+    $lockable = hs_lockable((string)$plan['plan_type'], (string)$plan['market']);
+    $lockTs = $lockable ? hs_lock_ts((string)$plan['plan_date']) : null;
+    $versions = $lockable ? (int)(fetch_one('SELECT COUNT(*) AS n FROM plan_versions WHERE plan_id = ?', [(int)$plan['id']])['n'] ?? 0) : 0;
+    return ['lockable' => $lockable, 'locked' => $lockTs !== null && time() >= $lockTs, 'lock_ts' => $lockTs, 'versions' => $versions, 'backfill' => $lockable && hs_backfill_mode()];
+}
+
+/** Smazání náhledu po zamčení: verze zůstanou, poslední zaznamená prázdný stav. */
+function hs_lock_delete(int $planId): void
+{
+    $lock = hs_lock_guard($planId, 'daily', '', '');
+    if ($lock === null) {
+        return;
+    }
+    if (!empty($lock['backfill'])) {
+        db()->prepare('DELETE FROM plan_versions WHERE plan_id = ?')->execute([$planId]);
+        return;
+    }
+    hs_insert_version($planId, (string)$lock['date'], (string)$lock['market'], 'later', ['bias' => '', 'zones' => []]);
+}
+
+/** Verze z otevření pro náhledy (plan_id => stav) a počty verzí. */
+function hs_locked_versions(array $planIds): array
+{
+    $planIds = array_values(array_unique(array_filter(array_map('intval', $planIds))));
+    if ($planIds === []) {
+        return [];
+    }
+    $result = [];
+    foreach (array_chunk($planIds, 500) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        foreach (fetch_all("SELECT plan_id, version, kind, saved_at, bias, zones FROM plan_versions WHERE plan_id IN ($placeholders) ORDER BY plan_id, version", $chunk) as $row) {
+            $id = (int)$row['plan_id'];
+            if (!isset($result[$id])) {
+                $zones = json_decode((string)$row['zones'], true);
+                $result[$id] = ['bias' => (string)$row['bias'], 'zones' => is_array($zones) ? $zones : [], 'count' => 0, 'last_at' => ''];
+            }
+            $result[$id]['count']++;
+            $result[$id]['last_at'] = (string)$row['saved_at'];
+        }
+    }
+    return $result;
+}
+
+/** Historie verzí dne (pro okénko v Hindsightu). */
+function hs_versions(string $date): array
+{
+    $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
+    $planId = hs_find_plan($date);
+    $rows = $planId !== null
+        ? fetch_all('SELECT * FROM plan_versions WHERE plan_id = ? ORDER BY version', [$planId])
+        : fetch_all("SELECT * FROM plan_versions WHERE plan_date = ? AND market IN ($markets) ORDER BY plan_id, version", [$date, ...HS_PLAN_MARKETS]);
+    return array_map(static function (array $row): array {
+        $zones = json_decode((string)$row['zones'], true);
+        return [
+            'version' => (int)$row['version'],
+            'kind' => (string)$row['kind'],
+            'saved_at' => (string)$row['saved_at'],
+            'bias' => (string)$row['bias'],
+            'zones' => is_array($zones) ? $zones : [],
+        ];
+    }, $rows);
 }
 
 /* ---------------------------------------------------------------- osobní nastavení grafu */
@@ -1178,7 +1483,7 @@ function hs_clean_prefs(array $data): array
     foreach (HS_LAYERS as $layer) {
         $layers[$layer] = !is_array($data['layers'] ?? null) || !array_key_exists($layer, $data['layers']) ? true : (bool)$data['layers'][$layer];
     }
-    return ['layers' => $layers, 'snap' => (bool)($data['snap'] ?? false)];
+    return ['layers' => $layers, 'snap' => (bool)($data['snap'] ?? false), 'backfill' => (bool)($data['backfill'] ?? false)];
 }
 
 function hs_save_prefs(array $data): array

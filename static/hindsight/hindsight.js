@@ -326,12 +326,41 @@
   }
 
   /** Vyhodnocení biasu: RTH close proti RTH open (jen celý RTH den). */
+  /** Platný bias dne: verze z otevření NY (po zamčení), jinak aktuální. */
+  function officialBias(info) {
+    if (!info) return '';
+    return info.bias_official ?? info.bias ?? '';
+  }
+
+  /** Zóny a bias se zamykají při otevření NY (9:30 New York). */
+  function lockTs(date) {
+    return T.nyToUtc(date, 9 * 60 + 30);
+  }
+
+  function dayLocked(date) {
+    return Date.now() / 1000 >= lockTs(date);
+  }
+
+  function backfillActive() {
+    return state.admin && Boolean(state.prefs.backfill);
+  }
+
+  const BIAS_WORDS = { long: 'long', short: 'short', neutral: 'neutral', '': 'nezadaný' };
+
+  function lockNote(date, what, plural = false) {
+    const at = T.pragueTime(lockTs(date));
+    if (!dayLocked(date)) return `${what} se ${plural ? 'zamknou' : 'zamkne'} při otevření NY v ${at}.`;
+    if (backfillActive()) return 'Zpětné doplňování je zapnuté: změna se vezme, jako by byla před otevřením.';
+    return `Den je zamčený od otevření NY (${at}). Změna se uloží jako dodatečná verze, vyhodnocení použije verzi z otevření.`;
+  }
+
   function verdict(day, info) {
-    if (!day || !info || (info.bias !== 'long' && info.bias !== 'short')) return null;
+    const bias = officialBias(info);
+    if (!day || (bias !== 'long' && bias !== 'short')) return null;
     if (day.rthOpen === null || day.rthLast === null || day.rthLast < day.rthEnd - BAR) return null;
     const move = day.rthClose - day.rthOpen;
     if (move === 0) return false;
-    return info.bias === 'long' ? move > 0 : move < 0;
+    return bias === 'long' ? move > 0 : move < 0;
   }
 
   /**
@@ -426,8 +455,9 @@
           const x0 = xOf(edgeOf(day.start));
           const x1 = xOf(edgeOf(day.next));
           const info = state.ann.days.get(day.date);
-          if (layers.bias && info && (info.bias === 'long' || info.bias === 'short')) {
-            ctx.fillStyle = info.bias === 'long' ? COLORS.biasLong : COLORS.biasShort;
+          const tint = officialBias(info);
+          if (layers.bias && (tint === 'long' || tint === 'short')) {
+            ctx.fillStyle = tint === 'long' ? COLORS.biasLong : COLORS.biasShort;
             ctx.fillRect(x0, 0, x1 - x0, height);
           }
           const dayWidth = x1 - x0;
@@ -488,15 +518,29 @@
       const h = Math.max(2, bottom - top);
       const color = COLORS.zones[zone.type] || COLORS.zones.other;
       const hovered = state.hover && state.hover.kind === 'zone' && state.hover.zone.id === zone.id;
-      ctx.fillStyle = rgba(color, hovered ? COLORS.zoneFillHover : COLORS.zoneFill);
-      ctx.fillRect(x0, top, x1 - x0, h);
-      if (x0 >= -3) {
-        ctx.fillStyle = color;
-        ctx.fillRect(x0, top, 3, h);
+      if (zone.removed || zone.later) {
+        // Dodatečná zóna: slabší výplň a tečkovaný okraj; odstraněná po otevření jen obrys.
+        if (zone.later) {
+          ctx.fillStyle = rgba(color, hovered ? COLORS.zoneFill : COLORS.zoneFill * 0.5);
+          ctx.fillRect(x0, top, x1 - x0, h);
+        }
+        ctx.strokeStyle = rgba(color, zone.removed ? 0.45 : 0.85);
+        ctx.lineWidth = 1;
+        ctx.setLineDash(zone.removed ? [6, 4] : [2, 3]);
+        ctx.strokeRect(Math.round(x0) + 0.5, Math.round(top) + 0.5, Math.round(x1 - x0), Math.round(h));
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = rgba(color, hovered ? COLORS.zoneFillHover : COLORS.zoneFill);
+        ctx.fillRect(x0, top, x1 - x0, h);
+        if (x0 >= -3) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x0, top, 3, h);
+        }
       }
-      const label = `${zone.name || ZONE_TYPES[zone.type] || 'Zóna'}  ${price(zone.price_low)}–${price(zone.price_high)}`;
+      const suffix = zone.removed ? ' · odstraněna po otevření' : zone.later ? ' · dodatečně' : '';
+      const label = `${zone.name || ZONE_TYPES[zone.type] || 'Zóna'}  ${price(zone.price_low)}–${price(zone.price_high)}${suffix}`;
       ctx.font = `500 11px ${FONT}`;
-      ctx.fillStyle = rgba(color, 0.95);
+      ctx.fillStyle = rgba(color, zone.removed ? 0.5 : 0.95);
       ctx.textBaseline = h >= 16 ? 'top' : 'bottom';
       ctx.fillText(label, Math.max(x0, 0) + 8, h >= 16 ? top + 3 : top - 2);
       state.zoneRects.push({ zone, x0, x1, top, bottom: top + h });
@@ -1183,6 +1227,8 @@
       button.setAttribute('aria-pressed', state.prefs.layers[button.dataset.layer] !== false ? 'true' : 'false');
     });
     $('#hsSnap').setAttribute('aria-pressed', state.prefs.snap ? 'true' : 'false');
+    const backfill = $('#hsBackfill');
+    if (backfill) backfill.setAttribute('aria-pressed', state.prefs.backfill ? 'true' : 'false');
     volume.applyOptions({ visible: state.prefs.layers.volume !== false });
   }
 
@@ -1190,6 +1236,21 @@
     const chip = $('[data-layer="volume"]');
     chip.disabled = !state.hasVolume;
     chip.title = state.hasVolume ? '' : 'V nahraných svíčkách není objem (export z ATAS ho nemusí obsahovat).';
+  }
+
+  // Správce: zpětné doplňování pro prezentaci; ukládá se hned, ať platí pro další úpravu.
+  const backfillButton = $('#hsBackfill');
+  if (backfillButton) {
+    backfillButton.addEventListener('click', async () => {
+      state.prefs.backfill = !state.prefs.backfill;
+      syncLayerButtons();
+      try {
+        await api('hindsight_prefs', { method: 'POST', body: state.prefs });
+        showToast(state.prefs.backfill ? 'Zpětné doplňování zapnuté: úpravy minulých dnů se berou jako před otevřením.' : 'Zpětné doplňování vypnuté.');
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
   }
 
   $$('[data-layer]').forEach(button => button.addEventListener('click', () => {
@@ -1215,9 +1276,10 @@
     if (width < 70) return `<span class="hs-day-date">${d}. ${m}.</span>`;
     parts.push(`<span class="hs-day-date"><small>${weekday}</small>${d}. ${m}.</span>`);
     if (layers.bias) {
-      const bias = info?.bias || '';
+      const bias = officialBias(info);
       const arrow = bias === 'long' ? '▲' : bias === 'short' ? '▼' : bias === 'neutral' ? '●' : '○';
-      parts.push(`<span class="hs-bias is-${bias || 'empty'}" title="Bias: ${bias || 'nezadaný'}">${arrow}</span>`);
+      parts.push(`<span class="hs-bias is-${bias || 'empty'}" title="Bias: ${bias || 'nezadaný'}${info?.versions ? ' (verze z otevření NY)' : ''}">${arrow}</span>`);
+      if (info?.bias_later) parts.push(`<span class="hs-later" title="Bias změněn po otevření NY: ${escapeHtml(BIAS_WORDS[bias] ?? bias)} → ${escapeHtml(BIAS_WORDS[info.bias] ?? info.bias)}">✎</span>`);
       const ok = verdict(day, info);
       if (ok !== null) parts.push(`<span class="hs-verdict ${ok ? 'is-ok' : 'is-bad'}" title="${ok ? 'Bias vyšel' : 'Bias nevyšel'} (RTH close proti RTH open)">${ok ? '✓' : '✗'}</span>`);
     }
@@ -1252,11 +1314,11 @@
           headerPool.set(day.date, el);
         }
         const info = state.ann.days.get(day.date);
-        const key = `${room >= 190 ? 2 : room >= 70 ? 1 : 0}|${info?.bias || ''}|${info?.trades || 0}|${info?.pnl || 0}|${state.prefs.layers.bias}|${day.rthLast}`;
+        const key = `${room >= 190 ? 2 : room >= 70 ? 1 : 0}|${info?.bias || ''}|${info?.bias_official ?? ''}|${info?.bias_later ? 1 : 0}|${info?.trades || 0}|${info?.pnl || 0}|${state.prefs.layers.bias}|${day.rthLast}`;
         if (el.dataset.key !== key) {
           el.innerHTML = headerContent(day, room);
           el.dataset.key = key;
-          el.setAttribute('aria-label', `${T.dateLabel(day.date, true)}: bias ${info?.bias || 'nezadaný'}`);
+          el.setAttribute('aria-label', `${T.dateLabel(day.date, true)}: bias ${officialBias(info) || 'nezadaný'}${info?.bias_later ? ', po otevření změněn' : ''}`);
         }
         el.classList.toggle('is-compact', room < 70);
         el.style.transform = `translateX(${Math.round(left)}px)`;
@@ -1366,7 +1428,7 @@
       const zone = hit.zone;
       tooltipEl.innerHTML = `<strong>${escapeHtml(zone.name || ZONE_TYPES[zone.type])}</strong>`
         + `<span class="hs-mono">${escapeHtml(ZONE_TYPES[zone.type])} · ${price(zone.price_low)}–${price(zone.price_high)}</span>`
-        + `<p>${escapeHtml(validityText(zone))}${zone.note ? `\n${escapeHtml(zone.note)}` : ''}</p>`;
+        + `<p>${escapeHtml(validityText(zone))}${zone.note ? `\n${escapeHtml(zone.note)}` : ''}${zone.later ? '\nPřidaná nebo změněná po otevření NY (dodatečně), vyhodnocení ji nepočítá.' : ''}${zone.removed ? '\nPři otevření NY v náhledu byla, potom byla odstraněna. Vyhodnocení ji počítá.' : ''}</p>`;
     }
     tooltipEl.hidden = false;
     const width = chartEl.clientWidth;
@@ -1410,6 +1472,7 @@
     const rect = chartEl.getBoundingClientRect();
     const anchor = { x: rect.left + param.point.x, y: rect.top + param.point.y };
     if (hit.kind === 'zone') {
+      if (hit.zone.removed) return;
       updateFrame();
       const index = clamp(Math.round(logicalAt(param.point.x)), 0, state.ts.length - 1);
       openZonePop(hit.zone, anchor, T.tradeDate(state.ts[index]));
@@ -1702,10 +1765,13 @@
       <div class="hs-seg" data-seg="bias">${option('long', '▲ Long')}${option('short', '▼ Short')}${option('neutral', '● Neutral')}</div>
       <label class="hs-field">Poznámka<textarea name="note" maxlength="1000" placeholder="Proč tenhle bias?">${escapeHtml(info.bias_note || '')}</textarea></label>
       ${rth ? `<p class="hs-hint">${escapeHtml(rth)}</p>` : ''}
-      <p class="hs-hint">Stejný bias jako v denním náhledu ES.</p>
+      ${info.bias_later ? `<p class="hs-hint hs-lock">Platný bias z otevření NY: <b>${escapeHtml(BIAS_WORDS[officialBias(info)] ?? officialBias(info))}</b>. Tady upravuješ aktuální verzi.</p>` : ''}
+      <p class="hs-hint hs-lock">${escapeHtml(lockNote(date, 'Bias a zóny', true))} Stejný bias jako v denním náhledu ES.</p>
+      ${info.versions ? '<div class="hs-versions" data-versions><p class="hs-sub">Verze</p><p class="hs-hint">Načítám…</p></div>' : ''}
       ${dayTradesHtml(date)}
       <p class="hs-error" hidden></p>
       <div class="hs-pop-actions"><span class="hs-grow"></span><button type="button" class="hs-btn" data-act="cancel">Zrušit</button><button type="button" class="hs-btn hs-primary" data-act="save">Uložit</button></div>`, anchor);
+    if (info.versions) loadVersions(date);
     popEl.querySelector('[data-act="save"]').addEventListener('click', async () => {
       const value = segValue('bias');
       if (!value) {
@@ -1713,8 +1779,9 @@
         return;
       }
       try {
-        await api('hindsight_bias', { method: 'POST', body: { date, bias: value, note: popEl.querySelector('[name="note"]').value } });
+        const saved = await api('hindsight_bias', { method: 'POST', body: { date, bias: value, note: popEl.querySelector('[name="note"]').value } });
         closePop();
+        if (saved.later) showToast('Uloženo jako dodatečná verze (po otevření NY).');
         await loadAnnotations();
       } catch (error) {
         popError(error.message);
@@ -1902,6 +1969,25 @@
     }
   }
 
+  /** Historie verzí dne: 1 = při otevření NY, další dodatečně. */
+  async function loadVersions(date) {
+    const box = popEl.querySelector('[data-versions]');
+    try {
+      const data = await api('hindsight_versions', { query: { date } });
+      if (!box.isConnected) return;
+      const arrow = bias => (bias === 'long' ? '▲' : bias === 'short' ? '▼' : bias === 'neutral' ? '●' : '○');
+      box.innerHTML = '<p class="hs-sub">Verze</p>' + data.versions.map(version => {
+        const ts = Math.floor(Date.parse(version.saved_at) / 1000);
+        const parts = T.pragueParts(ts);
+        const when = version.kind === 'locked' ? 'při otevření NY' : `dodatečně ${parts.day}. ${parts.month}. ${T.pragueTime(ts)}`;
+        const zones = version.zones.length === 1 ? '1 zóna' : version.zones.length >= 2 && version.zones.length <= 4 ? `${version.zones.length} zóny` : `${version.zones.length} zón`;
+        return `<div class="hs-version${version.kind === 'locked' ? ' is-locked' : ''}"><b>${version.version}</b><span>${escapeHtml(when)}</span><span class="hs-bias is-${escapeHtml(version.bias || 'empty')}">${arrow(version.bias)}</span><span class="hs-mono">${escapeHtml(zones)}</span></div>`;
+      }).join('');
+    } catch (error) {
+      if (box.isConnected) box.innerHTML = `<p class="hs-error">${escapeHtml(error.message)}</p>`;
+    }
+  }
+
   function openZonePop(zone, anchor, clickedDate) {
     const isNew = !zone.id;
     const validity = zone.valid_to === 'open' ? 'open' : zone.valid_to && zone.valid_to !== zone.valid_from ? 'date' : 'day';
@@ -1923,6 +2009,7 @@
         <label>Do data<input type="date" name="valid_to" min="${zone.valid_from}" value="${validity === 'date' ? escapeHtml(zone.valid_to) : ''}"${validity === 'date' ? '' : ' disabled'}></label>
       </div>
       <label class="hs-field">Poznámka<textarea name="note" maxlength="1000">${escapeHtml(zone.note)}</textarea></label>
+      <p class="hs-hint hs-lock">${escapeHtml(zone.later ? 'Zóna je dodatečná (přidaná nebo změněná po otevření NY). ' : '')}${escapeHtml(lockNote(zone.valid_from, 'Zóna'))}${dayLocked(zone.valid_from) && !backfillActive() ? ' Popisek, poznámka a platnost se dají měnit kdykoli.' : ''}</p>
       <p class="hs-error" hidden></p>
       <div class="hs-pop-actions">
         ${isNew ? '' : '<button type="button" class="hs-btn hs-danger" data-act="delete">Smazat</button>'}
@@ -1965,9 +2052,10 @@
         return;
       }
       try {
-        await api('hindsight_zone', { method: zone.id ? 'PUT' : 'POST', body });
+        const saved = await api('hindsight_zone', { method: zone.id ? 'PUT' : 'POST', body });
         state.draft = null;
         closePop();
+        if (saved.later) showToast('Zóna uložená jako dodatečná verze (po otevření NY).');
         await loadAnnotations();
       } catch (error) {
         popError(error.message);
@@ -2052,7 +2140,7 @@
       let color = day ? '#1F2533' : '#151A24';
       if (ok === true) color = COLORS.up;
       else if (ok === false) color = COLORS.down;
-      else if (info && info.bias) color = '#3A4357';
+      else if (officialBias(info)) color = '#3A4357';
       ctx.fillStyle = color;
       ctx.fillRect(position * column + (column > 3 ? 0.5 : 0), height - stripe - 3, Math.max(1, column - (column > 3 ? 1 : 0)), stripe);
     });

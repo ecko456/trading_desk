@@ -322,6 +322,25 @@ function migrate_schema(PDO $pdo): void
 
     // Hindsight: potenciální obchod má čas vstupu v grafu, výsledek (nevzatý, propáslý,
     // vzatý) a odkaz na realizovaný obchod.
+    // Hindsight: verze zón a biasu denního náhledu po zamčení při otevření RTH. Bez cizího
+    // klíče, aby verze z otevření zůstala, i když se náhled smaže.
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS plan_versions (
+    id INTEGER PRIMARY KEY,
+    plan_id INTEGER,
+    plan_date TEXT NOT NULL,
+    market TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    saved_at TEXT NOT NULL,
+    bias TEXT NOT NULL DEFAULT '',
+    zones TEXT NOT NULL DEFAULT '[]',
+    fingerprint TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plan_versions_plan ON plan_versions(plan_id, version);
+CREATE INDEX IF NOT EXISTS idx_plan_versions_date ON plan_versions(plan_date, market);
+SQL);
+
     $ideaColumns = table_columns($pdo, 'ideas');
     foreach (['entry_ts' => 'INTEGER', 'outcome' => 'TEXT', 'trade_id' => 'INTEGER'] as $column => $type) {
         if (!in_array($column, $ideaColumns, true)) {
@@ -891,6 +910,7 @@ function plan_payload(int $id): ?array
     }, fetch_all('SELECT * FROM zones WHERE plan_id = ? ORDER BY sort_order, id', [$id]));
     $plan['levels'] = fetch_all('SELECT * FROM levels WHERE plan_id = ? ORDER BY sort_order, id', [$id]);
     $plan['ideas'] = fetch_all('SELECT * FROM ideas WHERE plan_id = ? ORDER BY sort_order, id', [$id]);
+    $plan['lock'] = hs_plan_lock_info($plan);
     $plan['refs'] = fetch_all('SELECT * FROM plan_refs WHERE plan_id = ? ORDER BY sort_order, id', [$id]);
     $plan['screenshots'] = fetch_all('SELECT id, plan_id, trade_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots WHERE plan_id = ? ORDER BY created_at, id', [$id]);
     $plan['trades'] = fetch_all('SELECT * FROM trades WHERE plan_id = ? ORDER BY trade_date DESC, id DESC', [$id]);
@@ -957,6 +977,7 @@ function save_plan(array $data): array
             json_response(['error' => sprintf('%s náhled pro %s, %s a stejný typ obchodu už existuje. Otevři ho v Historii náhledů.', $type === 'weekly' ? 'Týdenní' : 'Denní', $date, $market)], 409);
         }
 
+        $lock = hs_lock_guard($id, $type, $date, $market);
         $pa = ['long', 'short', 'balance'];
         $fields = [
             'plan_type' => $type,
@@ -1098,8 +1119,13 @@ function save_plan(array $data): array
         $storedCustom = (string)(fetch_one('SELECT custom FROM plans WHERE id = ?', [$id])['custom'] ?? '{}');
         save_plan_extras($pdo, $id, $data, $storedCustom);
 
+        $savedLater = hs_lock_commit($lock, $id);
         $pdo->commit();
-        return plan_payload($id) ?? [];
+        $payload = plan_payload($id) ?? [];
+        if (isset($payload['lock'])) {
+            $payload['lock']['saved_later'] = $savedLater;
+        }
+        return $payload;
     } catch (Throwable $error) {
         $pdo->rollBack();
         throw $error;
