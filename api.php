@@ -289,6 +289,70 @@ try {
         json_response(['items' => strategy_statistics(), 'chart' => strategy_series()]);
     }
 
+    /* ---------- Hindsight: svíčky ES a náhledy v jednom grafu */
+
+    if ($action === 'hindsight_range' && $method === 'GET') {
+        json_response(hs_range() + ['prefs' => hs_prefs(), 'admin' => is_admin($user)]);
+    }
+
+    if ($action === 'hindsight_bars' && $method === 'GET') {
+        [$from, $to] = hs_request_range();
+        json_response(hs_bars(hs_trade_day_start($from), hs_trade_day_start($to) + 86400 - 1) + ['from' => $from, 'to' => $to]);
+    }
+
+    if ($action === 'hindsight_annotations' && $method === 'GET') {
+        [$from, $to] = hs_request_range();
+        json_response(hs_annotations($from, $to));
+    }
+
+    if ($action === 'hindsight_zone' && in_array($method, ['POST', 'PUT'], true)) {
+        json_response(hs_save_zone(request_json()));
+    }
+
+    if ($action === 'hindsight_zone' && $method === 'DELETE') {
+        hs_delete_zone((int)($_GET['id'] ?? 0));
+        json_response(['ok' => true]);
+    }
+
+    if ($action === 'hindsight_bias' && $method === 'POST') {
+        json_response(hs_save_bias(request_json()));
+    }
+
+    if ($action === 'hindsight_prefs' && $method === 'POST') {
+        json_response(['prefs' => hs_save_prefs(request_json())]);
+    }
+
+    // Svíčky jsou společné pro všechny, nahrává a maže je jen správce.
+    if ($action === 'hindsight_import' && $method === 'POST') {
+        require_admin();
+        $file = $_FILES['file'] ?? null;
+        $uploadError = is_array($file) ? (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+        if ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
+            json_response(['error' => 'Soubor je větší, než server dovolí (' . ini_get('upload_max_filesize') . '). Vyexportuj kratší období, nebo 5m svíčky místo 1m.'], 413);
+        }
+        if ($uploadError === UPLOAD_ERR_PARTIAL) {
+            json_response(['error' => 'Soubor se nahrál jen zčásti. Zkus to znovu.'], 422);
+        }
+        if (!is_array($file) || $uploadError !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
+            json_response(['error' => 'Vyber soubor CSV se svíčkami.'], 422);
+        }
+        if ((int)$file['size'] > MAX_UPLOAD_BYTES) {
+            json_response(['error' => 'Soubor je větší než ' . (MAX_UPLOAD_BYTES / 1024 / 1024) . ' MB. Rozděl export na menší části.'], 413);
+        }
+        $dateOrder = (string)($_POST['date_order'] ?? 'auto');
+        json_response(hs_import_bars((string)$file['tmp_name'], (string)($_POST['contract'] ?? ''), (string)($_POST['tz'] ?? 'Europe/Prague'), 'CSV ' . mb_substr((string)($file['name'] ?? ''), 0, 60), in_array($dateOrder, ['ydm', 'ymd', 'dmy', 'mdy'], true) ? $dateOrder : 'auto'), 201);
+    }
+
+    if ($action === 'hindsight_demo' && $method === 'POST') {
+        require_admin();
+        json_response(hs_generate_demo(), 201);
+    }
+
+    if ($action === 'hindsight_contract' && $method === 'DELETE') {
+        require_admin();
+        json_response(['removed' => hs_delete_contract((string)($_GET['contract'] ?? ''))]);
+    }
+
     if ($action === 'calendar' && $method === 'GET') {
         json_response(calendar_month((string)($_GET['month'] ?? '')));
     }

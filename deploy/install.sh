@@ -39,11 +39,15 @@ rsync -a --delete \
   --exclude '/ZACNI-TADY.txt' \
   --exclude '/odmeny/' \
   --exclude '/hodnoceni-operatoru.html' \
+  --exclude '/*.csv' \
+  --exclude '/*.docx' \
   "${SOURCE_DIR}/" "${TARGET_DIR}/"
 
 # Starší instalace kopírovaly na web i historii gitu a dokumentaci; ty tam nepatří.
 rm -rf "${TARGET_DIR}/.git" "${TARGET_DIR}/.devcontainer"
 rm -f "${TARGET_DIR}/.gitignore" "${TARGET_DIR}/README.md" "${TARGET_DIR}/ZACNI-TADY.txt" "${TARGET_DIR}"/*.zip
+# Podklady nahrané do repozitáře (exporty z ATAS, zadání) na web nepatří.
+rm -f "${TARGET_DIR}"/*.csv "${TARGET_DIR}"/*.docx
 # Odměny jsou samostatná aplikace s vlastní instalací (odmeny/deploy/install.sh).
 rm -rf "${TARGET_DIR}/odmeny"
 rm -f "${TARGET_DIR}/hodnoceni-operatoru.html"

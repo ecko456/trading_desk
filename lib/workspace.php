@@ -60,6 +60,7 @@ const MODULES = [
     'wall' => ['Nástěnka', 'Sdílení s komunitou, komentáře a reakce.'],
     'archive' => ['Historie náhledů', 'Seznam všech denních a týdenních náhledů.'],
     'calendar' => ['Kalendář', 'Měsíc v kostce, red news a svátky.'],
+    'hindsight' => ['Hindsight', 'Rok 5m grafů ES s tvými zónami, biasem a news na jedné ose.'],
     'strategies' => ['Strategie', 'Srovnání setupů a rozbor vlastních polí.'],
     'psyche' => ['Psychika', 'Vstupní profil, rychlý test a rozbor chyb.'],
     'accounts' => ['Účty a Money audit', 'Obchodní účty a měsíční kontrola evidence.'],

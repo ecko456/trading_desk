@@ -155,6 +155,7 @@ h1, h2, h3 { color: var(--text); }
 .nav-item { position: relative; width: 100%; min-height: 38px; border: 0; border-radius: 11px; background: transparent; color: var(--text-2); text-align: left; padding: 7px 12px; cursor: pointer; display: flex; gap: 11px; align-items: center; font-size: 14px; font-weight: 550; transition: background .18s ease, color .18s ease; }
 .nav-item .icon { color: var(--text-3); transition: color .18s ease; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
+a.nav-item { text-decoration: none; }
 .nav-item.is-active { background: linear-gradient(90deg, var(--accent-soft), rgba(214, 179, 111, 0) 92%); color: var(--text); font-weight: 700; }
 .nav-item.is-active::before { content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); box-shadow: 0 0 14px rgba(214, 179, 111, .7); }
 .nav-item.is-active .icon { color: var(--accent); }

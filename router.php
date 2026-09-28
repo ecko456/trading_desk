@@ -9,7 +9,7 @@ $path = rawurldecode((string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/')
 
 if (preg_match('#(^|/)(data|tests|deploy|lib|bin|odmeny)(/|$)#i', $path) || preg_match('#(^|/)\.#', $path)
     || basename($path) === 'hodnoceni-operatoru.html'
-    || preg_match('#\.(md|txt|zip|py|sh|bat|command|ini|json|sqlite3|sealed|lock|log|bak)$#i', $path)) {
+    || preg_match('#\.(md|txt|zip|py|sh|bat|command|ini|json|sqlite3|sealed|lock|log|bak|csv|docx)$#i', $path)) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'Nenalezeno.';

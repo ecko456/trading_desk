@@ -11,6 +11,7 @@ require_once __DIR__ . '/lib/vault.php';
 require_once __DIR__ . '/lib/accounts.php';
 require_once __DIR__ . '/lib/wall.php';
 require_once __DIR__ . '/lib/workspace.php';
+require_once __DIR__ . '/lib/hindsight.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -312,7 +313,8 @@ function migrate_schema(PDO $pdo): void
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_plans_type_date ON plans(plan_type, plan_date DESC)');
 
     $zoneColumns = table_columns($pdo, 'zones');
-    foreach (['long_entry', 'long_skip', 'short_entry', 'short_skip'] as $column) {
+    // valid_to: '' = zóna platí jen den náhledu, 'open' = dokud ji neukončím, datum = do data (Hindsight).
+    foreach (['long_entry', 'long_skip', 'short_entry', 'short_skip', 'valid_to', 'zone_type', 'note'] as $column) {
         if (!in_array($column, $zoneColumns, true)) {
             add_column($pdo, 'zones', $column, 'TEXT');
         }
@@ -901,6 +903,19 @@ function enum_value(mixed $value, array $allowed): string
     return in_array($text, $allowed, true) ? $text : '';
 }
 
+/** Platnost zóny z náhledu: '' (jen ten den), 'open' (dokud ji neukončím) nebo datum ne dřív než náhled. */
+function plan_zone_valid_to(mixed $value, string $planDate): string
+{
+    $text = trim((string)($value ?? ''));
+    if ($text === 'open') {
+        return 'open';
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $text) && $text >= $planDate) {
+        return $text;
+    }
+    return '';
+}
+
 function save_plan(array $data): array
 {
     $date = trim((string)value($data, 'plan_date', ''));
@@ -987,10 +1002,10 @@ function save_plan(array $data): array
         }
 
         $pdo->prepare('DELETE FROM zones WHERE plan_id = ?')->execute([$id]);
-        $zoneSql = 'INSERT INTO zones (plan_id, sort_order, name, direction, price_low, price_high, priority, source, invalidation, trigger, stop_loss, tp1, tp2, rr, status, long_entry, long_skip, short_entry, short_skip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $zoneSql = 'INSERT INTO zones (plan_id, sort_order, name, direction, price_low, price_high, priority, source, invalidation, trigger, stop_loss, tp1, tp2, rr, status, long_entry, long_skip, short_entry, short_skip, valid_to, zone_type, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $zoneStatement = $pdo->prepare($zoneSql);
         foreach ((array)value($data, 'zones', []) as $index => $zone) {
-            if (!is_array($zone) || !row_has_content($zone, ['name', 'price_low', 'price_high', 'source', 'invalidation', 'trigger', 'stop_loss', 'tp1', 'tp2', 'rr', 'long_entry', 'long_skip', 'short_entry', 'short_skip'])) {
+            if (!is_array($zone) || !row_has_content($zone, ['name', 'price_low', 'price_high', 'source', 'invalidation', 'trigger', 'stop_loss', 'tp1', 'tp2', 'rr', 'long_entry', 'long_skip', 'short_entry', 'short_skip', 'note'])) {
                 continue;
             }
             $low = nullable_float(value($zone, 'price_low'));
@@ -1005,6 +1020,8 @@ function save_plan(array $data): array
                 nullable_float(value($zone, 'tp2')), nullable_float(value($zone, 'rr')), value($zone, 'status', 'planned'),
                 (string)value($zone, 'long_entry', ''), (string)value($zone, 'long_skip', ''),
                 (string)value($zone, 'short_entry', ''), (string)value($zone, 'short_skip', ''),
+                plan_zone_valid_to(value($zone, 'valid_to', ''), $date), enum_value(value($zone, 'zone_type'), HS_ZONE_TYPES),
+                mb_substr((string)value($zone, 'note', ''), 0, 1000),
             ]);
         }
 

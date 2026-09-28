@@ -652,7 +652,29 @@ function zoneTokens() {
 const zoneStatusLabels = { planned: 'Čeká', active: 'Aktivní', hit: 'Zasažena', invalid: 'Neplatná' };
 const refKinds = { single_print: 'Single prints', poor_high: 'Poor high', poor_low: 'Poor low', naked_poc: 'Naked POC', gap: 'Gap', excess: 'Excess / tail', lvn: 'LVN', other: 'Jiná reference' };
 const refTokens = { single_print: 'SP', poor_high: 'Poor high', poor_low: 'Poor low', naked_poc: 'nPOC', gap: 'Gap', excess: 'Excess', lvn: 'LVN', other: '' };
-const zoneFields = ['name', 'direction', 'price_low', 'price_high', 'priority', 'source', 'invalidation', 'trigger', 'stop_loss', 'tp1', 'tp2', 'rr', 'status', 'long_entry', 'long_skip', 'short_entry', 'short_skip'];
+const zoneFields = ['name', 'direction', 'price_low', 'price_high', 'priority', 'source', 'invalidation', 'trigger', 'stop_loss', 'tp1', 'tp2', 'rr', 'status', 'long_entry', 'long_skip', 'short_entry', 'short_skip', 'valid_to', 'zone_type', 'note'];
+const zoneTypeLabels = { support: 'Support', resistance: 'Resistance', vpoc: 'VPOC', other: 'Jiná' };
+
+/** Platnost zóny v Hindsightu: '' = jen den náhledu, 'open' = dokud ji neukončím, datum = do data. */
+function zoneValidityFields(zone) {
+  const validTo = String(zone.valid_to ?? '');
+  const mode = validTo === 'open' ? 'open' : /^\d{4}-\d{2}-\d{2}$/.test(validTo) ? 'date' : '';
+  return `<div class="zone-grid-secondary zone-hindsight">
+      <label>Platnost zóny<select name="valid_mode">${optionTag('', 'Jen tento den', mode)}${optionTag('open', 'Dokud ji neukončím', mode)}${optionTag('date', 'Do data', mode)}</select></label>
+      <label>Do data<input type="date" name="valid_until" value="${mode === 'date' ? escapeHtml(validTo) : ''}"${mode === 'date' ? '' : ' disabled'}></label>
+      <input type="hidden" name="valid_to" value="${escapeHtml(validTo)}">
+      <label>Typ zóny<select name="zone_type">${optionTag('', 'Podle směru', zone.zone_type)}${Object.entries(zoneTypeLabels).map(([value, label]) => optionTag(value, label, zone.zone_type)).join('')}</select></label>
+      <label class="span-3">Poznámka k zóně<input name="note" value="${escapeHtml(zone.note)}" placeholder="Vidíš ji i v Hindsightu"></label>
+    </div>`;
+}
+
+function syncZoneValidity(row) {
+  const mode = $('[name="valid_mode"]', row).value;
+  const until = $('[name="valid_until"]', row);
+  until.disabled = mode !== 'date';
+  if (mode === 'date' && !until.value) until.value = $('#planDate')?.value || '';
+  $('[name="valid_to"]', row).value = mode === 'date' ? until.value : mode;
+}
 
 function sourceTokens(value) {
   return String(value ?? '').split(',').map(token => token.trim()).filter(Boolean);
@@ -701,6 +723,7 @@ function zoneTemplate(zone = {}, index = 0) {
       <label>TP2<input type="number" step="any" name="tp2" value="${escapeHtml(zone.tp2)}"></label>
       <label>Min. RR<input type="number" step="0.1" name="rr" value="${escapeHtml(zone.rr)}"></label>
     </div>
+    ${zoneValidityFields(zone)}
   </article>`;
 }
 
@@ -3122,6 +3145,7 @@ function bindPlanEvents() {
     }
     if (event.target.matches('#planMarket, #planSession')) { applySessionLocks(); refreshWeeklyContext(); }
     if (event.target.matches('.level-row [name="kind"]')) event.target.closest('.level-row').dataset.kind = event.target.value;
+    if (event.target.matches('.zone-row [name="valid_mode"], .zone-row [name="valid_until"]')) syncZoneValidity(event.target.closest('.zone-row'));
     schedulePlanRefresh();
   });
 

@@ -19,6 +19,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - klíčové levely jako horizontální úrovně s cenou, charakterem a stylem čáry,
 - srovnání výkonnosti jednotlivých strategií a setupů,
 - měsíční kalendář s výsledky dnů, red news a svátky,
+- **Hindsight**: rok 5m svíček ES na jedné souvislé ose se seancemi, tvými zónami, biasem a red news; zóny a bias se zadávají přímo v grafu a jsou stejné jako v denním náhledu,
 - vstupní psychologický profil se silnými a rizikovými oblastmi, ověřený proti vlastním obchodům,
 - rychlý test psychiky přizpůsobený profilu, s vlastními pravidly pro špatný den,
 - pravidlový rozbor dnů s porušenými pravidly,
@@ -79,6 +80,7 @@ Výchozí produkční umístění:
 /var/lib/trading-journal/users/<id>/trading.sqlite3.sealed deník člena se šifrováním
 /var/lib/trading-journal/users/<id>/uploads/               screenshoty člena
 /var/lib/trading-journal/wall/                             obrázky sdílené na nástěnce
+/var/lib/trading-journal/market.sqlite3                    svíčky ES pro Hindsight (společné, nahrává správce)
 ```
 
 Apache do adresáře zapisuje jako `www-data`. Data nejsou veřejně dostupná; obrázky se čtou přes `file.php`, a to jen z deníku přihlášeného člena nebo z nástěnky.
@@ -262,6 +264,41 @@ Nad tabulkou je graf **kumulativního R v čase**, kde má každá strategie vla
 Měsíční mřížka, kde každý den ukazuje výsledek v R, počet obchodů a značky: **N** pro existující denní náhled, **P** pro vyplněný rychlý test psychiky a **!** pro den s porušenými pravidly. Zelené a červené podbarvení odpovídá výsledku dne.
 
 Kliknutím na den otevřeš detail, kde můžeš přidat **red news** (s časem a dopadem), **svátek** nebo poznámku. Pokud na ten den existuje náhled, otevřeš ho přímo odtud.
+
+## Hindsight
+
+Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsight.php`). Jedna souvislá časová osa 5m svíček ES až rok zpátky, na které jsou vidět zóny, bias a red news každého dne. Odpovídá na tři otázky: drží moje zóny, sedí můj bias, kde nechávám obchody na stole.
+
+### Ovládání
+
+- **kolečko** posouvá v čase se setrvačností, **Ctrl + kolečko** přibližuje kolem kurzoru, graf jde i táhnout myší,
+- **← →** skočí na předchozí a další den, **Home / End** na první a poslední,
+- **datum** nahoře nebo **minimapa** dole (celý rok, barevný pruh = bias vyšel / nevyšel) skočí kamkoli, okno v minimapě jde táhnout,
+- **Kolotoč** drží na obrazovce vždy přesně jeden obchodní den, kolečko a šipky pak listují po dnech,
+- **hlavička dne** nahoře ukazuje datum, šipku biasu, ✓/✗ (RTH close proti RTH open), počet obchodů a P&L dne; klik na ni nastaví bias a poznámku,
+- **Z + tažení** v grafu nakreslí zónu (nebo tlačítko + Zóna): typ support / resistance / VPOC / jiná, popisek, poznámka a platnost *jen tento den*, *do data* nebo *dokud ji neukončím*; klik na zónu ji upraví, ukončí k danému dni nebo smaže,
+- **vrstvy** (seance, news, zóny, bias, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera.
+
+Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET) a zobrazují v pražském čase. Letní čas USA a Evropy se mění v jiné týdny; posun se počítá pro každý okamžik zvlášť, takže seance sedí na minutu i v březnu a na přelomu října a listopadu. Obchodní den začíná v 18:00 New York předchozího dne.
+
+Zóny a bias jsou **stejná data jako denní náhled ES** (případně MES): co zadáš v Hindsightu, uvidíš v náhledu, a naopak. Zóna ze staršího náhledu platí jen svůj den; v editoru zóny v náhledu je nově *Platnost zóny*, *Typ zóny* a *Poznámka k zóně*. Zadávat jde i zpětně, třeba pro prezentaci. Red news bere Hindsight z kalendáře (dopad *vysoký* nebo nezadaný) v čase, který je u nich uvedený (pražský čas).
+
+### Svíčky: import z ATAS
+
+Svíčky jsou tržní data, ne osobní deník, proto jsou společné pro všechny tradery v `market.sqlite3` a nahrává je jen správce (tlačítko **Data** v Hindsightu). Časy se ukládají v UTC.
+
+1. V ATAS vyexportuj 5m (nebo 1m) svíčky **konkrétního kontraktu**, třeba ESZ6. Export CSV z ATAS má datum ve tvaru rok-den-měsíc a pražský čas, to import pozná sám.
+2. V dialogu **Data** vyber kontrakt. Nic není předvybrané: kontrakt se volí při každém importu.
+3. Uloží se **jen svíčky z období vybraného kontraktu**: od rollu předchozího kontraktu do vlastního rollu. Roll je ve čtvrtek osm dní před expirací (třetí pátek v březnu, červnu, září a prosinci) a přechází se na začátku obchodního dne, v 18:00 New York den předem. Například ESZ6 = obchodní dny 10. 9. 2026 až 9. 12. 2026.
+4. Svíčky mimo období import přeskočí a řekne, ke kterému kontraktu patří. Pro to období vyexportuj z ATAS přímo ten kontrakt.
+
+Proč po kontraktech: spojitý (continuous) export z ATAS nemá v den rollu skok, protože starší kontrakty v něm mají posunuté ceny. Zóny, obchody a news ale musí sedět na skutečných cenách daného kontraktu. Graf pak skládá kontrakty za sebou bez úprav cen a den rollu označí svislou čarou `ROLL ESU6 → ESZ6`.
+
+Opakovaný import stejného souboru nic nezdvojí, svíčky se jen přepíšou. 1m svíčky se sloučí do 5m. Když z dat nejde poznat, jestli je v datu napřed den, nebo měsíc (třeba soubor jen s 3. 4.), import se zeptá na formát. Soubor může mít nejvýš 20 MB; rok 5m svíček je kolem 4 MB. Dokud nejsou nahraná skutečná data, jde modul vyzkoušet na **ukázkových datech** (vymyšlených, jedním kliknutím smazatelných).
+
+Graf kreslí [TradingView Lightweight Charts™](https://www.tradingview.com/) (Apache 2.0), písma jsou Inter a JetBrains Mono (SIL OFL). Vše je přibalené ve `static/hindsight/`, stránka nic nenačítá z cizích serverů.
+
+Hotovo je MVP (fáze 1 zadání). Další fáze: potenciální a realizované obchody v grafu s importem obchodů, zamykání zón a biasu k otevření NY s verzemi dodatečných úprav (správce bude moct doplňovat zpětně) a vyhodnocení zón, biasu a obchodů v souhrnném panelu.
 
 ## Psychika a disciplína
 

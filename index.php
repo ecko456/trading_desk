@@ -33,6 +33,7 @@ function icon(string $name): string
         'trash' => '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>',
         'sliders' => '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
         'fib' => '<path d="M3.5 19.5h17"/><path d="M4 18 11 5l5 8 4-4"/><path d="M3.5 9.5h17M3.5 13.5h17" stroke-dasharray="2 2.5"/>',
+        'hindsight' => '<path d="M3.5 18.5h17"/><path d="M6 15V9M6 11h0M10 16V6M14 14V8M18 12V5"/><path d="M4.5 5.5h4"/>',
         'spark' => '<path d="M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/>',
     ];
     return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$name] ?? '') . '</svg>';
@@ -106,6 +107,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <button class="nav-item" type="button" data-view="plan"><?= icon('plan') ?><span>Náhled trhu</span></button>
         <button class="nav-item" type="button" data-view="archive"<?= module_attr('archive') ?>><?= icon('archive') ?><span>Historie náhledů</span></button>
         <button class="nav-item" type="button" data-view="calendar"<?= module_attr('calendar') ?>><?= icon('calendar') ?><span>Kalendář</span></button>
+        <a class="nav-item" href="hindsight.php"<?= module_attr('hindsight') ?>><?= icon('hindsight') ?><span>Hindsight</span></a>
         <p class="nav-group">Exekuce</p>
         <button class="nav-item" type="button" data-view="journal"><?= icon('journal') ?><span>Deník obchodů</span></button>
         <button class="nav-item" type="button" data-view="strategies"<?= module_attr('strategies') ?>><?= icon('strategies') ?><span>Strategie</span></button>
