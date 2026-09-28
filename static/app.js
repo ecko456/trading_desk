@@ -324,9 +324,13 @@ function applyWorkspace() {
   $$('[data-module-group]').forEach(element => { element.hidden = element.dataset.moduleGroup.split(',').every(key => !moduleOn(key)); });
   // Zóny se překreslí s nabídkou štítků podle metodiky; rozepsané hodnoty zůstanou.
   renderZones(collectRows('#zoneList', '.zone-row', zoneFields));
+  // Nabídka timeframů u DiNapoli levelů se bere z nastavení tolerance.
+  if ($('#dnLevelList .dn-level-row')) renderDnLevels(dnLevels());
   renderPlanCustomFields();
   syncPlanSections();
   $('#tvIncludeDnControl').hidden = isHiddenEl('dn.swings');
+  const dnTab = $('#dnSettingsTab');
+  if (dnTab) dnTab.hidden = prefs().method === 'mp';
   renderDataLists();
   renderTradeHead();
   renderTradeTable();
@@ -637,7 +641,7 @@ function vaContext(lowValue, highValue, context) {
 // Řádky náhledu: zóny, levely, reference a scénáře.
 // ---------------------------------------------------------------------------
 const MP_TOKENS = ['VAH', 'VAL', 'POC', 'nPOC', 'SP', 'Poor high', 'Poor low', 'Excess', 'LVN', 'HVN', 'IB', 'Weekly VA', 'Monthly VA', 'Composite'];
-const DN_TOKENS = ['F3', 'F5', 'COP', 'OP', 'XOP', 'Confluence', 'Agreement', '3x3', 'Fib node'];
+const DN_TOKENS = ['F3', 'F5', 'F7', 'COP', 'OP', 'XOP', 'Konfluence', 'Shoda', 'Naked', 'Revisited', '3x3', 'Fib node'];
 
 /** Štítky zdroje zóny podle metodiky tradera a jeho vlastních štítků. */
 function zoneTokens() {
@@ -921,101 +925,153 @@ function refPricesToLevels() {
 }
 
 // ---------------------------------------------------------------------------
-// DiNapoli: swingy, Fibonacci úrovně a místa, kde se kryjí. Výpočet je ve
+// DiNapoli: levely zadané traderem a místa, kde se kryjí. Výpočet je ve
 // static/dinapoli.js a stejný na serveru (lib/workspace.php).
 // ---------------------------------------------------------------------------
-const DN_KIND_TITLES = { F3: 'F3 · .382', F5: 'F5 · .618', COP: 'COP · .618', OP: 'OP · 1.0', XOP: 'XOP · 1.618' };
+const DN_RETRACEMENT_KINDS = ['F3', 'F5', 'F7'];
+const DN_EXPANSION_KINDS = ['COP', 'OP', 'XOP'];
+const DN_TYPE_LABELS = { confluence: 'Konfluence', agreement: 'Shoda' };
+const DN_STATUS_LABELS = { naked: 'Naked', revisited: 'Revisited' };
 
-function dnSwingTemplate(swing = {}, index = 0) {
-  return `<article class="dn-swing plan-row">
-    <div class="dn-swing-grid">
-      <label>Swing<input name="label" maxlength="40" value="${escapeHtml(swing.label)}" placeholder="S${index + 1}"></label>
-      <label>A · začátek<input type="number" step="any" name="price_a" value="${escapeHtml(swing.price_a)}"></label>
-      <label>B · konec<input type="number" step="any" name="price_b" value="${escapeHtml(swing.price_b)}"></label>
-      <label>C · retracement<input type="number" step="any" name="price_c" value="${escapeHtml(swing.price_c)}" placeholder="pro cíle"></label>
-      <label class="grow">Poznámka<input name="note" maxlength="300" value="${escapeHtml(swing.note)}" placeholder="Timeframe, odkud swing je…"></label>
-    </div>
-    <div class="dn-swing-foot"><div class="dn-levels" data-dn-levels></div><div class="dn-swing-actions"><button class="mini-button" type="button" data-dn-to-levels>Do levelů</button><button class="remove-row" type="button" data-remove-dn>Odebrat</button></div></div>
+function dnTimeframes() {
+  const list = prefs().dn?.timeframes;
+  return Array.isArray(list) && list.length ? list : (state.workspace?.registry?.dn_default_timeframes || [{ tf: 'H1', confluence: 5, agreement: 5 }]);
+}
+
+function dnTimeframeOptions(current) {
+  const list = dnTimeframes().map(item => String(item.tf));
+  const value = current === undefined || current === null ? list[0] : String(current);
+  const options = list.map(tf => `<option value="${escapeHtml(tf)}"${tf === value ? ' selected' : ''}>${escapeHtml(tf)}</option>`);
+  if (!list.includes(value)) options.unshift(`<option value="${escapeHtml(value)}" selected>${value === '' ? 'Bez TF' : `${escapeHtml(value)} · mimo nastavení`}</option>`);
+  return options.join('');
+}
+
+function dnLevelTemplate(level = {}) {
+  const kind = [...DN_RETRACEMENT_KINDS, ...DN_EXPANSION_KINDS].includes(level.kind) ? level.kind : 'F5';
+  const status = level.status === 'revisited' ? 'revisited' : 'naked';
+  const group = DN_EXPANSION_KINDS.includes(kind) ? 'expansion' : 'retracement';
+  return `<article class="dn-level-row plan-row" data-group="${group}" data-status="${status}">
+    <label><span class="dn-lbl">Timeframe</span><select name="timeframe" aria-label="Timeframe">${dnTimeframeOptions(level.timeframe)}</select></label>
+    <label><span class="dn-lbl">Level</span><select name="kind" aria-label="Level"><optgroup label="Retracement">${DN_RETRACEMENT_KINDS.map(item => optionTag(item, item, kind)).join('')}</optgroup><optgroup label="Expanze">${DN_EXPANSION_KINDS.map(item => optionTag(item, item, kind)).join('')}</optgroup></select></label>
+    <label><span class="dn-lbl">Stav</span><select name="status" aria-label="Stav">${optionTag('naked', 'Naked', status)}${optionTag('revisited', 'Revisited', status)}</select></label>
+    <label><span class="dn-lbl">Cena</span><input type="number" step="any" name="price" value="${escapeHtml(level.price)}" aria-label="Cena levelu" placeholder="Hladina"></label>
+    <label class="grow"><span class="dn-lbl">Poznámka</span><input name="note" maxlength="300" value="${escapeHtml(level.note)}" aria-label="Poznámka" placeholder="Swing, odkud level je…"></label>
+    <span class="dn-match" data-dn-match></span>
+    <button class="remove-row" type="button" data-remove-dn aria-label="Odebrat level">×</button>
   </article>`;
 }
 
-function renderDnSwings(swings = []) {
-  $('#dnSwingList').innerHTML = swings.length
-    ? swings.map(dnSwingTemplate).join('')
-    : '<div class="empty-state compact">Přidej swing: A je začátek pohybu, B jeho konec. Aplikace dopočítá F3 a F5, s bodem C i cíle COP, OP a XOP, a sama najde confluence a agreement.</div>';
+function dnLevelHead() {
+  return '<div class="dn-level-head" aria-hidden="true"><span>Timeframe</span><span>Level</span><span>Stav</span><span>Cena</span><span>Poznámka</span><span></span><span></span></div>';
 }
 
-function dnSwings() {
-  return collectRows('#dnSwingList', '.dn-swing', ['label', 'price_a', 'price_b', 'price_c', 'note']);
+function renderDnLevels(levels = []) {
+  $('#dnLevelList').innerHTML = levels.length
+    ? dnLevelHead() + levels.map(dnLevelTemplate).join('')
+    : '<div class="empty-state compact">Přidej levely z grafu: timeframe, F3, F5, F7 nebo expanzi COP, OP, XOP, jestli je naked nebo revisited, a hladinu. Konfluenci a shodu aplikace najde sama.</div>';
+}
+
+function addDnLevel(template = {}) {
+  if (!$('#dnLevelList .dn-level-head')) {
+    $('#dnLevelList').innerHTML = dnLevelHead();
+  }
+  const last = $$('#dnLevelList .dn-level-row').pop();
+  const level = { timeframe: last ? $('[name="timeframe"]', last).value : undefined, kind: last ? $('[name="kind"]', last).value : 'F5', status: 'naked', ...template };
+  const row = appendRow('#dnLevelList', dnLevelTemplate(level));
+  $('[name="price"]', row).focus();
+  schedulePlanRefresh();
+  return row;
+}
+
+function dnLevels() {
+  return collectRows('#dnLevelList', '.dn-level-row', ['timeframe', 'kind', 'status', 'price', 'note']);
+}
+
+function dnRange(low, high) {
+  return low === high ? displayPrice(low) : `${displayPrice(low)} – ${displayPrice(high)}`;
+}
+
+function dnMemberText(member) {
+  return `${member.kind} ${displayPrice(member.price)}${member.status === 'revisited' ? ' (revisited)' : ''}`;
 }
 
 function updateDnAnalysis() {
   if (!window.DiNapoli) return;
-  const analysis = window.DiNapoli.analyze(dnSwings(), $('#dnTolerance').value);
+  const analysis = window.DiNapoli.analyze(dnLevels(), dnTimeframes());
   state.dnAnalysis = analysis;
-  $('#dnTolerance').placeholder = analysis.auto_tolerance ? `auto ${displayPrice(analysis.auto_tolerance)}` : 'auto';
-  $$('#dnSwingList .dn-swing').forEach((row, index) => {
-    const levels = analysis.levels.filter(level => level.swing_index === index).sort((a, b) => Object.keys(DN_KIND_TITLES).indexOf(a.kind) - Object.keys(DN_KIND_TITLES).indexOf(b.kind));
-    const a = numberOrNull($('[name="price_a"]', row).value);
-    const b = numberOrNull($('[name="price_b"]', row).value);
-    const direction = a !== null && b !== null && a !== b ? (b > a ? 'up' : 'down') : '';
-    row.dataset.direction = direction;
-    $('[data-dn-levels]', row).innerHTML = levels.length
-      ? `<span class="dn-direction">${direction === 'up' ? '↗ swing nahoru' : '↘ swing dolů'}</span>${levels.map(level => `<span class="dn-level is-${level.group}" title="${escapeHtml(DN_KIND_TITLES[level.kind])}"><b>${escapeHtml(level.kind)}</b>${escapeHtml(displayPrice(level.price))}</span>`).join('')}`
-      : '<span class="muted">Doplň A a B.</span>';
+  const matches = new Map();
+  analysis.clusters.forEach(cluster => cluster.members.forEach(member => {
+    if (!matches.has(member.index)) matches.set(member.index, new Set());
+    matches.get(member.index).add(cluster.type);
+  }));
+  $$('#dnLevelList .dn-level-row').forEach((row, index) => {
+    row.dataset.group = window.DiNapoli.LEVEL_KINDS[$('[name="kind"]', row).value] || '';
+    row.dataset.status = $('[name="status"]', row).value;
+    const types = [...(matches.get(index) || [])];
+    row.dataset.match = types.length > 1 ? 'both' : types[0] || '';
+    $('[data-dn-match]', row).textContent = types.map(type => DN_TYPE_LABELS[type]).join(' + ');
   });
+
   const clusters = analysis.clusters;
   $('#dnClusters').innerHTML = clusters.length
-    ? `<p class="subhead">Kde se úrovně kryjí<small>Tolerance ${escapeHtml(displayPrice(analysis.tolerance))} b${$('#dnTolerance').value ? '' : ' (automaticky 0,05 % ceny)'}</small></p>${clusters.map((cluster, index) => `<article class="dn-cluster${cluster.types.includes('agreement') ? ' is-agreement' : ''}">
-        <div><span class="dn-cluster-type">${cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence')).join(' + ')}</span><strong>${escapeHtml(cluster.low === cluster.high ? displayPrice(cluster.low) : `${displayPrice(cluster.low)} – ${displayPrice(cluster.high)}`)}</strong><small>${escapeHtml(cluster.members.join(' · '))}</small></div>
+    ? `<p class="subhead">Konfluence a shoda<small>Tolerance podle timeframu z Nastavení</small></p>${clusters.map((cluster, index) => `<article class="dn-cluster${cluster.type === 'agreement' ? ' is-agreement' : ''}${cluster.revisited ? ' has-revisited' : ''}">
+        <div><span class="dn-cluster-type">${escapeHtml(DN_TYPE_LABELS[cluster.type])} · ${escapeHtml(cluster.timeframe || 'bez TF')}</span><strong>${escapeHtml(dnRange(cluster.low, cluster.high))}</strong><small>${escapeHtml(cluster.members.map(dnMemberText).join(' · '))} · tolerance ${escapeHtml(displayPrice(cluster.tolerance))} b</small></div>
         <button class="button button-small" type="button" data-dn-cluster="${index}">Udělat zónu</button>
       </article>`).join('')}`
-    : (analysis.levels.length > 2 ? '<p class="section-hint">Úrovně z různých swingů se zatím nekryjí. Confluence vzniká, když se potkají retracementy dvou swingů, agreement při shodě retracementu s cílem expanze.</p>' : '');
-  const swingCount = new Set(analysis.levels.map(level => level.swing_index)).size;
-  $('#dnSummary').textContent = swingCount ? `${swingCount} ${swingCount === 1 ? 'swing' : swingCount < 5 ? 'swingy' : 'swingů'} · ${clusters.length ? `${clusters.length} ${clusters.length === 1 ? 'shoda' : clusters.length < 5 ? 'shody' : 'shod'}` : 'bez shody'}` : 'Retracementy, cíle a kde se kryjí';
+    : (analysis.levels.length > 1 ? '<p class="section-hint">Levely se zatím nekryjí. Konfluence vzniká ze dvou F5 levelů, shoda z expanze u retracementu, vždy na stejném timeframu a do tolerance z Nastavení.</p>' : '');
+  const count = analysis.levels.length;
+  const confluences = clusters.filter(cluster => cluster.type === 'confluence').length;
+  const agreements = clusters.length - confluences;
+  $('#dnSummary').textContent = count
+    ? [`${count} ${count === 1 ? 'level' : count < 5 ? 'levely' : 'levelů'}`, confluences ? `${confluences} ${confluences < 5 ? 'konfluence' : 'konfluencí'}` : '', agreements ? `${agreements} ${agreements === 1 ? 'shoda' : agreements < 5 ? 'shody' : 'shod'}` : ''].filter(Boolean).join(' · ')
+    : 'Levely, konfluence a shoda';
 }
 
-function dnSwingToLevels(row) {
-  const index = $$('#dnSwingList .dn-swing').indexOf(row);
-  const levels = (state.dnAnalysis?.levels || []).filter(level => level.swing_index === index);
-  if (!levels.length) { toast('Nejdřív doplň u swingu A a B.', 'error'); return; }
-  const up = row.dataset.direction === 'up';
+function dnLevelName(level) {
+  return `${level.timeframe ? `${level.timeframe} ` : ''}${level.kind}${level.status === 'revisited' ? ' R' : ''}`;
+}
+
+function dnLevelsToKeyLevels() {
+  const levels = state.dnAnalysis?.levels || [];
+  if (!levels.length) { toast('Nejdřív zadej DiNapoli levely s cenou.', 'error'); return; }
   let added = 0;
   let updated = 0;
   levels.forEach(level => {
-    const title = `${level.swing} ${level.kind}`;
-    const kind = level.group === 'retracement' ? (up ? 'support' : 'resistance') : (up ? 'resistance' : 'support');
-    const existing = $$('.level-row').find(item => $('[name="name"]', item).value.trim() === title);
+    const title = dnLevelName(level);
+    const existing = $$('.level-row').find(item => $('[name="name"]', item).value.trim() === title && $('[name="source"]', item).value.trim() === 'DiNapoli');
     if (existing) {
       $('[name="price"]', existing).value = level.price;
       updated += 1;
       return;
     }
-    appendRow('#levelList', levelTemplate({ name: title, price: level.price, kind, source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted' }, $$('.level-row').length));
+    appendRow('#levelList', levelTemplate({ name: title, price: level.price, kind: '', source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted', note: level.note }, $$('.level-row').length));
     added += 1;
   });
   schedulePlanRefresh();
-  toast(`Levely: ${added} přidáno${updated ? `, ${updated} aktualizováno` : ''}.`);
+  toast(`Klíčové levely: ${added} přidáno${updated ? `, ${updated} aktualizováno` : ''}.`);
+}
+
+function dnClusterPad(cluster) {
+  return cluster.low === cluster.high ? Math.max((cluster.tolerance || 0) / 2, 0) : 0;
 }
 
 function dnClusterToZone(cluster) {
-  const pad = Math.max((state.dnAnalysis?.tolerance || 0) / 2, 0);
-  const low = cluster.low === cluster.high ? cluster.low - pad : cluster.low;
-  const high = cluster.low === cluster.high ? cluster.high + pad : cluster.high;
-  const types = cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence'));
-  const kinds = [...new Set(cluster.members.map(member => member.split(' ').pop()))];
+  const pad = dnClusterPad(cluster);
+  const low = cluster.low - pad;
+  const high = cluster.high + pad;
+  const label = DN_TYPE_LABELS[cluster.type];
+  const kinds = [...new Set(cluster.members.map(member => member.kind))];
   const zone = {
-    name: `${types.join(' + ')} ${displayPrice((low + high) / 2)}`,
+    name: `${label}${cluster.timeframe ? ` ${cluster.timeframe}` : ''} ${displayPrice((low + high) / 2)}`,
     price_low: Math.round(low * 1e4) / 1e4,
     price_high: Math.round(high * 1e4) / 1e4,
-    source: [...types, ...kinds].join(', '),
-    invalidation: cluster.members.join(' + '),
+    source: [label, ...kinds, cluster.revisited ? 'Revisited' : 'Naked'].join(', '),
   };
   const row = appendRow('#zoneList', zoneTemplate(zone, $$('.zone-row').length));
   renumberRows();
   schedulePlanRefresh();
   row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  toast('Zóna je založená ze shody úrovní. Vyber směr a podmínky vstupu.');
+  toast(`Zóna je založená z ${cluster.type === 'agreement' ? 'shody' : 'konfluence'}. Vyber směr a podmínky vstupu.`);
 }
 
 function syncDnPatternChips() {
@@ -1032,7 +1088,7 @@ function dnConclusion(data) {
   if (fast && slow) {
     if (fast === 'above' && slow === 'above') parts.push('Cena je nad 3x3 i 25x5 DMA: trend nahoru, hledej long z Fibonacci supportů.');
     else if (fast === 'below' && slow === 'below') parts.push('Cena je pod 3x3 i 25x5 DMA: trend dolů, hledej short z Fibonacci rezistencí.');
-    else parts.push('3x3 a 25x5 DMA se neshodují: trh je v přechodu, obchoduj hlavně od shod úrovní.');
+    else parts.push('3x3 a 25x5 DMA se neshodují: trh je v přechodu, obchoduj hlavně od konfluence a shody.');
   } else if (fast) {
     parts.push(fast === 'above' ? 'Cena je nad 3x3 DMA.' : 'Cena je pod 3x3 DMA.');
   }
@@ -1040,7 +1096,7 @@ function dnConclusion(data) {
   if (data.dn_thrust === 'down') parts.push('Běží thrust dolů; první návrat k F3 nebo F5 bývá nejlepší místo pro short.');
   const clusters = state.dnAnalysis?.clusters || [];
   if (clusters.length && !isHiddenEl('dn.swings')) {
-    parts.push(`Nejsilnější Fibonacci místa: ${clusters.slice(0, 3).map(cluster => `${cluster.types.includes('agreement') ? 'agreement' : 'confluence'} ${cluster.low === cluster.high ? displayPrice(cluster.low) : `${displayPrice(cluster.low)}–${displayPrice(cluster.high)}`}`).join(', ')}.`);
+    parts.push(`Nejsilnější DiNapoli místa: ${clusters.slice(0, 3).map(cluster => `${DN_TYPE_LABELS[cluster.type].toLowerCase()} ${cluster.timeframe ? `${cluster.timeframe} ` : ''}${cluster.low === cluster.high ? displayPrice(cluster.low) : `${displayPrice(cluster.low)}–${displayPrice(cluster.high)}`}${cluster.revisited ? ' (s revisited levelem)' : ''}`).join(', ')}.`);
   }
   const patterns = sourceTokens(data.dn_patterns);
   if (patterns.length && !isHiddenEl('dn.patterns')) parts.push(`Sleduješ vzory: ${patterns.join(', ')}.`);
@@ -1048,20 +1104,22 @@ function dnConclusion(data) {
 }
 
 function bindDnEvents() {
-  $('#addDnSwing').addEventListener('click', () => {
-    const row = appendRow('#dnSwingList', dnSwingTemplate({}, $$('#dnSwingList .dn-swing').length));
-    $('[name="price_a"]', row).focus();
+  $('#addDnLevel').addEventListener('click', () => addDnLevel());
+  $('#dnToLevels').addEventListener('click', dnLevelsToKeyLevels);
+  $('#dnLevelList').addEventListener('click', event => {
+    const row = event.target.closest('.dn-level-row');
+    if (!row || !event.target.closest('[data-remove-dn]')) return;
+    row.remove();
+    if (!$$('#dnLevelList .dn-level-row').length) renderDnLevels([]);
     schedulePlanRefresh();
   });
-  $('#dnSwingList').addEventListener('click', event => {
-    const row = event.target.closest('.dn-swing');
-    if (!row) return;
-    if (event.target.closest('[data-remove-dn]')) {
-      row.remove();
-      if (!$$('#dnSwingList .dn-swing').length) renderDnSwings([]);
-      schedulePlanRefresh();
-    }
-    if (event.target.closest('[data-dn-to-levels]')) dnSwingToLevels(row);
+  // Enter v ceně posledního levelu přidá další řádek se stejným timeframem a typem.
+  $('#dnLevelList').addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.target.name !== 'price') return;
+    event.preventDefault();
+    const row = event.target.closest('.dn-level-row');
+    if (row === $$('#dnLevelList .dn-level-row').pop()) addDnLevel();
+    else $('[name="price"]', row.nextElementSibling)?.focus();
   });
   $('#dnClusters').addEventListener('click', event => {
     const button = event.target.closest('[data-dn-cluster]');
@@ -1347,11 +1405,11 @@ function renderPriceMap() {
 
   if (!isHiddenEl('dn.swings')) {
     (state.dnAnalysis?.clusters || []).forEach(cluster => {
-      const pad = Math.max((state.dnAnalysis.tolerance || 0) / 2, 0);
-      items.push({ type: 'band', cls: 'pm-cluster', low: cluster.low - pad, high: cluster.high + pad, label: cluster.types.includes('agreement') ? 'Agreement' : 'Confluence' });
+      const pad = dnClusterPad(cluster);
+      items.push({ type: 'band', cls: 'pm-cluster', low: cluster.low - pad, high: cluster.high + pad, label: `${DN_TYPE_LABELS[cluster.type]} ${cluster.timeframe}`.trim() });
     });
     (state.dnAnalysis?.levels || []).forEach(level => {
-      items.push({ type: 'line', cls: level.group === 'retracement' ? 'pm-fib' : 'pm-objective', price: level.price, label: `${level.swing} ${level.kind}` });
+      items.push({ type: 'line', cls: level.group === 'retracement' ? 'pm-fib' : 'pm-objective', price: level.price, label: dnLevelName(level) });
     });
   }
   const prices = items.flatMap(item => (item.type === 'zone' || item.type === 'band' ? [item.low, item.high] : [item.price]));
@@ -1426,7 +1484,7 @@ function serializePlan() {
   data.levels = collectRows('#levelList', '.level-row', ['name', 'price', 'kind', 'source', 'line_style', 'note']);
   data.ideas = collectRows('#ideaList', '.idea-row', ['name', 'direction', 'zone_name', 'trigger', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'final_tp', 'rr', 'status', 'notes']);
   data.refs = collectRows('#refList', '.ref-row', ['kind', 'price_low', 'price_high', 'status', 'note']);
-  data.dn_swings = collectRows('#dnSwingList', '.dn-swing', ['label', 'price_a', 'price_b', 'price_c', 'note']);
+  data.dn_levels = dnLevels();
   data.custom = extractCustomValues(data, 'plan');
   return data;
 }
@@ -1503,13 +1561,15 @@ function tradingViewItems() {
   const zones = collectRows('#zoneList', '.zone-row', ['name', 'direction', 'price_low', 'price_high', 'source']);
   const levels = collectRows('#levelList', '.level-row', ['name', 'price', 'kind', 'source', 'line_style']);
   if ($('#tvIncludeDn').checked && !isHiddenEl('dn.swings') && state.dnAnalysis) {
-    const pad = Math.max(state.dnAnalysis.tolerance / 2, 0);
     state.dnAnalysis.clusters.forEach(cluster => {
-      const name = cluster.types.includes('agreement') ? 'Agreement' : 'Confluence';
-      zones.push({ name, direction: '', price_low: cluster.low - pad, price_high: cluster.high + pad, source: cluster.members.join(' + '), pine_color: DN_OBJECTIVE_PINE_COLOR });
+      const pad = dnClusterPad(cluster);
+      const name = `${DN_TYPE_LABELS[cluster.type]} ${cluster.timeframe}`.trim();
+      zones.push({ name, direction: '', price_low: cluster.low - pad, price_high: cluster.high + pad, source: cluster.members.map(member => `${member.kind} ${member.price}`).join(' + '), pine_color: DN_OBJECTIVE_PINE_COLOR });
     });
-    state.dnAnalysis.levels.forEach(level => {
-      levels.push({ name: `${level.swing} ${level.kind}`, price: level.price, kind: '', source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted', pine_color: level.group === 'retracement' ? DN_RETRACEMENT_PINE_COLOR : DN_OBJECTIVE_PINE_COLOR });
+    // Levely už přenesené do klíčových levelů se neopakují.
+    const present = new Set(levels.map(level => `${String(level.name).trim()}|${Number(level.price)}`));
+    state.dnAnalysis.levels.filter(level => !present.has(`${dnLevelName(level)}|${level.price}`)).forEach(level => {
+      levels.push({ name: dnLevelName(level), price: level.price, kind: '', source: 'DiNapoli', line_style: level.group === 'retracement' ? 'dashed' : 'dotted', pine_color: level.group === 'retracement' ? DN_RETRACEMENT_PINE_COLOR : DN_OBJECTIVE_PINE_COLOR });
     });
   }
   if (!$('#tvIncludeRefs').checked || isHiddenEl('profile.values')) return { zones, levels };
@@ -1632,7 +1692,7 @@ function resetPlan({ type = planType(), date = null, market = null } = {}) {
   renderIdeas([]);
   renderLevels([]);
   renderRefs([]);
-  renderDnSwings([]);
+  renderDnLevels([]);
   syncDnPatternChips();
   renderPlanCustomFields({});
   renderScreenshots();
@@ -1662,7 +1722,7 @@ async function loadPlan(id) {
   renderIdeas(plan.ideas || []);
   renderLevels(plan.levels || []);
   renderRefs(plan.refs || []);
-  renderDnSwings(plan.dn_swings || []);
+  renderDnLevels(plan.dn_levels || []);
   syncDnPatternChips();
   renderPlanCustomFields(plan.custom || {});
   renderScreenshots();

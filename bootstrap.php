@@ -1060,7 +1060,7 @@ function save_plan(array $data): array
             $refStatement->execute([$id, $index, $kind, $low, $high, $status, trim((string)value($ref, 'note', ''))]);
         }
 
-        // DiNapoli swingy, trend a vlastní pole náhledu.
+        // DiNapoli levely, trend a vlastní pole náhledu.
         $storedCustom = (string)(fetch_one('SELECT custom FROM plans WHERE id = ?', [$id])['custom'] ?? '{}');
         save_plan_extras($pdo, $id, $data, $storedCustom);
 

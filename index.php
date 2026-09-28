@@ -346,8 +346,8 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                     </div>
                   </div>
                   <div class="dn-block"<?= el('dn.swings') ?>>
-                    <div class="section-heading"><div><p class="subhead">Fibonacci swingy<small>A → B je swing, C konec retracementu. F3 = .382, F5 = .618, COP / OP / XOP = .618 / 1 / 1.618 od C.</small></p></div><div class="section-actions"><label class="dn-tolerance">Tolerance shody<input type="number" step="any" min="0" name="dn_tolerance" id="dnTolerance" placeholder="auto"></label><button class="button button-small" type="button" id="addDnSwing"><?= icon('plus') ?>Swing</button></div></div>
-                    <div class="stack" id="dnSwingList"></div>
+                    <div class="section-heading"><div><p class="subhead">DiNapoli levely<small>Retracementy F3, F5, F7 a expanze COP, OP, XOP. Konfluence = dva F5 u sebe, shoda = expanze u retracementu, vždy v rámci jednoho timeframu.</small></p></div><div class="section-actions"><button class="text-button" type="button" data-open-view="settings" data-settings-tab="dinapoli">Tolerance</button><button class="text-button" type="button" id="dnToLevels">Do klíčových levelů</button><button class="button button-small" type="button" id="addDnLevel"><?= icon('plus') ?>Level</button></div></div>
+                    <div class="dn-level-list" id="dnLevelList"></div>
                     <div class="dn-clusters" id="dnClusters"></div>
                   </div>
                   <div class="dn-block"<?= el('dn.patterns') ?>>
@@ -576,6 +576,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
             <nav class="settings-tabs" id="settingsTabs" aria-label="Části nastavení">
               <button type="button" data-settings-tab="method" class="is-active"><?= icon('spark') ?><span><strong>Metodika</strong><small>Market Profile, DiNapoli</small></span></button>
               <button type="button" data-settings-tab="plan"><?= icon('plan') ?><span><strong>Náhled trhu</strong><small>Co v náhledu vidíš</small></span></button>
+              <button type="button" data-settings-tab="dinapoli" id="dnSettingsTab"<?= $ws['method'] === 'mp' ? ' hidden' : '' ?>><?= icon('fib') ?><span><strong>DiNapoli</strong><small>Tolerance shody a konfluence</small></span></button>
               <button type="button" data-settings-tab="trade"><?= icon('journal') ?><span><strong>Zápis obchodu</strong><small>Pole a výchozí hodnoty</small></span></button>
               <button type="button" data-settings-tab="fields"><?= icon('sliders') ?><span><strong>Vlastní pole</strong><small>Co chceš zapisovat navíc</small></span></button>
               <button type="button" data-settings-tab="markets"><?= icon('strategies') ?><span><strong>Moje trhy</strong><small>Symboly a hodnota bodu</small></span></button>
@@ -584,10 +585,10 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
             <div class="settings-panels">
               <section class="surface settings-panel is-active" data-settings-panel="method">
                 <div class="section-heading"><div><p class="eyebrow">Jak obchoduješ</p><h2>Metodika</h2></div><span id="methodSaved"></span></div>
-                <p class="settings-lead">Podle metodiky se připraví náhled trhu: Market Profile přinese profil, value a reference, DiNapoli Fibonacci swingy, DMA a vzory. Jednotlivé prvky pak doladíš v další části.</p>
+                <p class="settings-lead">Podle metodiky se připraví náhled trhu: Market Profile přinese profil, value a reference, DiNapoli levely se shodou a konfluencí, DMA a vzory. Jednotlivé prvky pak doladíš v další části.</p>
                 <div class="method-cards" id="methodCards">
                   <button type="button" class="method-card" data-method="mp"><span class="method-glyph method-glyph-mp" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>Market Profile</strong><small>Value area, POC, tvar profilu, reference na dojetí, otevření podle Daltona.</small></button>
-                  <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Fibonacci F3 a F5, cíle COP, OP a XOP, confluence, agreement a DMA 3x3.</small></button>
+                  <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Levely F3, F5, F7 a expanze COP, OP, XOP, shoda a konfluence podle timeframu, DMA a vzory.</small></button>
                   <button type="button" class="method-card" data-method="both"><span class="method-glyph method-glyph-both" aria-hidden="true"><i></i><i></i><i></i><?= icon('fib') ?></span><strong>Obojí</strong><small>Profil i Fibonacci v jednom náhledu. Nejvíc informací, nejvíc polí.</small></button>
                 </div>
                 <div class="plan-preview" id="planPreview"></div>
@@ -601,6 +602,15 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   <p class="subhead">Vlastní štítky zdroje zón<small>Přidají se k nabídce u každé zóny, třeba „Weekly open“ nebo „Gap fill“.</small></p>
                   <div class="token-editor"><div class="chip-row" id="tokenList"></div><form class="inline-add" id="tokenForm"><input name="token" maxlength="24" placeholder="Nový štítek"><button class="button button-small" type="submit"><?= icon('plus') ?>Přidat</button></form></div>
                 </div>
+              </section>
+
+              <section class="surface settings-panel" data-settings-panel="dinapoli">
+                <div class="section-heading"><div><p class="eyebrow">DiNapoli</p><h2>Tolerance podle timeframu</h2></div><button class="text-button" type="button" id="resetDnTimeframes">Výchozí hodnoty</button></div>
+                <p class="settings-lead">Dva levely stejného timeframu, které jsou od sebe nejvýš o toleranci v bodech, tvoří <strong>konfluenci</strong> (F5 + F5), nebo <strong>shodu</strong> (expanze COP, OP, XOP + retracement F3, F5, F7). Každý druh má vlastní kritéria, proto má i vlastní toleranci. Levely z různých timeframů se neporovnávají.</p>
+                <form id="dnTimeframesForm">
+                  <div class="markets-table dn-tf-table" id="dnTimeframeRows"></div>
+                  <div class="form-actions"><button class="button button-ghost" type="button" id="addDnTimeframe"><?= icon('plus') ?>Přidat timeframe</button><button class="button button-primary" type="submit">Uložit tolerance</button></div>
+                </form>
               </section>
 
               <section class="surface settings-panel" data-settings-panel="trade">
@@ -977,7 +987,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <p class="settings-lead">Jak připravuješ obchody? Podle toho se připraví náhled trhu. Později ho doladíš v Nastavení.</p>
         <div class="method-cards compact" id="onboardingMethods">
           <button type="button" class="method-card" data-method="mp"><span class="method-glyph method-glyph-mp" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>Market Profile</strong><small>Value, POC, profil, reference</small></button>
-          <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Fibonacci, COP/OP/XOP, DMA</small></button>
+          <button type="button" class="method-card" data-method="dn"><span class="method-glyph method-glyph-dn" aria-hidden="true"><?= icon('fib') ?></span><strong>DiNapoli</strong><small>Levely, shoda, konfluence, DMA</small></button>
           <button type="button" class="method-card" data-method="both"><span class="method-glyph method-glyph-both" aria-hidden="true"><i></i><i></i><i></i><?= icon('fib') ?></span><strong>Obojí</strong><small>Profil i Fibonacci</small></button>
         </div>
       </div>

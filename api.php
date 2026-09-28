@@ -491,7 +491,7 @@ try {
             'levels' => fetch_all('SELECT * FROM levels ORDER BY plan_id, sort_order, id'),
             'ideas' => fetch_all('SELECT * FROM ideas ORDER BY plan_id, sort_order, id'),
             'plan_refs' => fetch_all('SELECT * FROM plan_refs ORDER BY plan_id, sort_order, id'),
-            'plan_dn_swings' => fetch_all('SELECT * FROM plan_dn_swings ORDER BY plan_id, sort_order, id'),
+            'plan_dn_levels' => fetch_all('SELECT * FROM plan_dn_levels ORDER BY plan_id, sort_order, id'),
             'custom_fields' => fetch_all('SELECT * FROM custom_fields ORDER BY scope, sort_order, id'),
             'workspace' => workspace(),
             'strategies' => fetch_all('SELECT * FROM strategies ORDER BY name COLLATE NOCASE'),

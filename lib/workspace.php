@@ -22,7 +22,7 @@ const PLAN_ELEMENTS = [
     'profile.auction' => ['Migrace a stav aukce', 'Migrace value a POC, aukce, single prints, excess.', 'Market Profile', 'mp'],
     'refs' => ['Reference na dojetí', 'Poor high a low, naked POC, single prints, gap, LVN.', 'Market Profile', 'mp'],
     'dn.trend' => ['Trend podle DMA', 'Poloha ceny vůči 3x3, 7x5 a 25x5 a thrust.', 'DiNapoli', 'dn'],
-    'dn.swings' => ['Fibonacci swingy', 'Retracementy F3 a F5, cíle COP, OP a XOP, automatická confluence a agreement.', 'DiNapoli', 'dn'],
+    'dn.swings' => ['DiNapoli levely', 'F3, F5, F7 a expanze COP, OP, XOP s timeframem a stavem naked / revisited; shoda a konfluence podle tolerance z nastavení.', 'DiNapoli', 'dn'],
     'dn.patterns' => ['DiNapoli vzory', 'Double Repo, Single Penetration, Railroad Tracks, Failure, Bread & Butter, Minesweeper.', 'DiNapoli', 'dn'],
     'open.va' => ['Otevření vůči value', 'Globex, EU a RTH open vůči value area.', 'Otevření', 'mp'],
     'open.type' => ['Typ otevření', 'Open Drive, Test Drive, Rejection Reverse, Open Auction.', 'Otevření', 'mp'],
@@ -87,9 +87,16 @@ const CUSTOM_FIELD_KINDS = [
 ];
 
 const DN_PATTERNS = ['Double Repo', 'Single Penetration', 'Railroad Tracks', 'Failure', 'Bread & Butter', 'Minesweeper A', 'Minesweeper B', 'Fib Node'];
-const DN_MAX_SWINGS = 40;
-const DN_RETRACEMENTS = ['F3' => 0.382, 'F5' => 0.618];
-const DN_EXPANSIONS = ['COP' => 0.618, 'OP' => 1.0, 'XOP' => 1.618];
+/** Typy DiNapoli levelů: retracementy a cíle expanze. */
+const DN_LEVEL_KINDS = ['F3' => 'retracement', 'F5' => 'retracement', 'F7' => 'retracement', 'COP' => 'expansion', 'OP' => 'expansion', 'XOP' => 'expansion'];
+const DN_MAX_LEVELS = 80;
+const DN_DEFAULT_TOLERANCE = 5.0;
+const DN_DEFAULT_TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
+
+function dn_default_timeframes(): array
+{
+    return array_map(static fn(string $tf): array => ['tf' => $tf, 'confluence' => DN_DEFAULT_TOLERANCE, 'agreement' => DN_DEFAULT_TOLERANCE], DN_DEFAULT_TIMEFRAMES);
+}
 
 function method_hidden_plan(string $method): array
 {
@@ -112,7 +119,7 @@ function default_workspace(): array
         'tokens_extra' => [],
         'markets' => DEFAULT_MARKETS,
         'defaults' => ['market' => '', 'session' => 'Intraday', 'risk' => null, 'fees' => null, 'account_id' => null],
-        'dn' => ['tolerance' => null],
+        'dn' => ['timeframes' => dn_default_timeframes()],
     ];
 }
 
@@ -162,7 +169,23 @@ function normalize_workspace(array $input): array
     $session = (string)($defaults['session'] ?? 'Intraday');
     $risk = nullable_float($defaults['risk'] ?? null);
     $fees = nullable_float($defaults['fees'] ?? null);
-    $tolerance = nullable_float($input['dn']['tolerance'] ?? null);
+    // Tolerance shody a konfluence pro každý timeframe zvlášť.
+    $timeframes = [];
+    foreach (is_array($input['dn']['timeframes'] ?? null) ? $input['dn']['timeframes'] : [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $tf = trim(preg_replace('/[^\p{L}\p{N} ._-]/u', '', (string)($row['tf'] ?? '')) ?? '');
+        if ($tf === '' || mb_strlen($tf, 'UTF-8') > 12 || isset($timeframes[mb_strtolower($tf, 'UTF-8')])) {
+            continue;
+        }
+        $tolerance = static function (mixed $value): float {
+            $number = nullable_float($value);
+            return $number !== null && $number >= 0 && $number <= 1000000 ? $number : DN_DEFAULT_TOLERANCE;
+        };
+        $timeframes[mb_strtolower($tf, 'UTF-8')] = ['tf' => $tf, 'confluence' => $tolerance($row['confluence'] ?? null), 'agreement' => $tolerance($row['agreement'] ?? null)];
+    }
+    $timeframes = array_slice(array_values($timeframes), 0, 20);
 
     return [
         'version' => 1,
@@ -182,7 +205,7 @@ function normalize_workspace(array $input): array
             'fees' => $fees !== null && $fees >= 0 ? $fees : null,
             'account_id' => nullable_int($defaults['account_id'] ?? null),
         ],
-        'dn' => ['tolerance' => $tolerance !== null && $tolerance > 0 ? $tolerance : null],
+        'dn' => ['timeframes' => $timeframes !== [] ? $timeframes : dn_default_timeframes()],
     ];
 }
 
@@ -207,20 +230,33 @@ CREATE TABLE IF NOT EXISTS custom_fields (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS plan_dn_swings (
+CREATE INDEX IF NOT EXISTS idx_custom_fields_scope ON custom_fields(scope, archived, sort_order);
+SQL);
+    $hasLevels = $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'plan_dn_levels'")->fetchColumn() !== false;
+    if (!$hasLevels) {
+        // Tabulka i převod starých swingů proběhnou naráz, nebo vůbec.
+        $pdo->beginTransaction();
+        $pdo->exec(<<<'SQL'
+CREATE TABLE plan_dn_levels (
     id INTEGER PRIMARY KEY,
     plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    label TEXT,
-    price_a REAL,
-    price_b REAL,
-    price_c REAL,
+    timeframe TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'naked',
+    price REAL,
     note TEXT
 );
-
-CREATE INDEX IF NOT EXISTS idx_custom_fields_scope ON custom_fields(scope, archived, sort_order);
-CREATE INDEX IF NOT EXISTS idx_dn_swings_plan ON plan_dn_swings(plan_id, sort_order);
+CREATE INDEX idx_dn_levels_plan ON plan_dn_levels(plan_id, sort_order);
 SQL);
+        try {
+            migrate_dn_swings($pdo);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+            throw $error;
+        }
+    }
     foreach (['custom' => "TEXT NOT NULL DEFAULT '{}'"] as $column => $type) {
         foreach (['trades', 'plans'] as $table) {
             if (!in_array($column, table_columns($pdo, $table), true)) {
@@ -307,6 +343,8 @@ function workspace_registry(): array
         'presets' => ['mp' => method_hidden_plan('mp'), 'dn' => method_hidden_plan('dn'), 'both' => []],
         'kinds' => CUSTOM_FIELD_KINDS,
         'dn_patterns' => DN_PATTERNS,
+        'dn_level_kinds' => DN_LEVEL_KINDS,
+        'dn_default_timeframes' => dn_default_timeframes(),
         'default_markets' => DEFAULT_MARKETS,
     ];
 }
@@ -559,148 +597,198 @@ function custom_field_statistics(): array
 
 /* ---------------------------------------------------------------- DiNapoli */
 
+/** Tolerance v bodech pro timeframe a druh shody; neznámý timeframe dostane výchozích 5 bodů. */
+function dn_tolerance(array $timeframes, string $timeframe, string $type): float
+{
+    foreach ($timeframes as $row) {
+        if (is_array($row) && (string)($row['tf'] ?? '') === $timeframe) {
+            $value = nullable_float($row[$type] ?? null);
+            return $value !== null && $value >= 0 ? $value : DN_DEFAULT_TOLERANCE;
+        }
+    }
+    return DN_DEFAULT_TOLERANCE;
+}
+
+/** Platné levely: známý typ a cena. index ukazuje na pořadí ve vstupu. */
+function dn_clean_levels(array $rows): array
+{
+    $levels = [];
+    foreach (array_values($rows) as $index => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $kind = strtoupper(trim((string)($row['kind'] ?? '')));
+        $price = nullable_float($row['price'] ?? null);
+        if (!isset(DN_LEVEL_KINDS[$kind]) || $price === null) {
+            continue;
+        }
+        $levels[] = [
+            'index' => $index,
+            'timeframe' => trim((string)($row['timeframe'] ?? '')),
+            'kind' => $kind,
+            'group' => DN_LEVEL_KINDS[$kind],
+            'status' => ($row['status'] ?? '') === 'revisited' ? 'revisited' : 'naked',
+            'price' => $price,
+            'note' => trim((string)($row['note'] ?? '')),
+        ];
+    }
+    return $levels;
+}
+
 /**
- * Úrovně jednoho swingu. Swing jde z A do B; retracement se měří od B zpět
- * k A, expanze od bodu C (konec retracementu) ve směru A→B.
+ * Kde se levely kryjí. Porovnávají se jen levely stejného timeframu:
+ * konfluence = dva F5 do tolerance konfluence, shoda = expanze u retracementu
+ * do tolerance shody. Víc levelů spojených přes sebe tvoří jedno pásmo.
  */
-function dn_swing_levels(array $swing, int $index): array
+function dn_analysis(array $rows, array $timeframes): array
+{
+    $levels = dn_clean_levels($rows);
+    $byTimeframe = [];
+    foreach ($levels as $position => $level) {
+        $byTimeframe[$level['timeframe']][] = $position;
+    }
+
+    $clusters = [];
+    foreach ($byTimeframe as $timeframe => $positions) {
+        $timeframe = (string)$timeframe;
+        foreach (['confluence', 'agreement'] as $type) {
+            $tolerance = dn_tolerance($timeframes, $timeframe, $type);
+            $parent = array_combine($positions, $positions);
+            $find = static function (int $x) use (&$parent): int {
+                while ($parent[$x] !== $x) {
+                    $parent[$x] = $parent[$parent[$x]];
+                    $x = $parent[$x];
+                }
+                return $x;
+            };
+            $linked = [];
+            $count = count($positions);
+            for ($i = 0; $i < $count; $i++) {
+                for ($j = $i + 1; $j < $count; $j++) {
+                    $a = $levels[$positions[$i]];
+                    $b = $levels[$positions[$j]];
+                    $qualifies = $type === 'confluence' ? $a['kind'] === 'F5' && $b['kind'] === 'F5' : $a['group'] !== $b['group'];
+                    $near = abs($a['price'] - $b['price']) <= $tolerance + 1e-9 * max(1.0, abs($a['price']), abs($b['price']));
+                    if (!$qualifies || !$near) {
+                        continue;
+                    }
+                    $parent[$find($positions[$i])] = $find($positions[$j]);
+                    $linked[$positions[$i]] = true;
+                    $linked[$positions[$j]] = true;
+                }
+            }
+            $groups = [];
+            foreach ($positions as $position) {
+                if (isset($linked[$position])) {
+                    $groups[$find($position)][] = $levels[$position];
+                }
+            }
+            foreach ($groups as $members) {
+                usort($members, static fn(array $x, array $y): int => [$x['price'], $x['index']] <=> [$y['price'], $y['index']]);
+                $prices = array_column($members, 'price');
+                $clusters[] = [
+                    'type' => $type,
+                    'timeframe' => $timeframe,
+                    'low' => min($prices),
+                    'high' => max($prices),
+                    'tolerance' => $tolerance,
+                    'revisited' => in_array('revisited', array_column($members, 'status'), true),
+                    'members' => array_map(static fn(array $m): array => ['index' => $m['index'], 'kind' => $m['kind'], 'status' => $m['status'], 'price' => $m['price']], $members),
+                ];
+            }
+        }
+    }
+
+    usort($clusters, static fn(array $x, array $y): int => [$y['high'], $y['low']] <=> [$x['high'], $x['low']]
+        ?: strcmp($x['type'], $y['type'])
+        ?: strcmp($x['timeframe'], $y['timeframe'])
+        ?: $x['members'][0]['index'] <=> $y['members'][0]['index']);
+    return ['levels' => $levels, 'clusters' => $clusters];
+}
+
+/**
+ * Úrovně jednoho swingu z dřívější verze (A → B, C). Slouží jen k převodu
+ * uložených swingů na levely, aby se po aktualizaci nic neztratilo.
+ */
+function dn_legacy_swing_levels(array $swing): array
 {
     $a = nullable_float($swing['price_a'] ?? null);
     $b = nullable_float($swing['price_b'] ?? null);
     $c = nullable_float($swing['price_c'] ?? null);
-    $label = trim((string)($swing['label'] ?? '')) ?: 'S' . ($index + 1);
     if ($a === null || $b === null || $a === $b) {
         return [];
     }
     $range = $b - $a;
     $levels = [];
-    foreach (DN_RETRACEMENTS as $kind => $ratio) {
-        $levels[] = ['swing' => $label, 'swing_index' => $index, 'kind' => $kind, 'group' => 'retracement', 'price' => round($b - $ratio * $range, 6)];
+    foreach (['F3' => 0.382, 'F5' => 0.618] as $kind => $ratio) {
+        $levels[] = ['kind' => $kind, 'price' => round($b - $ratio * $range, 6)];
     }
     if ($c !== null) {
-        foreach (DN_EXPANSIONS as $kind => $ratio) {
-            $levels[] = ['swing' => $label, 'swing_index' => $index, 'kind' => $kind, 'group' => 'expansion', 'price' => round($c + $ratio * $range, 6)];
+        foreach (['COP' => 0.618, 'OP' => 1.0, 'XOP' => 1.618] as $kind => $ratio) {
+            $levels[] = ['kind' => $kind, 'price' => round($c + $ratio * $range, 6)];
         }
     }
     return $levels;
 }
 
-function dn_auto_tolerance(array $swings): float
+function migrate_dn_swings(PDO $pdo): void
 {
-    $prices = [];
+    $exists = $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'plan_dn_swings'")->fetchColumn();
+    if ($exists === false) {
+        return;
+    }
+    $insert = $pdo->prepare('INSERT INTO plan_dn_levels (plan_id, sort_order, timeframe, kind, status, price, note) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $order = [];
+    $swings = $pdo->query('SELECT s.* FROM plan_dn_swings s JOIN plans p ON p.id = s.plan_id ORDER BY s.plan_id, s.sort_order, s.id')->fetchAll(PDO::FETCH_ASSOC);
     foreach ($swings as $swing) {
-        foreach (['price_a', 'price_b'] as $key) {
-            $price = nullable_float($swing[$key] ?? null);
-            if ($price !== null) {
-                $prices[] = abs($price);
-            }
+        $planId = (int)$swing['plan_id'];
+        $label = trim((string)($swing['label'] ?? ''));
+        $note = trim(($label !== '' ? $label . ' · ' : '') . 'swing ' . $swing['price_a'] . ' → ' . $swing['price_b']);
+        foreach (dn_legacy_swing_levels($swing) as $level) {
+            $insert->execute([$planId, $order[$planId] = ($order[$planId] ?? -1) + 1, '', $level['kind'], 'naked', $level['price'], mb_substr($note, 0, 300, 'UTF-8')]);
         }
     }
-    if ($prices === []) {
-        return 0.0;
-    }
-    sort($prices);
-    return round($prices[intdiv(count($prices) - 1, 2)] * 0.0005, 6);
-}
-
-/**
- * Úrovně všech swingů a místa, kde se kryjí: confluence (dva retracementy
- * z různých swingů) a agreement (retracement s cílem expanze).
- */
-function dn_analysis(array $swings, ?float $tolerance): array
-{
-    $levels = [];
-    foreach (array_values($swings) as $index => $swing) {
-        array_push($levels, ...dn_swing_levels($swing, $index));
-    }
-    $auto = dn_auto_tolerance($swings);
-    $tol = $tolerance !== null && $tolerance > 0 ? $tolerance : $auto;
-    usort($levels, static fn(array $x, array $y): int => $x['price'] <=> $y['price']);
-
-    $clusters = [];
-    $group = [];
-    foreach ($levels as $level) {
-        if ($group !== [] && $level['price'] - $group[count($group) - 1]['price'] > $tol) {
-            $clusters[] = $group;
-            $group = [];
-        }
-        $group[] = $level;
-    }
-    if ($group !== []) {
-        $clusters[] = $group;
-    }
-
-    $zones = [];
-    foreach ($clusters as $members) {
-        $swingsIn = array_unique(array_column($members, 'swing_index'));
-        if (count($members) < 2 || count($swingsIn) < 2) {
-            continue;
-        }
-        $retracementSwings = array_unique(array_column(array_filter($members, static fn(array $m): bool => $m['group'] === 'retracement'), 'swing_index'));
-        $expansions = array_filter($members, static fn(array $m): bool => $m['group'] === 'expansion');
-        $types = [];
-        if (count($retracementSwings) >= 2) {
-            $types[] = 'confluence';
-        }
-        if ($retracementSwings !== [] && $expansions !== []) {
-            $mixed = false;
-            foreach ($expansions as $expansion) {
-                foreach ($retracementSwings as $swingIndex) {
-                    if ($swingIndex !== $expansion['swing_index']) {
-                        $mixed = true;
-                    }
-                }
-            }
-            if ($mixed) {
-                $types[] = 'agreement';
-            }
-        }
-        if ($types === []) {
-            continue;
-        }
-        $prices = array_column($members, 'price');
-        $zones[] = [
-            'types' => $types,
-            'low' => min($prices),
-            'high' => max($prices),
-            'members' => array_map(static fn(array $m): string => $m['swing'] . ' ' . $m['kind'], $members),
-        ];
-    }
-    return ['levels' => $levels, 'clusters' => $zones, 'tolerance' => $tol, 'auto_tolerance' => $auto];
 }
 
 function save_plan_extras(PDO $pdo, int $planId, array $data, string $storedCustom): void
 {
-    $pdo->prepare('DELETE FROM plan_dn_swings WHERE plan_id = ?')->execute([$planId]);
-    $statement = $pdo->prepare('INSERT INTO plan_dn_swings (plan_id, sort_order, label, price_a, price_b, price_c, note) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    foreach (array_slice(array_values((array)($data['dn_swings'] ?? [])), 0, DN_MAX_SWINGS) as $index => $swing) {
-        if (!is_array($swing) || !row_has_content($swing, ['label', 'price_a', 'price_b', 'price_c', 'note'])) {
-            continue;
+    // Starší otevřená stránka levely neposílá; bez klíče se uložené levely nemažou.
+    if (array_key_exists('dn_levels', $data)) {
+        $pdo->prepare('DELETE FROM plan_dn_levels WHERE plan_id = ?')->execute([$planId]);
+        $statement = $pdo->prepare('INSERT INTO plan_dn_levels (plan_id, sort_order, timeframe, kind, status, price, note) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $order = 0;
+        foreach (array_slice(array_values((array)$data['dn_levels']), 0, DN_MAX_LEVELS) as $level) {
+            if (!is_array($level)) {
+                continue;
+            }
+            $kind = strtoupper(trim((string)($level['kind'] ?? '')));
+            $price = nullable_float($level['price'] ?? null);
+            $note = mb_substr(trim((string)($level['note'] ?? '')), 0, 300, 'UTF-8');
+            if (!isset(DN_LEVEL_KINDS[$kind]) || ($price === null && $note === '')) {
+                continue;
+            }
+            $statement->execute([
+                $planId, $order++, mb_substr(trim((string)($level['timeframe'] ?? '')), 0, 12, 'UTF-8'), $kind,
+                ($level['status'] ?? '') === 'revisited' ? 'revisited' : 'naked', $price, $note,
+            ]);
         }
-        $statement->execute([
-            $planId, $index, mb_substr(trim((string)($swing['label'] ?? '')), 0, 40, 'UTF-8'),
-            nullable_float($swing['price_a'] ?? null), nullable_float($swing['price_b'] ?? null), nullable_float($swing['price_c'] ?? null),
-            mb_substr(trim((string)($swing['note'] ?? '')), 0, 300, 'UTF-8'),
-        ]);
     }
     $patterns = array_values(array_intersect(DN_PATTERNS, array_map('trim', explode(',', (string)($data['dn_patterns'] ?? '')))));
     $side = static fn(mixed $value): string => in_array($value, ['above', 'below'], true) ? $value : '';
-    $pdo->prepare('UPDATE plans SET dn_dma_3x3 = ?, dn_dma_7x5 = ?, dn_dma_25x5 = ?, dn_thrust = ?, dn_patterns = ?, dn_notes = ?, dn_tolerance = ?, custom = ? WHERE id = ?')->execute([
+    $pdo->prepare('UPDATE plans SET dn_dma_3x3 = ?, dn_dma_7x5 = ?, dn_dma_25x5 = ?, dn_thrust = ?, dn_patterns = ?, dn_notes = ?, custom = ? WHERE id = ?')->execute([
         $side($data['dn_dma_3x3'] ?? ''), $side($data['dn_dma_7x5'] ?? ''), $side($data['dn_dma_25x5'] ?? ''),
         in_array($data['dn_thrust'] ?? '', ['up', 'down'], true) ? $data['dn_thrust'] : '',
         implode(', ', $patterns), mb_substr((string)($data['dn_notes'] ?? ''), 0, 4000, 'UTF-8'),
-        (($tolerance = nullable_float($data['dn_tolerance'] ?? null)) !== null && $tolerance > 0) ? $tolerance : null,
         merge_custom_values('plan', $data['custom'] ?? [], $storedCustom), $planId,
     ]);
 }
 
 function plan_extras(array $plan): array
 {
-    $swings = fetch_all('SELECT label, price_a, price_b, price_c, note FROM plan_dn_swings WHERE plan_id = ? ORDER BY sort_order, id', [(int)$plan['id']]);
-    $analysis = dn_analysis($swings, nullable_float($plan['dn_tolerance'] ?? null));
+    $levels = fetch_all('SELECT timeframe, kind, status, price, note FROM plan_dn_levels WHERE plan_id = ? ORDER BY sort_order, id', [(int)$plan['id']]);
     return [
-        'dn_swings' => $swings,
-        'dinapoli' => $analysis,
+        'dn_levels' => $levels,
+        'dinapoli' => dn_analysis($levels, workspace()['dn']['timeframes']),
         'custom' => json_decode((string)($plan['custom'] ?? '{}'), true) ?: new stdClass(),
         'custom_readable' => custom_values_readable('plan', (string)($plan['custom'] ?? '{}')),
     ];

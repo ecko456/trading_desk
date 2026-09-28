@@ -634,12 +634,13 @@ def build_pdf(payload: dict, output_path: str) -> None:
             tints.append(LINE if done else VIOLET)
         story.append(simple_table(["Typ", "Cena", "Stav", "Poznámka"], rows, [usable_width * .2, usable_width * .2, usable_width * .14, usable_width * .46], styles, tints))
 
-    # DiNapoli: trend podle DMA, swingy s Fibonacci úrovněmi a místa, kde se kryjí.
+    # DiNapoli: trend podle DMA, levely a kde se kryjí (konfluence F5 + F5, shoda expanze + retracement).
     dinapoli = plan.get("dinapoli") or {}
     dn_levels = dinapoli.get("levels") or []
     dn_clusters = dinapoli.get("clusters") or []
     dma = {"above": "Nad", "below": "Pod"}
     thrust = {"up": "Nahoru", "down": "Dolů"}
+    dn_types = {"confluence": "Konfluence", "agreement": "Shoda"}
     trend_table = context_grid([
         ("3x3 DMA", label(dma, plan.get("dn_dma_3x3"))),
         ("7x5 DMA", label(dma, plan.get("dn_dma_7x5"))),
@@ -648,35 +649,47 @@ def build_pdf(payload: dict, output_path: str) -> None:
         ("Vzory", clean(plan.get("dn_patterns"), "")),
     ], styles, usable_width)
     if dn_levels or trend_table or filled(plan.get("dn_notes")):
-        swing_names = []
-        for level in dn_levels:
-            if level.get("swing") not in swing_names:
-                swing_names.append(level.get("swing"))
-        story.extend(section_title("DiNapoli", f"{len(swing_names)} swingů · {len(dn_clusters)} shod", styles))
+        confluences = sum(1 for cluster in dn_clusters if cluster.get("type") == "confluence")
+        agreements = len(dn_clusters) - confluences
+        def plural(count, one, few, many):
+            return f"{count} {one if count == 1 else few if 2 <= count <= 4 else many}"
+        story.extend(section_title("DiNapoli", " · ".join([plural(len(dn_levels), "level", "levely", "levelů"), plural(confluences, "konfluence", "konfluence", "konfluencí"), plural(agreements, "shoda", "shody", "shod")]), styles))
         if trend_table:
             story.extend([trend_table, Spacer(1, 2.5 * mm)])
         if dn_levels:
-            swings = plan.get("dn_swings") or []
-            rows = []
-            for index, name in enumerate(swing_names):
-                own = {level.get("kind"): level.get("price") for level in dn_levels if level.get("swing") == name}
-                source = next((swing for position, swing in enumerate(swings) if (clean(swing.get("label"), "") or f"S{position + 1}") == name), {})
-                rows.append([Paragraph(f"<b>{escape(str(name))}</b>", styles["body_small"]),
-                             Paragraph(escape(f"{fmt_number(source.get('price_a'))} → {fmt_number(source.get('price_b'))}"), styles["body_small"]),
-                             Paragraph(escape(fmt_number(source.get("price_c")) if source.get("price_c") is not None else "-"), styles["body_small"])]
-                            + [Paragraph(escape(fmt_number(own[kind]) if kind in own else "-"), styles["body_small"]) for kind in ("F3", "F5", "COP", "OP", "XOP")])
-            width = usable_width / 8
-            story.append(simple_table(["Swing", "A → B", "C", "F3 .382", "F5 .618", "COP", "OP", "XOP"], rows, [width] * 8, styles))
+            matched = {}
+            for cluster in dn_clusters:
+                for member in cluster.get("members") or []:
+                    matched.setdefault(member.get("index"), set()).add(dn_types.get(cluster.get("type"), ""))
+            rows, tints = [], []
+            for level in sorted(dn_levels, key=lambda item: -float(item.get("price") or 0)):
+                revisited = level.get("status") == "revisited"
+                rows.append([
+                    Paragraph(escape(clean(level.get("timeframe"), "-")), styles["body_small"]),
+                    Paragraph(f"<b>{escape(clean(level.get('kind')))}</b>", styles["body_small"]),
+                    Paragraph("Revisited" if revisited else "Naked", styles["body_small"]),
+                    Paragraph(escape(fmt_number(level.get("price"))), styles["body_small"]),
+                    Paragraph(escape(" + ".join(sorted(matched.get(level.get("index"), set())))), styles["body_small"]),
+                    Paragraph(ptext(level.get("note"), ""), styles["body_small"]),
+                ])
+                tints.append(GREEN if level.get("group") == "retracement" else AMBER)
+            story.append(simple_table(["TF", "Level", "Stav", "Cena", "Kryje se", "Poznámka"], rows,
+                                      [usable_width * .1, usable_width * .1, usable_width * .13, usable_width * .15, usable_width * .17, usable_width * .35], styles, tints))
         if dn_clusters:
             rows, tints = [], []
             for cluster in dn_clusters:
-                types = cluster.get("types") or []
                 low, high = cluster.get("low"), cluster.get("high")
-                rows.append([Paragraph(escape(" + ".join("Agreement" if kind == "agreement" else "Confluence" for kind in types)), styles["body_small"]),
+                members = " · ".join(
+                    f"{member.get('kind')} {fmt_number(member.get('price'))}" + (" (revisited)" if member.get("status") == "revisited" else "")
+                    for member in cluster.get("members") or [])
+                rows.append([Paragraph(escape(dn_types.get(cluster.get("type"), "")), styles["body_small"]),
+                             Paragraph(escape(clean(cluster.get("timeframe"), "-")), styles["body_small"]),
                              Paragraph(escape(fmt_number(low) if low == high else f"{fmt_number(low)} – {fmt_number(high)}"), styles["body_small"]),
-                             Paragraph(escape(" · ".join(cluster.get("members") or [])), styles["body_small"])])
-                tints.append(AMBER if "agreement" in types else GREEN)
-            story.extend([Spacer(1, 2.5 * mm), simple_table(["Shoda", "Pásmo", "Složení"], rows, [usable_width * .22, usable_width * .22, usable_width * .56], styles, tints)])
+                             Paragraph(escape(members), styles["body_small"]),
+                             Paragraph(escape(f"{fmt_number(cluster.get('tolerance'))} b"), styles["body_small"])])
+                tints.append(AMBER if cluster.get("type") == "agreement" else GREEN)
+            story.extend([Spacer(1, 2.5 * mm), simple_table(["Druh", "TF", "Pásmo", "Složení", "Tolerance"], rows,
+                                                            [usable_width * .16, usable_width * .1, usable_width * .2, usable_width * .4, usable_width * .14], styles, tints)])
         if filled(plan.get("dn_notes")):
             story.extend([Spacer(1, 2 * mm), Paragraph(ptext(plan.get("dn_notes")), styles["body_small"])])
 

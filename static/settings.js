@@ -45,6 +45,7 @@ function toggleRow(group, item, checked, extra = '') {
 /* ---------------------------------------------------------------- vykreslení */
 
 function renderSettings() {
+  if (settingsState.tab === 'dinapoli' && prefs().method === 'mp') settingsState.tab = 'method';
   $$('#settingsTabs [data-settings-tab]').forEach(button => button.classList.toggle('is-active', button.dataset.settingsTab === settingsState.tab));
   $$('[data-settings-panel]').forEach(panel => panel.classList.toggle('is-active', panel.dataset.settingsPanel === settingsState.tab));
   const current = prefs();
@@ -79,6 +80,7 @@ function renderSettings() {
 
   renderFieldLists();
   renderMarketRows(marketList());
+  renderDnTimeframeRows(dnTimeframes());
   $('#moduleToggles').innerHTML = `<section class="toggle-group">${registry().modules.map(item => toggleRow('modules', item, !current.hidden.modules.includes(item.key))).join('')}</section>`;
 }
 
@@ -118,6 +120,19 @@ function renderMarketRows(markets) {
     <input name="rth" type="time" value="${escapeHtml(market.rth || '09:30')}" aria-label="RTH open">
     <button class="remove-row" type="button" data-remove-market>Odebrat</button>
   </div>`).join('')}`;
+}
+
+function renderDnTimeframeRows(rows) {
+  $('#dnTimeframeRows').innerHTML = `<div class="market-row market-head"><span>Timeframe</span><span>Konfluence · F5 + F5 (body)</span><span>Shoda · expanze + retracement (body)</span><span></span></div>${rows.map(row => `<div class="market-row">
+    <input name="tf" maxlength="12" value="${escapeHtml(row.tf)}" aria-label="Timeframe" placeholder="H4">
+    <input name="confluence" type="number" min="0" step="any" value="${escapeHtml(row.confluence ?? '')}" aria-label="Tolerance konfluence v bodech">
+    <input name="agreement" type="number" min="0" step="any" value="${escapeHtml(row.agreement ?? '')}" aria-label="Tolerance shody v bodech">
+    <button class="remove-row" type="button" data-remove-tf>Odebrat</button>
+  </div>`).join('')}`;
+}
+
+function dnTimeframeFormRows() {
+  return $$('#dnTimeframeRows .market-row:not(.market-head)').map(row => ({ tf: $('[name="tf"]', row).value.trim(), confluence: $('[name="confluence"]', row).value, agreement: $('[name="agreement"]', row).value }));
 }
 
 function resetFieldForm() {
@@ -376,6 +391,24 @@ function bindSettingsEvents() {
     try {
       const saved = await saveWorkspace({ markets }, 'Trhy jsou uložené.');
       renderMarketRows(saved.markets);
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  $('#addDnTimeframe').addEventListener('click', () => {
+    renderDnTimeframeRows([...dnTimeframeFormRows(), { tf: '', confluence: 5, agreement: 5 }]);
+    $$('#dnTimeframeRows [name="tf"]').pop().focus();
+  });
+  $('#dnTimeframeRows').addEventListener('click', event => {
+    if (event.target.closest('[data-remove-tf]')) event.target.closest('.market-row').remove();
+  });
+  $('#resetDnTimeframes').addEventListener('click', () => renderDnTimeframeRows(registry().dn_default_timeframes || []));
+  $('#dnTimeframesForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const timeframes = dnTimeframeFormRows().filter(row => row.tf);
+    if (!timeframes.length) { toast('Nech v seznamu aspoň jeden timeframe.', 'error'); return; }
+    try {
+      const saved = await saveWorkspace({ dn: { ...prefs().dn, timeframes } }, 'Tolerance jsou uložené. Konfluence a shoda se přepočítaly.');
+      renderDnTimeframeRows(saved.dn.timeframes);
     } catch (error) { toast(error.message, 'error'); }
   });
 

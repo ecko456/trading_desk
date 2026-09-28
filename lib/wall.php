@@ -74,7 +74,7 @@ function build_share_snapshot(string $kind, int $sourceId, array $options): arra
         $snapshot['refs'] = array_map(static fn(array $row): array => pick_fields($row, REF_SHARE_FIELDS), $plan['refs'] ?? []);
         $snapshot['ideas'] = array_map(static fn(array $row): array => pick_fields($row, IDEA_SHARE_FIELDS), $plan['ideas'] ?? []);
         if (($plan['dinapoli']['levels'] ?? []) !== []) {
-            $snapshot['dn_swings'] = array_map(static fn(array $row): array => pick_fields($row, ['label', 'price_a', 'price_b', 'price_c']), $plan['dn_swings'] ?? []);
+            $snapshot['dn_levels'] = array_map(static fn(array $row): array => pick_fields($row, ['timeframe', 'kind', 'status', 'price', 'note']), $plan['dn_levels'] ?? []);
             $snapshot['dinapoli'] = $plan['dinapoli'];
         }
         if ((bool)($options['custom'] ?? false) && ($plan['custom_readable'] ?? []) !== []) {

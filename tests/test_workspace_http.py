@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+import sqlite3
 import subprocess
 import unittest
 import uuid
@@ -91,43 +92,75 @@ class WorkspaceHttpTests(unittest.TestCase):
     def test_plan_dinapoli_and_custom(self):
         status, result = self.client.api("POST", "custom_field", {"scope": "plan", "label": "COT report", "kind": "text"})
         field = result["field"]["id"]
+        levels = [
+            {"timeframe": "H4", "kind": "F5", "status": "naked", "price": 6038, "note": "Swing z pondělí"},
+            {"timeframe": "H4", "kind": "F5", "status": "revisited", "price": 6034},      # konfluence s prvním (4 b)
+            {"timeframe": "H4", "kind": "F3", "status": "naked", "price": 6036},           # F3 konfluenci nedělá
+            {"timeframe": "H1", "kind": "F5", "status": "naked", "price": 6037},           # jiný timeframe se neporovnává
+            {"timeframe": "H4", "kind": "COP", "status": "naked", "price": 6120},
+            {"timeframe": "H4", "kind": "F3", "status": "naked", "price": 6126},           # shoda s COP (6 b > 5), jen s větší tolerancí
+            {"timeframe": "H4", "kind": "F7", "status": "naked", "price": ""},             # bez ceny se nepočítá
+            {"timeframe": "H4", "kind": "XX", "status": "naked", "price": 6000},           # neznámý typ se neuloží
+        ]
         status, plan = self.client.api("POST", "plan", {
             "plan_type": "daily", "plan_date": "2026-09-29", "market": "ES", "session": "Intraday", "status": "draft",
             "dn_dma_3x3": "above", "dn_dma_25x5": "below", "dn_thrust": "up", "dn_patterns": "Double Repo, Neexistuje, Railroad Tracks",
-            "dn_swings": [
-                {"label": "Hlavní", "price_a": 6000, "price_b": 6100, "price_c": 6050},
-                {"label": "", "price_a": 6020, "price_b": 6090},
-            ],
+            "dn_levels": levels,
             "custom": {str(field): "Commercials net long"},
         })
         self.assertEqual(status, 200, plan)
         self.assertEqual(plan["dn_patterns"], "Double Repo, Railroad Tracks")
         self.assertEqual(plan["dn_thrust"], "up")
+        self.assertEqual([level["kind"] for level in plan["dn_levels"]], ["F5", "F5", "F3", "F5", "COP", "F3"], "prázdný F7 a neznámý typ se neuloží")
+        self.assertEqual(plan["dn_levels"][1]["status"], "revisited")
         analysis = plan["dinapoli"]
-        kinds = {(level["swing"], level["kind"]): level["price"] for level in analysis["levels"]}
-        self.assertAlmostEqual(kinds[("Hlavní", "F3")], 6061.8)
-        self.assertAlmostEqual(kinds[("Hlavní", "F5")], 6038.2)
-        self.assertAlmostEqual(kinds[("Hlavní", "COP")], 6111.8)
-        self.assertAlmostEqual(kinds[("Hlavní", "OP")], 6150)
-        self.assertAlmostEqual(kinds[("S2", "F3")], 6063.26)
-        self.assertEqual(len(analysis["clusters"]), 1)
-        self.assertEqual(analysis["clusters"][0]["types"], ["confluence"])
+        self.assertEqual(len(analysis["levels"]), 6)
+        self.assertEqual([(c["type"], c["timeframe"], c["low"], c["high"]) for c in analysis["clusters"]], [("confluence", "H4", 6034, 6038)])
+        cluster = analysis["clusters"][0]
+        self.assertTrue(cluster["revisited"])
+        self.assertEqual(cluster["tolerance"], 5)
+        self.assertEqual([m["status"] for m in cluster["members"]], ["revisited", "naked"])
         self.assertEqual(plan["custom_readable"], [{"label": "COT report", "value": "Commercials net long", "kind": "text"}])
 
-        # Stejný výpočet v prohlížeči (static/dinapoli.js) jako na serveru.
-        script = "const d=require('./static/dinapoli.js');process.stdout.write(JSON.stringify(d.analyze(JSON.parse(process.argv[1]),null)))"
-        swings = [{"label": s["label"], "price_a": s["price_a"], "price_b": s["price_b"], "price_c": s["price_c"]} for s in plan["dn_swings"]]
-        js = json.loads(subprocess.run(["node", "-e", script, json.dumps(swings)], cwd=ROOT, capture_output=True, text=True, check=True).stdout)
-        self.assertEqual([(l["kind"], l["price"]) for l in js["levels"]], [(l["kind"], l["price"]) for l in analysis["levels"]])
-        self.assertEqual(js["clusters"], analysis["clusters"])
-        self.assertAlmostEqual(js["tolerance"], analysis["tolerance"])
+        # Tolerance shody pro H4 zvýšená na 6 bodů: COP 6120 a F3 6126 se kryjí.
+        prefs = self.client.api("GET", "workspace")[1]["prefs"]
+        timeframes = [dict(row, agreement=6) if row["tf"] == "H4" else row for row in prefs["dn"]["timeframes"]]
+        status, saved = self.client.api("POST", "workspace", {**prefs, "dn": {"timeframes": timeframes}})
+        self.assertEqual(status, 200, saved)
+        status, plan = self.client.api("GET", "plan", id=plan["id"])
+        kinds = {(c["type"], c["low"], c["high"]) for c in plan["dinapoli"]["clusters"]}
+        self.assertIn(("agreement", 6120, 6126), kinds)
+        # F5 6034 a F3 6036 nejsou expanze, takže shodu netvoří ani s větší tolerancí.
+        self.assertNotIn("agreement", {c["type"] for c in plan["dinapoli"]["clusters"] if c["low"] < 6100})
 
-        # Agreement: retracement jednoho swingu na cíli expanze druhého.
-        status, plan = self.client.api("POST", "plan", {"id": plan["id"], "plan_type": "daily", "plan_date": "2026-09-29", "market": "ES", "session": "Intraday",
-                                                        "dn_swings": [{"price_a": 6000, "price_b": 6100, "price_c": 6050}, {"price_a": 6231, "price_b": 6100}], "dn_tolerance": 3})
+        # Stejný výpočet v prohlížeči (static/dinapoli.js) jako na serveru.
+        script = "const d=require('./static/dinapoli.js');const a=JSON.parse(process.argv[1]);process.stdout.write(JSON.stringify(d.analyze(a.levels,a.timeframes)))"
+        payload = json.dumps({"levels": plan["dn_levels"], "timeframes": timeframes})
+        js = json.loads(subprocess.run(["node", "-e", script, payload], cwd=ROOT, capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(js["levels"], plan["dinapoli"]["levels"])
+        self.assertEqual(js["clusters"], plan["dinapoli"]["clusters"])
+
+        # Starší stránka bez dn_levels uložené levely nesmaže.
+        status, again = self.client.api("POST", "plan", {"id": plan["id"], "plan_type": "daily", "plan_date": "2026-09-29", "market": "ES", "session": "Intraday"})
+        self.assertEqual(len(again["dn_levels"]), 6)
+
+    def test_confluence_chains_and_timeframe_settings(self):
+        levels = [{"timeframe": "M15", "kind": "F5", "price": price} for price in (100, 104, 108, 120)]
+        levels.append({"timeframe": "M15", "kind": "OP", "price": 110})
+        status, plan = self.client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-10-01", "market": "NQ", "session": "Intraday", "dn_levels": levels})
+        self.assertEqual(status, 200, plan)
         clusters = plan["dinapoli"]["clusters"]
-        self.assertTrue(any("agreement" in c["types"] for c in clusters), clusters)
-        self.assertEqual(plan["dinapoli"]["tolerance"], 3)
+        # 100, 104 a 108 se řetězí přes sousedy do jednoho pásma; 120 je daleko.
+        self.assertEqual([(c["type"], c["low"], c["high"], len(c["members"])) for c in clusters],
+                         [("agreement", 108, 110, 2), ("confluence", 100, 108, 3)])
+        # Neplatné hodnoty v nastavení dostanou výchozích 5 bodů, duplicitní timeframe se zahodí.
+        prefs = self.client.api("GET", "workspace")[1]["prefs"]
+        status, saved = self.client.api("POST", "workspace", {**prefs, "dn": {"timeframes": [
+            {"tf": "M15", "confluence": -3, "agreement": "abc"}, {"tf": "m15", "confluence": 1, "agreement": 1}, {"tf": "<b>", "confluence": 1, "agreement": 1}, {"tf": "", "confluence": 1}]}})
+        self.assertEqual(saved["prefs"]["dn"]["timeframes"], [{"tf": "M15", "confluence": 5.0, "agreement": 5.0}, {"tf": "b", "confluence": 1.0, "agreement": 1.0}])
+        status, saved = self.client.api("POST", "workspace", {**prefs, "dn": {"timeframes": []}})
+        self.assertEqual([row["tf"] for row in saved["prefs"]["dn"]["timeframes"]], ["M5", "M15", "M30", "H1", "H4", "D1", "W1"])
+        self.client.api("POST", "workspace", prefs)
 
     def test_pdf_with_dinapoli_and_custom_fields(self):
         probe = subprocess.run(["python3", "-c", "import reportlab, PIL"], capture_output=True)
@@ -135,8 +168,9 @@ class WorkspaceHttpTests(unittest.TestCase):
             self.skipTest("chybí reportlab nebo pillow")
         field = self.client.api("POST", "custom_field", {"scope": "plan", "label": "Téma dne " + uuid.uuid4().hex[:4], "kind": "bool"})[1]["field"]["id"]
         status, plan = self.client.api("POST", "plan", {"plan_type": "weekly", "plan_date": "2026-10-05", "market": "ES", "session": "Intraday",
-                                                        "dn_dma_3x3": "above", "dn_patterns": "Double Repo", "dn_notes": "Fib node na 6038",
-                                                        "dn_swings": [{"label": "W1", "price_a": 6000, "price_b": 6100, "price_c": 6050}, {"price_a": 6020, "price_b": 6090}],
+                                                        "dn_dma_3x3": "above", "dn_patterns": "Double Repo", "dn_notes": "Fib node na 6038 <b>&",
+                                                        "dn_levels": [{"timeframe": "D1", "kind": "F5", "price": 6038, "note": "Týdenní <swing>"}, {"timeframe": "D1", "kind": "F5", "status": "revisited", "price": 6040},
+                                                                      {"timeframe": "D1", "kind": "XOP", "price": 6041}],
                                                         "custom": {str(field): True}})
         self.assertEqual(status, 200, plan)
         status, pdf, content_type = self.client.request("GET", f"/pdf.php?id={plan['id']}", raw=True)
@@ -149,11 +183,51 @@ class WorkspaceHttpTests(unittest.TestCase):
 
     def test_share_includes_dinapoli_only_as_snapshot(self):
         status, plan = self.client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-09-30", "market": "NQ", "session": "Intraday",
-                                                        "dn_swings": [{"price_a": 100, "price_b": 200, "price_c": 150}]})
+                                                        "dn_levels": [{"timeframe": "H1", "kind": "F5", "price": 100}, {"timeframe": "H1", "kind": "COP", "price": 103}]})
         status, post = self.client.api("POST", "share", {"kind": "plan", "id": plan["id"], "options": {}})
         self.assertEqual(status, 201, post)
-        self.assertEqual(len(post["snapshot"]["dinapoli"]["levels"]), 5)
+        self.assertEqual(len(post["snapshot"]["dinapoli"]["levels"]), 2)
+        self.assertEqual(post["snapshot"]["dinapoli"]["clusters"][0]["type"], "agreement")
+        self.assertEqual(post["snapshot"]["dn_levels"][1]["kind"], "COP")
         self.assertNotIn("custom_readable", post["snapshot"])
+
+
+
+@unittest.skipIf(PHP is None, "PHP není nainstalované")
+class DinapoliMigrationTests(unittest.TestCase):
+    """Swingy z předchozí verze se po aktualizaci převedou na levely."""
+
+    def setUp(self):
+        self.server = Server()
+        self.client = Client(self.server)
+        self.client.api("GET", "auth_state")
+        token = (self.server.data / "setup-token.txt").read_text().strip()
+        self.client.api("POST", "setup", {"token": token, "login": "starsi", "display_name": "Starší", "password": "starsi-heslo-1"})
+
+    def tearDown(self):
+        self.server.stop()
+
+    def test_old_swings_become_levels(self):
+        status, plan = self.client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-09-28", "market": "ES", "session": "Intraday"})
+        self.assertEqual(status, 200, plan)
+        journal = next((self.server.data / "users").glob("*/trading.sqlite3"))
+        with sqlite3.connect(journal) as db:
+            db.executescript("""
+                DROP TABLE plan_dn_levels;
+                CREATE TABLE plan_dn_swings (id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
+                    label TEXT, price_a REAL, price_b REAL, price_c REAL, note TEXT);
+            """)
+            db.execute("INSERT INTO plan_dn_swings (plan_id, sort_order, label, price_a, price_b, price_c) VALUES (?, 0, 'Hlavní', 6000, 6100, 6050)", (plan["id"],))
+            db.execute("INSERT INTO plan_dn_swings (plan_id, sort_order, label, price_a, price_b) VALUES (?, 1, '', 6231, 6100)", (plan["id"],))
+        status, plan = self.client.api("GET", "plan", id=plan["id"])
+        self.assertEqual(status, 200, plan)
+        migrated = [(level["kind"], round(level["price"], 2)) for level in plan["dn_levels"]]
+        self.assertEqual(migrated, [("F3", 6061.8), ("F5", 6038.2), ("COP", 6111.8), ("OP", 6150.0), ("XOP", 6211.8), ("F3", 6150.04), ("F5", 6180.96)])
+        self.assertIn("Hlavní", plan["dn_levels"][0]["note"])
+        self.assertEqual({level["timeframe"] for level in plan["dn_levels"]}, {""})
+        # Druhé otevření už nic nezdvojí.
+        status, again = self.client.api("GET", "plan", id=plan["id"])
+        self.assertEqual(len(again["dn_levels"]), 7)
 
 
 if __name__ == "__main__":

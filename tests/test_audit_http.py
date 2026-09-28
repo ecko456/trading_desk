@@ -87,11 +87,11 @@ class AuditHttpTests(unittest.TestCase):
         with opener.open(urllib.request.Request(self.server.base + "/api.php?action=health", headers={"X-Forwarded-Proto": "https"})) as response:
             self.assertIn("max-age=", response.headers.get("Strict-Transport-Security", ""))
 
-    def test_dinapoli_swings_are_capped(self):
-        swings = [{"price_a": 100 + i, "price_b": 200 + i} for i in range(60)]
-        status, plan = self.client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-09-04", "market": "ES", "session": "Intraday", "dn_swings": swings})
+    def test_dinapoli_levels_are_capped(self):
+        levels = [{"timeframe": "H1", "kind": "F5", "price": 100 + i * 10} for i in range(120)]
+        status, plan = self.client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-09-04", "market": "ES", "session": "Intraday", "dn_levels": levels})
         self.assertEqual(status, 200, plan)
-        self.assertEqual(len(plan["dn_swings"]), 40)
+        self.assertEqual(len(plan["dn_levels"]), 80)
 
 
 @unittest.skipIf(PHP is None, "PHP není nainstalované")

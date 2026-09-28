@@ -377,6 +377,11 @@ class StaticAppTests(unittest.TestCase):
             self.assertLess(html.index(script), html.index("static/app.js"))
         for name in ("bindDnEvents()", "bindSettingsEvents()", "await loadWorkspace()", "openOnboarding()"):
             self.assertIn(name, javascript)
+        # DiNapoli levely se zadávají ručně a tolerance mají v nastavení vlastní záložku.
+        for marker in ('id="dnLevelList"', 'id="addDnLevel"', 'data-settings-tab="dinapoli"', 'data-settings-panel="dinapoli"', 'id="dnTimeframesForm"'):
+            self.assertIn(marker, html)
+        self.assertIn("data.dn_levels = dnLevels()", javascript)
+        self.assertNotIn("dnSwing", javascript)
 
     def test_chart_colors_come_from_validated_tokens(self):
         javascript = (ROOT / "static" / "app.js").read_text(encoding="utf-8")

@@ -160,7 +160,7 @@ function priceLadder(snapshot) {
   });
   (snapshot.levels || []).forEach(level => push(level.price, 'level', level.name || 'Level'));
   (snapshot.refs || []).filter(ref => ref.status !== 'filled').forEach(ref => push(ref.price_low ?? ref.price_high, 'ref', ref.note || (ref.kind || 'reference').replace('_', ' ')));
-  (snapshot.dinapoli?.clusters || []).forEach(cluster => push((Number(cluster.low) + Number(cluster.high)) / 2, 'cluster', `${cluster.types.includes('agreement') ? 'Agreement' : 'Confluence'} · ${cluster.members.join(' + ')}`));
+  (snapshot.dinapoli?.clusters || []).forEach(cluster => push((Number(cluster.low) + Number(cluster.high)) / 2, 'cluster', `${dnClusterLabel(cluster)} · ${dnClusterMembers(cluster, ' + ')}`));
   if (rows.length < 2) return '';
   rows.sort((a, b) => b.price - a.price);
   return `<p class="snap-section-title">Mapa ceny</p><div class="snap-ladder">${rows.slice(0, 18).map(row => `<div class="ladder-row" data-tone="${row.tone}"><b>${snapNumber(row.price)}</b><i></i><span>${escapeHtml(row.label)}</span></div>`).join('')}</div>`;
@@ -171,6 +171,21 @@ function renderCustomReadable(rows) {
   return `<p class="snap-section-title">Vlastní pole</p><dl class="snap-facts snap-custom">${rows.map(row => `<div><dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd></div>`).join('')}</dl>`;
 }
 
+const DN_SNAPSHOT_TYPES = { confluence: 'Konfluence', agreement: 'Shoda' };
+
+/** Druh shluku; starší snímky (swingy) měly pole types, nové mají type a timeframe. */
+function dnClusterType(cluster) {
+  return cluster.type || (cluster.types?.includes('agreement') ? 'agreement' : 'confluence');
+}
+
+function dnClusterLabel(cluster) {
+  return `${DN_SNAPSHOT_TYPES[dnClusterType(cluster)]}${cluster.timeframe ? ` ${cluster.timeframe}` : ''}`;
+}
+
+function dnClusterMembers(cluster, separator) {
+  return (cluster.members || []).map(member => (typeof member === 'string' ? member : `${member.kind} ${snapNumber(member.price)}${member.status === 'revisited' ? ' (revisited)' : ''}`)).join(separator);
+}
+
 function renderDnSnapshot(snapshot) {
   const analysis = snapshot.dinapoli;
   const dma = { above: 'nad', below: 'pod' };
@@ -179,16 +194,19 @@ function renderDnSnapshot(snapshot) {
   if (snapshot.dn_thrust) trend.push(`<span class="badge badge-gold">Thrust ${snapshot.dn_thrust === 'up' ? 'nahoru' : 'dolů'}</span>`);
   const patterns = String(snapshot.dn_patterns || '').split(',').map(item => item.trim()).filter(Boolean).map(item => `<span class="badge badge-violet">${escapeHtml(item)}</span>`);
   if (!analysis?.levels?.length && !trend.length && !patterns.length) return '';
-  const swings = [];
+  // Levely podle timeframu (starší snímky podle swingu), od nejvyšší ceny.
+  const groups = [];
   (analysis?.levels || []).forEach(level => {
-    let swing = swings.find(item => item.name === level.swing);
-    if (!swing) swings.push(swing = { name: level.swing, levels: [] });
-    swing.levels.push(level);
+    const name = level.timeframe !== undefined ? (level.timeframe || 'Bez TF') : level.swing;
+    let group = groups.find(item => item.name === name);
+    if (!group) groups.push(group = { name, levels: [] });
+    group.levels.push(level);
   });
+  groups.forEach(group => group.levels.sort((a, b) => Number(b.price) - Number(a.price)));
   return `<p class="snap-section-title">DiNapoli</p>
     ${trend.length || patterns.length ? `<div class="snap-chips">${[...trend, ...patterns].join('')}</div>` : ''}
-    ${swings.map(swing => `<div class="dn-levels snap-dn"><span class="dn-direction">${escapeHtml(swing.name)}</span>${swing.levels.map(level => `<span class="dn-level is-${level.group}"><b>${escapeHtml(level.kind)}</b>${escapeHtml(snapNumber(level.price))}</span>`).join('')}</div>`).join('')}
-    ${(analysis?.clusters || []).map(cluster => `<article class="dn-cluster${cluster.types.includes('agreement') ? ' is-agreement' : ''}"><div><span class="dn-cluster-type">${cluster.types.map(type => (type === 'agreement' ? 'Agreement' : 'Confluence')).join(' + ')}</span><strong>${escapeHtml(priceRange(cluster.low, cluster.high))}</strong><small>${escapeHtml(cluster.members.join(' · '))}</small></div></article>`).join('')}
+    ${groups.map(group => `<div class="dn-levels snap-dn"><span class="dn-direction">${escapeHtml(group.name)}</span>${group.levels.map(level => `<span class="dn-level ${level.group === 'expansion' ? 'is-expansion' : 'is-retracement'}${level.status === 'revisited' ? ' is-revisited' : ''}"><b>${escapeHtml(level.kind)}</b>${escapeHtml(snapNumber(level.price))}${level.status === 'revisited' ? '<i>R</i>' : ''}</span>`).join('')}</div>`).join('')}
+    ${(analysis?.clusters || []).map(cluster => `<article class="dn-cluster${dnClusterType(cluster) === 'agreement' ? ' is-agreement' : ''}${cluster.revisited ? ' has-revisited' : ''}"><div><span class="dn-cluster-type">${escapeHtml(dnClusterLabel(cluster))}</span><strong>${escapeHtml(priceRange(cluster.low, cluster.high))}</strong><small>${escapeHtml(dnClusterMembers(cluster, ' · '))}</small></div></article>`).join('')}
     ${textBlock(snapshot.dn_notes)}`;
 }
 

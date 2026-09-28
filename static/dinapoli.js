@@ -1,8 +1,13 @@
 'use strict';
 
 /*
- * DiNapoli úrovně: retracementy F3 (.382) a F5 (.618), cíle expanze COP (.618),
- * OP (1.0) a XOP (1.618) a místa, kde se kryjí (confluence, agreement).
+ * DiNapoli levely zadané traderem a místa, kde se kryjí.
+ *
+ * Level má timeframe, typ (retracement F3, F5, F7 nebo expanze COP, OP, XOP),
+ * stav (naked / revisited) a cenu. Porovnávají se jen levely stejného timeframu:
+ *   konfluence = dva F5 levely do tolerance konfluence,
+ *   shoda      = expanze u retracementu do tolerance shody.
+ * Tolerance v bodech má každý timeframe v nastavení zvlášť pro oba druhy.
  * Stejný výpočet má server v lib/workspace.php (dn_analysis); test je porovnává.
  */
 (function attachDiNapoli(root, factory) {
@@ -10,8 +15,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.DiNapoli = api;
 })(typeof window !== 'undefined' ? window : globalThis, function createDiNapoli() {
-  const RETRACEMENTS = { F3: 0.382, F5: 0.618 };
-  const EXPANSIONS = { COP: 0.618, OP: 1.0, XOP: 1.618 };
+  const LEVEL_KINDS = { F3: 'retracement', F5: 'retracement', F7: 'retracement', COP: 'expansion', OP: 'expansion', XOP: 'expansion' };
+  const DEFAULT_TOLERANCE = 5;
+  const TYPES = ['confluence', 'agreement'];
 
   function toNumber(value) {
     if (value === null || value === undefined || String(value).trim() === '') return null;
@@ -19,64 +25,97 @@
     return Number.isFinite(number) ? number : null;
   }
 
-  const round = value => Math.round(value * 1e6) / 1e6;
+  function toleranceFor(timeframes, timeframe, type) {
+    const row = (timeframes || []).find(item => String(item?.tf ?? '') === timeframe);
+    const value = row ? toNumber(row[type]) : null;
+    return value !== null && value >= 0 ? value : DEFAULT_TOLERANCE;
+  }
 
-  function swingLevels(swing, index) {
-    const a = toNumber(swing.price_a);
-    const b = toNumber(swing.price_b);
-    const c = toNumber(swing.price_c);
-    const label = String(swing.label || '').trim() || `S${index + 1}`;
-    if (a === null || b === null || a === b) return [];
-    const range = b - a;
-    const levels = Object.entries(RETRACEMENTS).map(([kind, ratio]) => ({ swing: label, swing_index: index, kind, group: 'retracement', price: round(b - ratio * range) }));
-    if (c !== null) {
-      Object.entries(EXPANSIONS).forEach(([kind, ratio]) => levels.push({ swing: label, swing_index: index, kind, group: 'expansion', price: round(c + ratio * range) }));
-    }
+  /** Platné levely: známý typ a cena. index ukazuje na pořadí ve vstupu. */
+  function cleanLevels(rows) {
+    const levels = [];
+    (rows || []).forEach((row, index) => {
+      const kind = String(row?.kind ?? '').trim().toUpperCase();
+      const price = toNumber(row?.price);
+      if (!LEVEL_KINDS[kind] || price === null) return;
+      levels.push({
+        index,
+        timeframe: String(row.timeframe ?? '').trim(),
+        kind,
+        group: LEVEL_KINDS[kind],
+        status: row.status === 'revisited' ? 'revisited' : 'naked',
+        price,
+        note: String(row.note ?? '').trim(),
+      });
+    });
     return levels;
   }
 
-  function autoTolerance(swings) {
-    const prices = [];
-    swings.forEach(swing => ['price_a', 'price_b'].forEach(key => {
-      const price = toNumber(swing[key]);
-      if (price !== null) prices.push(Math.abs(price));
-    }));
-    if (!prices.length) return 0;
-    prices.sort((x, y) => x - y);
-    return round(prices[Math.floor((prices.length - 1) / 2)] * 0.0005);
+  function qualifies(type, a, b) {
+    return type === 'confluence' ? a.kind === 'F5' && b.kind === 'F5' : a.group !== b.group;
   }
 
-  function analyze(swings, tolerance = null) {
-    const levels = swings.flatMap((swing, index) => swingLevels(swing, index));
-    const auto = autoTolerance(swings);
-    const tol = toNumber(tolerance) !== null && toNumber(tolerance) > 0 ? toNumber(tolerance) : auto;
-    levels.sort((x, y) => x.price - y.price);
+  function near(a, b, tolerance) {
+    return Math.abs(a - b) <= tolerance + 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+  }
 
-    const groups = [];
-    let group = [];
-    levels.forEach(level => {
-      if (group.length && level.price - group[group.length - 1].price > tol) {
-        groups.push(group);
-        group = [];
-      }
-      group.push(level);
+  function analyze(rows, timeframes) {
+    const levels = cleanLevels(rows);
+    const byTimeframe = new Map();
+    levels.forEach((level, position) => {
+      if (!byTimeframe.has(level.timeframe)) byTimeframe.set(level.timeframe, []);
+      byTimeframe.get(level.timeframe).push(position);
     });
-    if (group.length) groups.push(group);
 
     const clusters = [];
-    groups.forEach(members => {
-      if (members.length < 2 || new Set(members.map(m => m.swing_index)).size < 2) return;
-      const retracementSwings = [...new Set(members.filter(m => m.group === 'retracement').map(m => m.swing_index))];
-      const expansions = members.filter(m => m.group === 'expansion');
-      const types = [];
-      if (retracementSwings.length >= 2) types.push('confluence');
-      if (retracementSwings.length && expansions.some(expansion => retracementSwings.some(index => index !== expansion.swing_index))) types.push('agreement');
-      if (!types.length) return;
-      const prices = members.map(m => m.price);
-      clusters.push({ types, low: Math.min(...prices), high: Math.max(...prices), members: members.map(m => `${m.swing} ${m.kind}`) });
+    byTimeframe.forEach((positions, timeframe) => {
+      TYPES.forEach(type => {
+        const tolerance = toleranceFor(timeframes, timeframe, type);
+        const parent = new Map(positions.map(position => [position, position]));
+        const find = x => {
+          while (parent.get(x) !== x) {
+            parent.set(x, parent.get(parent.get(x)));
+            x = parent.get(x);
+          }
+          return x;
+        };
+        const linked = new Set();
+        positions.forEach((first, i) => positions.slice(i + 1).forEach(second => {
+          const a = levels[first];
+          const b = levels[second];
+          if (!qualifies(type, a, b) || !near(a.price, b.price, tolerance)) return;
+          parent.set(find(first), find(second));
+          linked.add(first);
+          linked.add(second);
+        }));
+        const groups = new Map();
+        positions.filter(position => linked.has(position)).forEach(position => {
+          const rootPosition = find(position);
+          if (!groups.has(rootPosition)) groups.set(rootPosition, []);
+          groups.get(rootPosition).push(levels[position]);
+        });
+        groups.forEach(members => {
+          members.sort((x, y) => x.price - y.price || x.index - y.index);
+          const prices = members.map(member => member.price);
+          clusters.push({
+            type,
+            timeframe,
+            low: Math.min(...prices),
+            high: Math.max(...prices),
+            tolerance,
+            revisited: members.some(member => member.status === 'revisited'),
+            members: members.map(member => ({ index: member.index, kind: member.kind, status: member.status, price: member.price })),
+          });
+        });
+      });
     });
-    return { levels, clusters, tolerance: tol, auto_tolerance: auto };
+
+    clusters.sort((x, y) => y.high - x.high || y.low - x.low
+      || (x.type < y.type ? -1 : x.type > y.type ? 1 : 0)
+      || (x.timeframe < y.timeframe ? -1 : x.timeframe > y.timeframe ? 1 : 0)
+      || x.members[0].index - y.members[0].index);
+    return { levels, clusters };
   }
 
-  return { RETRACEMENTS, EXPANSIONS, swingLevels, analyze, autoTolerance };
+  return { LEVEL_KINDS, DEFAULT_TOLERANCE, TYPES, analyze, toleranceFor, cleanLevels };
 });
