@@ -91,7 +91,10 @@ const DN_PATTERNS = ['Double Repo', 'Single Penetration', 'Railroad Tracks', 'Fa
 const DN_LEVEL_KINDS = ['F3' => 'retracement', 'F5' => 'retracement', 'F7' => 'retracement', 'COP' => 'expansion', 'OP' => 'expansion', 'XOP' => 'expansion'];
 const DN_MAX_LEVELS = 80;
 const DN_DEFAULT_TOLERANCE = 5.0;
-const DN_DEFAULT_TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
+/** MN = měsíční, Q = čtvrtletní graf; DiNapoli je používá pro hlavní levely. */
+const DN_DEFAULT_TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN', 'Q'];
+/** Verze nastavení; 2 přidala měsíční a čtvrtletní timeframe. */
+const WORKSPACE_VERSION = 2;
 
 function dn_default_timeframes(): array
 {
@@ -112,7 +115,7 @@ function method_hidden_plan(string $method): array
 function default_workspace(): array
 {
     return [
-        'version' => 1,
+        'version' => WORKSPACE_VERSION,
         'method' => 'both',
         'onboarded' => false,
         'hidden' => ['plan' => [], 'trade' => [], 'modules' => []],
@@ -185,10 +188,16 @@ function normalize_workspace(array $input): array
         };
         $timeframes[mb_strtolower($tf, 'UTF-8')] = ['tf' => $tf, 'confluence' => $tolerance($row['confluence'] ?? null), 'agreement' => $tolerance($row['agreement'] ?? null)];
     }
+    // Seznam uložený ve starší verzi dostane měsíční a čtvrtletní timeframe navíc.
+    if ($timeframes !== [] && (int)($input['version'] ?? 1) < 2) {
+        foreach (['MN', 'Q'] as $tf) {
+            $timeframes[mb_strtolower($tf, 'UTF-8')] ??= ['tf' => $tf, 'confluence' => DN_DEFAULT_TOLERANCE, 'agreement' => DN_DEFAULT_TOLERANCE];
+        }
+    }
     $timeframes = array_slice(array_values($timeframes), 0, 20);
 
     return [
-        'version' => 1,
+        'version' => WORKSPACE_VERSION,
         'method' => $method,
         'onboarded' => (bool)($input['onboarded'] ?? false),
         'hidden' => [

@@ -165,7 +165,7 @@ Konfluence   dva F5 levely, které jsou od sebe nejvýš o toleranci konfluence
 Shoda        expanze (COP, OP, XOP) u retracementu (F3, F5, F7), nejvýš o toleranci shody
 ```
 
-   Tolerance v bodech se nastavuje v **Nastavení → DiNapoli** pro každý timeframe zvlášť, jinou pro konfluenci a jinou pro shodu. Výchozí je 5 bodů. Víc levelů, které na sebe navazují, tvoří jedno pásmo. Řádky, které do konfluence nebo shody patří, se v seznamu zvýrazní; pásmo s revisited levelem má čárkovaný okraj. Tlačítkem **Udělat zónu** z pásma vznikne obchodní zóna, **Do klíčových levelů** přenese všechny levely mezi klíčové levely.
+   Tolerance v bodech se nastavuje v **Nastavení → DiNapoli** pro každý timeframe zvlášť, jinou pro konfluenci a jinou pro shodu. Výchozí timeframy jsou M5, M15, M30, H1, H4, D1, W1, měsíční **MN** a čtvrtletní **Q**, všechny s tolerancí 5 bodů; u vyšších timeframů si ji nejspíš zvětšíš. Víc levelů, které na sebe navazují, tvoří jedno pásmo. Řádky, které do konfluence nebo shody patří, se v seznamu zvýrazní; pásmo s revisited levelem má čárkovaný okraj. Tlačítkem **Udělat zónu** z pásma vznikne obchodní zóna, **Do klíčových levelů** přenese všechny levely mezi klíčové levely.
 4. **Vzory**: Double Repo, Single Penetration, Railroad Tracks, Failure, Bread & Butter, Minesweeper A a B a Fib Node jako štítky, plus poznámky.
 
 DiNapoli levely se ukážou na mapě ceny, v pracovním závěru, v PDF, ve sdíleném náhledu na nástěnce a volitelně v TradingView exportu. Výpočet v prohlížeči i na serveru je stejný a testy to hlídají. Swingy zadané ve starší verzi (A, B, C) se při aktualizaci samy převedly na levely F3, F5, COP, OP a XOP bez timeframu; timeframe jim doplníš v náhledu.

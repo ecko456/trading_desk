@@ -159,7 +159,13 @@ class WorkspaceHttpTests(unittest.TestCase):
             {"tf": "M15", "confluence": -3, "agreement": "abc"}, {"tf": "m15", "confluence": 1, "agreement": 1}, {"tf": "<b>", "confluence": 1, "agreement": 1}, {"tf": "", "confluence": 1}]}})
         self.assertEqual(saved["prefs"]["dn"]["timeframes"], [{"tf": "M15", "confluence": 5.0, "agreement": 5.0}, {"tf": "b", "confluence": 1.0, "agreement": 1.0}])
         status, saved = self.client.api("POST", "workspace", {**prefs, "dn": {"timeframes": []}})
-        self.assertEqual([row["tf"] for row in saved["prefs"]["dn"]["timeframes"]], ["M5", "M15", "M30", "H1", "H4", "D1", "W1"])
+        self.assertEqual([row["tf"] for row in saved["prefs"]["dn"]["timeframes"]], ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN", "Q"])
+        # Seznam uložený starší verzí dostane měsíční a čtvrtletní timeframe; smazaný v nové verzi se už nevrací.
+        status, saved = self.client.api("POST", "workspace", {**prefs, "version": 1, "dn": {"timeframes": [{"tf": "H4", "confluence": 3, "agreement": 4}, {"tf": "mn", "confluence": 20, "agreement": 20}]}})
+        self.assertEqual([(row["tf"], row["confluence"]) for row in saved["prefs"]["dn"]["timeframes"]], [("H4", 3.0), ("mn", 20.0), ("Q", 5.0)])
+        self.assertEqual(saved["prefs"]["version"], 2)
+        status, saved = self.client.api("POST", "workspace", {**saved["prefs"], "dn": {"timeframes": [{"tf": "H4", "confluence": 3, "agreement": 4}]}})
+        self.assertEqual([row["tf"] for row in saved["prefs"]["dn"]["timeframes"]], ["H4"])
         self.client.api("POST", "workspace", prefs)
 
     def test_pdf_with_dinapoli_and_custom_fields(self):
