@@ -65,6 +65,10 @@ http://localhost/trading/
 
 Instalátor pouze přidá Apache alias `/trading/`. Existující aplikace na `/` zůstane beze změny.
 
+V repozitáři je i samostatná aplikace **Odměny** (hodnocení operátorů, adresa `/odmeny/`).
+S Trading Deskem nemá nic společného a instaluje se zvlášť: `sudo bash odmeny/deploy/install.sh`.
+Podrobnosti v [`odmeny/README.md`](odmeny/README.md).
+
 ## Uložení dat
 
 Výchozí produkční umístění:

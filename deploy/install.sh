@@ -37,11 +37,16 @@ rsync -a --delete \
   --exclude '/INSTALL.md' \
   --exclude '/README.md' \
   --exclude '/ZACNI-TADY.txt' \
+  --exclude '/odmeny/' \
+  --exclude '/hodnoceni-operatoru.html' \
   "${SOURCE_DIR}/" "${TARGET_DIR}/"
 
 # Starší instalace kopírovaly na web i historii gitu a dokumentaci; ty tam nepatří.
 rm -rf "${TARGET_DIR}/.git" "${TARGET_DIR}/.devcontainer"
 rm -f "${TARGET_DIR}/.gitignore" "${TARGET_DIR}/README.md" "${TARGET_DIR}/ZACNI-TADY.txt" "${TARGET_DIR}"/*.zip
+# Odměny jsou samostatná aplikace s vlastní instalací (odmeny/deploy/install.sh).
+rm -rf "${TARGET_DIR}/odmeny"
+rm -f "${TARGET_DIR}/hodnoceni-operatoru.html"
 
 chown -R root:www-data "${TARGET_DIR}"
 find "${TARGET_DIR}" -type d -exec chmod 0750 {} +

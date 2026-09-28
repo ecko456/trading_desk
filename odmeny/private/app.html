@@ -1,0 +1,232 @@
+<div class="shell">
+  <aside class="side" aria-label="Aplikace">
+    <div class="side-top">
+      <div class="side-brand">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14.5" r="5.5"/><path d="M9 9.5 6.5 3h4L12 6.5 13.5 3h4L15 9.5"/><path d="m12 11.8.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z"/></svg></span>
+        <div><strong>Odměny</strong><small>Tabáky a Kafe</small></div>
+      </div>
+      <div class="side-quick">
+        <span class="save-dot" id="saveDot" data-state="saved" title="Uloženo a zašifrováno"></span>
+        <button class="icon-btn" type="button" id="lockBtnTop" aria-label="Zamknout aplikaci" title="Zamknout"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg></button>
+      </div>
+    </div>
+    <label class="period-box">
+      <span>Hodnocené období</span>
+      <select id="periodSel"></select>
+    </label>
+    <nav class="nav" id="nav" aria-label="Hlavní menu">
+      <button type="button" data-view="prehled"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="8" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="5" rx="1.5"/><rect x="13.5" y="11.5" width="7" height="9" rx="1.5"/><rect x="3.5" y="14.5" width="7" height="6" rx="1.5"/></svg><span>Přehled</span></button>
+      <button type="button" data-view="lide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.5.2 4.3 1.9 5 4.9"/></svg><span>Lidé</span><em class="nav-badge" id="navPeople" hidden></em></button>
+      <button type="button" data-view="sankce"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.1"/></svg><span>Sankce</span></button>
+      <button type="button" data-view="dochazka"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M8 13.5h2M14 13.5h2M8 17h2"/></svg><span>Docházka</span></button>
+      <button type="button" data-view="vyroba"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5h17M5.5 20.5V11l5 3V11l5 3V6.5h3v14"/></svg><span>Výroba</span></button>
+      <button type="button" data-view="pozice"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h16M4 17h7"/><circle cx="17" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>Pozice</span></button>
+      <button type="button" data-view="nastaveni"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Nastavení</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="save-state" id="saveState" data-state="saved"><i aria-hidden="true"></i><span>Uloženo a zašifrováno</span></div>
+      <button class="btn ghost small" type="button" id="lockBtn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>Zamknout</button>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <div id="demoBanner"></div>
+
+    <!-- ============ PŘEHLED ============ -->
+    <section class="view" id="view-prehled" aria-labelledby="ovTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Výsledek období</p>
+          <h1 id="ovTitle">Hodnocení</h1>
+          <p class="lede" id="ovLede"></p>
+        </div>
+        <div class="page-actions noprint">
+          <button class="btn sec" type="button" id="btnCopy">Kopírovat</button>
+          <button class="btn sec" type="button" id="btnXlsx">Excel</button>
+          <button class="btn sec" type="button" id="btnPrint">Tisk</button>
+        </div>
+      </header>
+      <div id="todo"></div>
+      <div class="stats" id="ovStats"></div>
+      <div class="toolbar noprint">
+        <input type="search" id="ovSearch" class="grow" placeholder="Hledat jméno…" aria-label="Hledat jméno">
+        <select id="ovPos" aria-label="Filtr pozice"></select>
+        <label class="switch"><input type="checkbox" id="ovOnlyImported" checked><span>Jen z docházky</span></label>
+        <label class="switch"><input type="checkbox" id="ovOnlyOpen"><span>Jen nevydané</span></label>
+        <details class="colpick" id="colPick">
+          <summary class="btn sec" id="colSum">Sloupce</summary>
+          <div class="colpanel" id="colPanel"></div>
+        </details>
+      </div>
+      <div class="kafe-ctl noprint" id="kafeCtl" hidden>
+        <span class="kafe-ico" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5h12v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M16.5 11h1.5a2.5 2.5 0 0 1 0 5h-1.8M8 3.5c-.8 1 .8 2 0 3M12 3.5c-.8 1 .8 2 0 3"/></svg></span>
+        <label for="kafeTh">Kafe od</label>
+        <input type="number" id="kafeTh" min="0" step="0.5" inputmode="decimal">
+        <span>hodin</span>
+        <span class="small muted" id="kafeHint"></span>
+        <button class="btn ghost small" type="button" id="kafeReset" hidden>Vrátit na fond</button>
+      </div>
+      <div class="table-card">
+        <table class="ov-table stack" id="ovTable">
+          <thead><tr id="ovHead"></tr></thead>
+          <tbody id="ovBody"></tbody>
+          <tfoot id="ovFoot"></tfoot>
+        </table>
+      </div>
+      <div id="ovExcluded"></div>
+      <p class="hint noprint">Klikni na řádek a uvidíš rozpad tabáků. Tlačítka − a + přidají nebo uberou tabáky ručně; úprava platí jen pro vybrané období.</p>
+    </section>
+
+    <!-- ============ LIDÉ ============ -->
+    <section class="view" id="view-lide" aria-labelledby="peopleTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Zařazení a úrovně</p>
+          <h1 id="peopleTitle">Lidé</h1>
+          <p class="lede">Zařaď každého na pozici a vyber úroveň 1–4. Zařazení zůstává uložené i pro další měsíce.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn sec" type="button" id="btnAddPerson">Přidat člověka</button>
+          <button class="btn sec" type="button" id="btnExpRoster">Export zařazení</button>
+          <button class="btn sec" type="button" id="btnImpRoster">Načíst zařazení</button>
+          <input type="file" id="rosterFile" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden>
+        </div>
+      </header>
+      <div id="rosterMsg"></div>
+      <div class="split" id="peopleSplit">
+        <div class="split-list">
+          <input type="search" id="lSearch" placeholder="Hledat…" aria-label="Hledat zaměstnance">
+          <div class="list" id="lList"></div>
+        </div>
+        <div class="split-detail" id="lDetail"></div>
+      </div>
+    </section>
+
+    <!-- ============ SANKCE ============ -->
+    <section class="view" id="view-sankce" aria-labelledby="sanTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Srážky tabáků</p>
+          <h1 id="sanTitle">Sankce</h1>
+          <p class="lede">Srážka 10, 30 nebo 50 % z tabáků, na které měl člověk v měsíci nárok. Procenta se sčítají; dvě padesátiprocentní sankce srazí na nulu. Kafe se sankcí netýká.</p>
+        </div>
+      </header>
+      <div class="grid-2 wide-right">
+        <div class="stack">
+          <div class="card" id="sanForm"></div>
+          <div class="card" id="sanReasons"></div>
+        </div>
+        <div class="stack">
+          <div class="toolbar">
+            <select id="sanFilter" aria-label="Filtr měsíce"></select>
+            <input type="search" id="sanSearch" class="grow" placeholder="Hledat jméno nebo důvod…" aria-label="Hledat v sankcích">
+          </div>
+          <div id="sanList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DOCHÁZKA ============ -->
+    <section class="view" id="view-dochazka" aria-labelledby="attTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Import</p>
+          <h1 id="attTitle">Docházka</h1>
+          <p class="lede">Z docházky se počítá fond hodin, absence, víkendové směny i Kafe. Nahraj export z docházkového systému.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn danger" type="button" id="btnDelPeriod">Smazat vybrané období</button>
+        </div>
+      </header>
+      <div class="drop" id="drop">
+        <div class="drop-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5M12 17.5v-6M9.5 14 12 11.5l2.5 2.5"/></svg></div>
+        <div class="drop-text">
+          <h2>Přetáhni sem docházku</h2>
+          <p>XLSX, XLSM nebo CSV. Poznám datum v hlavičce i pouhá čísla dnů, čárku i tečku v hodinách.</p>
+        </div>
+        <button class="btn" type="button" id="btnPick">Vybrat soubor</button>
+        <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden>
+      </div>
+      <details class="format-help">
+        <summary>Jak má soubor vypadat</summary>
+        <div class="format-sheet" aria-hidden="true">
+          <span class="h">A · Jméno</span><span class="h">B · Příjmení</span><span class="h gap">C–E</span><span class="h">F · 1. 9.</span><span class="h">G · 2. 9.</span><span class="h">…</span>
+          <span>Jan</span><span>Novák</span><span class="gap"></span><span>7,5</span><span>D</span><span>…</span>
+          <span>Eva</span><span>Svobodová</span><span class="gap"></span><span>6</span><span>7,5</span><span>…</span>
+        </div>
+        <p class="small muted">V buňkách jsou odpracované hodiny, nebo kód nepřítomnosti (D, NEM, OČR…). Které kódy jsou omluvené, nastavíš v Nastavení.</p>
+      </details>
+      <div id="importMsg"></div>
+      <div id="attView"></div>
+    </section>
+
+    <!-- ============ VÝROBA ============ -->
+    <section class="view" id="view-vyroba" aria-labelledby="prodTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Evidence práce</p>
+          <h1 id="prodTitle">Výroba</h1>
+          <p class="lede">Vyrobené kusy po lidech a průměr na odpracovaný den. Jen pro přehled, do tabáků se nezapočítávají.</p>
+        </div>
+      </header>
+      <div class="drop" id="pdrop">
+        <div class="drop-ico prod" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5h17M5.5 20.5V11l5 3V11l5 3V6.5h3v14"/></svg></div>
+        <div class="drop-text">
+          <h2>Přetáhni sem evidenci práce</h2>
+          <p>Sloupec C jméno a příjmení, D datum a čas, E počet kusů. Hlavičku hledat nemusím.</p>
+        </div>
+        <button class="btn" type="button" id="pbtnPick">Vybrat soubor</button>
+        <input type="file" id="pfile" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden>
+      </div>
+      <div id="prodMsg"></div>
+      <div id="prodPair"></div>
+      <div id="prodView"></div>
+    </section>
+
+    <!-- ============ POZICE ============ -->
+    <section class="view" id="view-pozice" aria-labelledby="posTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Pravidla</p>
+          <h1 id="posTitle">Pozice a úrovně</h1>
+          <p class="lede">Každá pozice má 4 úrovně od nováčka po profíka. Úroveň dává základ tabáků, docházka ho sníží nebo zvýší, maximum pozice je strop.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn" type="button" id="btnAddPos">Nová pozice</button>
+        </div>
+      </header>
+      <div class="split" id="posSplit">
+        <div class="split-list"><div class="list" id="posList"></div></div>
+        <div class="split-detail" id="posEditor"></div>
+      </div>
+    </section>
+
+    <!-- ============ NASTAVENÍ ============ -->
+    <section class="view" id="view-nastaveni" aria-labelledby="setTitle">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Aplikace</p>
+          <h1 id="setTitle">Nastavení</h1>
+          <p class="lede">Pravidla hodnocení, zabezpečení a zálohy.</p>
+        </div>
+      </header>
+      <div class="settings-grid">
+        <div class="card" id="setScore"></div>
+        <div class="card" id="setAtt"></div>
+        <div class="card" id="setSecurity"></div>
+        <div class="card" id="setData"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog class="dlg" id="dlg" aria-labelledby="dlgTitle">
+  <form method="dialog" id="dlgForm">
+    <h2 id="dlgTitle"></h2>
+    <div class="dlg-body" id="dlgBody"></div>
+    <div class="dlg-actions" id="dlgActions">
+      <button class="btn ghost" value="cancel" type="submit" id="dlgCancel" formnovalidate>Zrušit</button>
+      <button class="btn" value="ok" type="submit" id="dlgOk">OK</button>
+    </div>
+  </form>
+</dialog>
