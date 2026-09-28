@@ -38,6 +38,13 @@
     draft: '#FFB547',
     minimapLine: '#5B6478',
     minimapWindow: '#FFB547',
+    ideaProfit: 'rgba(38, 166, 154, 0.13)',
+    ideaLoss: 'rgba(239, 83, 80, 0.13)',
+    ideaBorder: 'rgba(214, 218, 227, 0.42)',
+    ideaEntry: 'rgba(214, 218, 227, 0.75)',
+    tradeWin: '#26A69A',
+    tradeLoss: '#EF5350',
+    tradeFlat: '#A3ABBD',
   };
   const FONT = "'Inter', system-ui, sans-serif";
   const MONO = "'JetBrains Mono', ui-monospace, monospace";
@@ -47,6 +54,7 @@
   const CHUNK_DAYS = 40;
   const ZONE_TYPES = { support: 'Support', resistance: 'Resistance', vpoc: 'VPOC', other: 'Jiná' };
   const LAYERS = ['sessions', 'news', 'zones', 'bias', 'ideas', 'trades', 'volume'];
+  const OUTCOMES = { skipped: 'Nevzatý', missed: 'Propáslý', taken: 'Vzatý' };
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -104,7 +112,7 @@
     days: [],
     dayMap: new Map(),
     hasVolume: false,
-    ann: { days: new Map(), zones: [], news: [] },
+    ann: { days: new Map(), zones: [], news: [], ideas: [], trades: [] },
     annRange: null,
     rolls: [],
     zoneMode: false,
@@ -113,6 +121,15 @@
     hover: null,
     zoneRects: [],
     newsMarks: [],
+    ideaKey: null,
+    ideaMode: null,
+    ideaDraft: null,
+    ideaRects: [],
+    tradeMarks: [],
+    draftGeo: null,
+    handleDrag: null,
+    ideaClick: null,
+    evalCache: new Map(),
     generation: 0,
   };
 
@@ -317,6 +334,65 @@
     return info.bias === 'long' ? move > 0 : move < 0;
   }
 
+  /**
+   * Potenciální obchod proti svíčkám: od času vstupu (bez času od začátku dne) čeká na dotek
+   * vstupní ceny, pak rozhodne, co přišlo dřív, stop, nebo cíl. Svíčka, která zasáhne obojí,
+   * se počítá jako stop (horší případ). Bez stopu i cíle se počítá k poslední svíčce dne.
+   */
+  function evaluateIdea(idea) {
+    const key = `${idea.id}|${idea.date}|${idea.direction}|${idea.entry}|${idea.stop}|${idea.target}|${idea.entry_ts}|${state.ts.length}`;
+    if (!state.evalCache.has(key)) {
+      if (state.evalCache.size > 800) state.evalCache.clear();
+      state.evalCache.set(key, computeIdea(idea));
+    }
+    return state.evalCache.get(key);
+  }
+
+  function computeIdea(idea) {
+    const day = state.dayMap.get(idea.date);
+    if (!day) return { state: 'nodata' };
+    const bars = state.bars;
+    const long = idea.direction === 'long';
+    const risk = Math.abs(idea.entry - idea.stop);
+    let start = day.first;
+    if (idea.entry_ts !== null && idea.entry_ts !== undefined) {
+      const index = barAtOrBefore(idea.entry_ts);
+      if (index > day.last) return { state: 'nodata' };
+      start = Math.max(day.first, index);
+    }
+    let fill = -1;
+    for (let k = start; k <= day.last; k++) {
+      if (bars[k].low <= idea.entry && bars[k].high >= idea.entry) {
+        fill = k;
+        break;
+      }
+    }
+    if (fill < 0) return { state: 'unfilled', start };
+    const hitsStop = bar => (long ? bar.low <= idea.stop : bar.high >= idea.stop);
+    const hitsTarget = bar => (long ? bar.high >= idea.target : bar.low <= idea.target);
+    const finish = (name, end, points, ambiguous = false) => ({ state: name, start, fill, end, points, r: risk > 0 ? points / risk : 0, ambiguous });
+    if (hitsStop(bars[fill])) return finish('sl', fill, -risk, true);
+    for (let k = fill + 1; k <= day.last; k++) {
+      const stop = hitsStop(bars[k]);
+      if (stop) return finish('sl', k, -risk, hitsTarget(bars[k]));
+      if (hitsTarget(bars[k])) return finish('tp', k, Math.abs(idea.target - idea.entry));
+    }
+    const close = bars[day.last].close;
+    return finish('open', day.last, long ? close - idea.entry : idea.entry - close);
+  }
+
+  function signed(value, digits = 1) {
+    return `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(digits)}`;
+  }
+
+  function resultText(result) {
+    if (!result || result.state === 'nodata') return 'bez svíček';
+    if (result.state === 'unfilled') return 'vstup nezasažen';
+    if (result.state === 'tp') return `TP ${signed(result.r)}R`;
+    if (result.state === 'sl') return `SL ${signed(result.r)}R${result.ambiguous ? '?' : ''}`;
+    return `konec dne ${signed(result.r)}R`;
+  }
+
   /* ------------------------------------------------------------------ vrstvy v grafu */
 
   function visibleDays(width) {
@@ -388,6 +464,8 @@
           }
         }
         if (layers.zones) drawZones(ctx, width, height);
+        state.ideaRects = [];
+        if (layers.ideas) drawIdeas(ctx, width);
       });
     },
   };
@@ -422,6 +500,164 @@
       ctx.textBaseline = h >= 16 ? 'top' : 'bottom';
       ctx.fillText(label, Math.max(x0, 0) + 8, h >= 16 ? top + 3 : top - 2);
       state.zoneRects.push({ zone, x0, x1, top, bottom: top + h });
+    }
+  }
+
+  function ideaGeometry(idea) {
+    const day = state.dayMap.get(idea.date);
+    if (!day) return null;
+    const result = evaluateIdea(idea);
+    const x0 = idea.entry_ts !== null && idea.entry_ts !== undefined ? xOf(pointOf(idea.entry_ts)) : xOf(edgeOf(day.start));
+    let x1 = result.state === 'tp' || result.state === 'sl' ? xOf(result.end + 0.5) : xOf(edgeOf(day.next));
+    if (x1 - x0 < 18) x1 = x0 + 18;
+    const yE = candles.priceToCoordinate(idea.entry);
+    const yS = candles.priceToCoordinate(idea.stop);
+    const yT = candles.priceToCoordinate(idea.target);
+    if (yE === null || yS === null || yT === null) return null;
+    return { x0, x1, yE, yS, yT, result, top: Math.min(yE, yS, yT), bottom: Math.max(yE, yS, yT) };
+  }
+
+  /** Box pozice: zisková část k cíli, ztrátová ke stopu, čárkovaný okraj, čára vstupu. */
+  function paintIdea(ctx, idea, geo, active, width) {
+    const { x0, x1, yE, yS, yT, top, bottom, result } = geo;
+    const w = x1 - x0;
+    ctx.fillStyle = COLORS.ideaProfit;
+    ctx.fillRect(x0, Math.min(yE, yT), w, Math.abs(yT - yE));
+    ctx.fillStyle = COLORS.ideaLoss;
+    ctx.fillRect(x0, Math.min(yE, yS), w, Math.abs(yS - yE));
+    ctx.strokeStyle = active ? COLORS.draft : COLORS.ideaBorder;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(Math.round(x0) + 0.5, Math.round(top) + 0.5, Math.round(w), Math.round(bottom - top));
+    ctx.setLineDash([]);
+    ctx.fillStyle = COLORS.ideaEntry;
+    ctx.fillRect(x0, Math.round(yE), w, 1);
+    if (result.fill >= 0 && result.fill !== undefined) {
+      ctx.beginPath();
+      ctx.arc(xOf(result.fill), yE, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (result.state === 'tp' || result.state === 'sl') {
+      ctx.fillStyle = result.state === 'tp' ? COLORS.up : COLORS.down;
+      ctx.beginPath();
+      ctx.arc(xOf(result.end), result.state === 'tp' ? yT : yS, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const rr = Math.abs(idea.target - idea.entry) / Math.abs(idea.entry - idea.stop);
+    const outcome = OUTCOMES[idea.outcome] ? ` · ${OUTCOMES[idea.outcome].toLowerCase()}` : '';
+    const label = `${idea.direction === 'long' ? 'L' : 'S'}${idea.name ? ` ${idea.name}` : ''} · ${rr.toFixed(1)}R · ${resultText(result)}${outcome}`;
+    ctx.font = `500 10.5px ${FONT}`;
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = result.state === 'tp' ? COLORS.up : result.state === 'sl' ? COLORS.down : '#A3ABBD';
+    ctx.fillText(label, clamp(x0, 0, Math.max(0, width - ctx.measureText(label).width - 4)) + 3, top - 3);
+  }
+
+  function drawIdeas(ctx, width) {
+    for (const idea of state.ann.ideas) {
+      if (state.ideaDraft && state.ideaDraft.id === idea.id) continue;
+      const geo = ideaGeometry(idea);
+      if (!geo || geo.x1 < 0 || geo.x0 > width) continue;
+      paintIdea(ctx, idea, geo, false, width);
+      state.ideaRects.push({ idea, x0: geo.x0, x1: geo.x1, top: geo.top, bottom: geo.bottom });
+    }
+  }
+
+  /** Rozpracovaný potenciální obchod: táhla stopu, vstupu a cíle vpravo. */
+  function drawIdeaDraft(ctx, width) {
+    state.draftGeo = null;
+    const idea = state.ideaDraft;
+    if (!idea) return;
+    const geo = ideaGeometry(idea);
+    if (!geo) return;
+    paintIdea(ctx, idea, geo, true, width);
+    geo.hx = clamp(geo.x1, 8, width - 8);
+    state.draftGeo = geo;
+    const risk = Math.abs(idea.entry - idea.stop);
+    const reward = Math.abs(idea.target - idea.entry);
+    const lines = [
+      [geo.yT, COLORS.up, `TP ${price(idea.target)}  ${reward.toFixed(2)} b. · ${(reward / risk).toFixed(1)}R`],
+      [geo.yE, COLORS.draft, `Vstup ${price(idea.entry)}`],
+      [geo.yS, COLORS.down, `SL ${price(idea.stop)}  ${risk.toFixed(2)} b.`],
+    ];
+    ctx.font = `500 10.5px ${MONO}`;
+    ctx.textBaseline = 'middle';
+    for (const [y, color, text] of lines) {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round(geo.hx) - 5, Math.round(y) - 5, 10, 10);
+      const textWidth = ctx.measureText(text).width;
+      const tx = geo.hx + 10 + textWidth > width ? geo.hx - 12 - textWidth : geo.hx + 10;
+      ctx.fillStyle = 'rgba(14, 17, 23, 0.8)';
+      ctx.fillRect(tx - 3, y - 8, textWidth + 6, 16);
+      ctx.fillStyle = color;
+      ctx.fillText(text, tx, y);
+    }
+  }
+
+  function tradeColor(trade) {
+    let value = trade.result_r ?? trade.result_usd;
+    if (value === null || value === undefined) {
+      value = trade.exit !== null && trade.entry !== null ? (trade.direction === 'long' ? trade.exit - trade.entry : trade.entry - trade.exit) : 0;
+    }
+    return value > 0 ? COLORS.tradeWin : value < 0 ? COLORS.tradeLoss : COLORS.tradeFlat;
+  }
+
+  /** Šipka se špičkou přesně na ceně: nahoru = nákup, dolů = prodej. */
+  function arrow(ctx, x, y, up, color) {
+    ctx.fillStyle = color;
+    ctx.strokeStyle = COLORS.background;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (up) {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 6, y + 10);
+      ctx.lineTo(x + 6, y + 10);
+    } else {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 6, y - 10);
+      ctx.lineTo(x + 6, y - 10);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function tradeResultLabel(trade) {
+    if (trade.result_r !== null && trade.result_r !== undefined) return `${signed(trade.result_r, 2)}R`;
+    if (trade.result_usd !== null && trade.result_usd !== undefined) return `${signed(trade.result_usd, 0)} $`;
+    return '';
+  }
+
+  function drawTrades(ctx, width) {
+    for (const trade of state.ann.trades) {
+      if (trade.entry_ts === null || trade.entry === null) continue;
+      const long = trade.direction === 'long';
+      const xE = xOf(pointOf(trade.entry_ts));
+      const yE = candles.priceToCoordinate(trade.entry);
+      const hasExit = trade.exit_ts !== null && trade.exit !== null;
+      const xX = hasExit ? xOf(pointOf(trade.exit_ts)) : null;
+      const yX = hasExit ? candles.priceToCoordinate(trade.exit) : null;
+      if (yE === null || Math.max(xE, xX ?? xE) < -20 || Math.min(xE, xX ?? xE) > width + 20) continue;
+      const color = tradeColor(trade);
+      if (hasExit && yX !== null) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(xE, yE);
+        ctx.lineTo(xX, yX);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        arrow(ctx, xX, yX, !long, color);
+        const label = tradeResultLabel(trade);
+        if (label) {
+          ctx.font = `600 10.5px ${MONO}`;
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = color;
+          ctx.fillText(label, xX + 9, long ? yX - 5 : yX + 5);
+        }
+      }
+      arrow(ctx, xE, yE, long, color);
+      state.tradeMarks.push({ trade, xE, yE, xX, yX });
     }
   }
 
@@ -466,6 +702,9 @@
             state.newsMarks.push({ item, x });
           }
         }
+        state.tradeMarks = [];
+        if (state.prefs.layers.trades) drawTrades(ctx, width);
+        drawIdeaDraft(ctx, width);
         if (state.draft) {
           const d = state.draft;
           const left = Math.min(d.x0, d.x1);
@@ -520,6 +759,7 @@
     candles.setData(state.bars.map(bar => ({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close })));
     volume.setData(state.hasVolume ? state.bars.map(bar => ({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? COLORS.volumeUp : COLORS.volumeDown })) : []);
     buildDays();
+    state.evalCache.clear();
     if (before && centerTime !== null && centerTime !== undefined) {
       // Starší svíčky se přidaly zleva: stejný výřez musí zůstat na místě.
       const shift = barAtOrBefore(centerTime) - oldCenterIndex;
@@ -553,7 +793,10 @@
       days: new Map(data.days.map(day => [day.date, day])),
       zones: data.zones,
       news: data.news,
+      ideas: data.ideas || [],
+      trades: data.trades || [],
     };
+    state.evalCache.clear();
     redraw();
     renderHeaders();
     renderMinimap();
@@ -850,7 +1093,7 @@
 
   // Po tažení myší v režimu Kolotoč graf dojede na nejbližší den.
   chartEl.addEventListener('pointerup', () => {
-    if (state.prefs.snap && !state.zoneMode) setTimeout(snapToCenter, 380);
+    if (state.prefs.snap && !state.zoneMode && !state.ideaMode && !state.handleDrag && popEl.hidden) setTimeout(snapToCenter, 380);
   });
 
   document.addEventListener('keydown', event => {
@@ -860,6 +1103,8 @@
         state.draft = null;
         redraw();
       }
+      $$('[data-idea-mode]').forEach(button => button.setAttribute('aria-pressed', 'false'));
+      syncIdeaMode();
       closePop();
       return;
     }
@@ -878,6 +1123,12 @@
         state.zoneKey = true;
         syncZoneMode();
       }
+    } else if (['l', 'L', 's', 'S'].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const direction = event.key.toLowerCase() === 'l' ? 'long' : 'short';
+      if (state.ideaKey !== direction) {
+        state.ideaKey = direction;
+        syncIdeaMode();
+      }
     }
   });
   document.addEventListener('keyup', event => {
@@ -885,10 +1136,16 @@
       state.zoneKey = false;
       syncZoneMode();
     }
+    if (['l', 'L', 's', 'S'].includes(event.key)) {
+      state.ideaKey = null;
+      syncIdeaMode();
+    }
   });
   window.addEventListener('blur', () => {
     state.zoneKey = false;
+    state.ideaKey = null;
     syncZoneMode();
+    syncIdeaMode();
   });
 
   $$('[data-go]').forEach(button => button.addEventListener('click', () => {
@@ -1040,9 +1297,22 @@
   }
 
   function hitTest(x, y) {
+    if (state.prefs.layers.trades) {
+      for (const mark of state.tradeMarks) {
+        const nearEntry = Math.hypot(mark.xE - x, mark.yE - y) <= 11;
+        const nearExit = mark.xX !== null && mark.yX !== null && Math.hypot(mark.xX - x, mark.yX - y) <= 11;
+        if (nearEntry || nearExit) return { kind: 'trade', trade: mark.trade };
+      }
+    }
     if (state.prefs.layers.news) {
       for (const mark of state.newsMarks) {
         if (Math.abs(mark.x - x) <= 4) return { kind: 'news', item: mark.item };
+      }
+    }
+    if (state.prefs.layers.ideas) {
+      for (let index = state.ideaRects.length - 1; index >= 0; index--) {
+        const rect = state.ideaRects[index];
+        if (x >= rect.x0 && x <= rect.x1 && y >= rect.top - 2 && y <= rect.bottom + 2) return { kind: 'idea', idea: rect.idea };
       }
     }
     if (state.prefs.layers.zones) {
@@ -1052,6 +1322,27 @@
       }
     }
     return null;
+  }
+
+  function tradeSummaryHtml(trade) {
+    const times = trade.entry_ts !== null ? `${T.pragueTime(trade.entry_ts)}${trade.exit_ts !== null ? ` → ${T.pragueTime(trade.exit_ts)}` : ''}` : 'bez času';
+    const prices = `${trade.entry !== null ? price(trade.entry) : '—'}${trade.exit !== null ? ` → ${price(trade.exit)}` : ''}`;
+    const result = [trade.result_r !== null ? `${signed(trade.result_r, 2)}R` : '', trade.result_usd !== null ? `${signed(trade.result_usd, 0)} $` : ''].filter(Boolean).join(' · ');
+    const linked = state.ann.ideas.find(idea => idea.trade_id === trade.id);
+    return `<strong>${trade.direction === 'long' ? 'Long' : 'Short'} ${escapeHtml(trade.market)}${trade.strategy ? ` · ${escapeHtml(trade.strategy)}` : ''}</strong>`
+      + `<span class="hs-mono">${escapeHtml(times)} · ${escapeHtml(prices)}${result ? ` · ${escapeHtml(result)}` : ''}</span>`
+      + (linked ? `<p>Propojený potenciální obchod: ${escapeHtml(linked.name || (linked.direction === 'long' ? 'long' : 'short'))} ${price(linked.entry)}</p>` : '');
+  }
+
+  function ideaSummaryHtml(idea) {
+    const result = evaluateIdea(idea);
+    const risk = Math.abs(idea.entry - idea.stop);
+    const reward = Math.abs(idea.target - idea.entry);
+    const when = result.end !== undefined && state.ts[result.end] ? ` v ${T.pragueTime(state.ts[result.end])}` : '';
+    const note = [OUTCOMES[idea.outcome] || '', idea.notes || ''].filter(Boolean).join(' · ');
+    return `<strong>Potenciální ${idea.direction === 'long' ? 'long' : 'short'}${idea.name ? ` · ${escapeHtml(idea.name)}` : ''}</strong>`
+      + `<span class="hs-mono">vstup ${price(idea.entry)} · SL ${price(idea.stop)} · cíl ${price(idea.target)} · ${(reward / risk).toFixed(1)}R</span>`
+      + `<p>${escapeHtml(resultText(result))}${escapeHtml(when)}${result.points !== undefined ? ` (${escapeHtml(signed(result.points, 2))} b.)` : ''}${result.ambiguous ? ', stop i cíl v jedné svíčce: počítá se stop' : ''}${note ? `\n${escapeHtml(note)}` : ''}</p>`;
   }
 
   function validityText(zone) {
@@ -1067,6 +1358,10 @@
     }
     if (hit.kind === 'news') {
       tooltipEl.innerHTML = `<strong>${escapeHtml(hit.item.title)}</strong><span class="hs-mono">Red news · ${escapeHtml(T.pragueTime(hit.item.ts))} · ${escapeHtml(czechDate(hit.item.date))}</span>`;
+    } else if (hit.kind === 'trade') {
+      tooltipEl.innerHTML = tradeSummaryHtml(hit.trade);
+    } else if (hit.kind === 'idea') {
+      tooltipEl.innerHTML = ideaSummaryHtml(hit.idea);
     } else {
       const zone = hit.zone;
       tooltipEl.innerHTML = `<strong>${escapeHtml(zone.name || ZONE_TYPES[zone.type])}</strong>`
@@ -1093,23 +1388,35 @@
     }
     const index = barAtOrBefore(param.time);
     renderLegend(state.bars[index]);
-    if (state.draft) return;
+    if (state.draft || state.handleDrag) return;
     const hit = hitTest(param.point.x, param.point.y);
-    const changed = (hit?.zone?.id ?? hit?.item?.id ?? null) !== (state.hover?.zone?.id ?? state.hover?.item?.id ?? null) || hit?.kind !== state.hover?.kind;
+    const changed = hitKey(hit) !== hitKey(state.hover);
     state.hover = hit;
     if (changed) redraw();
     showTooltip(hit, param.point);
-    chartEl.classList.toggle('is-pointer', Boolean(hit && hit.kind === 'zone'));
+    chartEl.classList.toggle('is-pointer', Boolean(hit && hit.kind !== 'news'));
   });
 
+  function hitKey(hit) {
+    if (!hit) return '';
+    const item = hit.zone || hit.item || hit.idea || hit.trade;
+    return `${hit.kind}:${item ? item.id : ''}`;
+  }
+
   chart.subscribeClick(param => {
-    if (!param.point || state.zoneMode || suppressClick) return;
+    if (!param.point || state.zoneMode || state.ideaMode || suppressClick) return;
     const hit = hitTest(param.point.x, param.point.y);
-    if (hit && hit.kind === 'zone') {
-      const rect = chartEl.getBoundingClientRect();
+    if (!hit || hit.kind === 'news') return;
+    const rect = chartEl.getBoundingClientRect();
+    const anchor = { x: rect.left + param.point.x, y: rect.top + param.point.y };
+    if (hit.kind === 'zone') {
       updateFrame();
       const index = clamp(Math.round(logicalAt(param.point.x)), 0, state.ts.length - 1);
-      openZonePop(hit.zone, { x: rect.left + param.point.x, y: rect.top + param.point.y }, T.tradeDate(state.ts[index]));
+      openZonePop(hit.zone, anchor, T.tradeDate(state.ts[index]));
+    } else if (hit.kind === 'idea') {
+      openIdeaPop({ ...hit.idea }, anchor);
+    } else if (hit.kind === 'trade') {
+      openTradePop(hit.trade, anchor);
     }
   });
 
@@ -1122,7 +1429,8 @@
     if (on === state.zoneMode) return;
     state.zoneMode = on;
     chartEl.classList.toggle('is-drawing', on);
-    chart.applyOptions({ handleScroll: { pressedMouseMove: !on, horzTouchDrag: !on }, kineticScroll: { mouse: !on, touch: !on } });
+    syncPointerModes();
+    syncIdeaMode();
     if (!on && state.draft && !state.draft.active) {
       state.draft = null;
       redraw();
@@ -1135,30 +1443,88 @@
     syncZoneMode();
   });
 
-  chartEl.addEventListener('pointerdown', event => {
-    if (!state.zoneMode || event.button !== 0 || !state.ts.length) return;
+  function localPoint(event) {
     const rect = chartEl.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top, rect };
+  }
+
+  /** Táhlo rozpracovaného potenciálního obchodu pod kurzorem (stop, vstup, cíl). */
+  function handleAt(x, y) {
+    const geo = state.draftGeo;
+    if (!geo || popEl.hidden) return null;
+    if (x < Math.min(geo.x0, geo.hx) - 4 || x > Math.max(geo.x1, geo.hx) + 8) return null;
+    const candidates = [['stop', geo.yS], ['target', geo.yT], ['entry', geo.yE]]
+      .map(([name, y0]) => [name, Math.abs(y - y0)])
+      .filter(([, distance]) => distance <= 6)
+      .sort((a, b) => a[1] - b[1]);
+    return candidates.length ? candidates[0][0] : null;
+  }
+
+  chartEl.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || !state.ts.length) return;
+    const { x, y } = localPoint(event);
     if (x > chart.timeScale().width()) return;
-    event.preventDefault();
-    event.stopPropagation();
-    stopMotion();
-    closePop();
-    chartEl.setPointerCapture(event.pointerId);
-    state.draft = { x0: x, y0: y, x1: x, y1: y, active: true, pointerId: event.pointerId };
-    redraw();
+    const handle = handleAt(x, y);
+    if (handle) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopMotion();
+      chartEl.setPointerCapture(event.pointerId);
+      state.handleDrag = { handle, pointerId: event.pointerId };
+      chart.applyOptions({ handleScroll: { pressedMouseMove: false }, kineticScroll: { mouse: false } });
+      return;
+    }
+    if (state.zoneMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopMotion();
+      closePop();
+      chartEl.setPointerCapture(event.pointerId);
+      state.draft = { x0: x, y0: y, x1: x, y1: y, active: true, pointerId: event.pointerId };
+      redraw();
+      return;
+    }
+    if (state.ideaMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopMotion();
+      closePop();
+      state.ideaClick = { x, y, pointerId: event.pointerId, direction: state.ideaMode };
+    }
   }, true);
 
   chartEl.addEventListener('pointermove', event => {
-    if (!state.draft || !state.draft.active || event.pointerId !== state.draft.pointerId) return;
-    const rect = chartEl.getBoundingClientRect();
-    state.draft.x1 = clamp(event.clientX - rect.left, 0, chart.timeScale().width());
-    state.draft.y1 = clamp(event.clientY - rect.top, 0, rect.height);
-    redraw();
+    const { x, y, rect } = localPoint(event);
+    if (state.handleDrag && event.pointerId === state.handleDrag.pointerId) {
+      const value = candles.coordinateToPrice(clamp(y, 0, rect.height));
+      if (value !== null) moveHandle(state.handleDrag.handle, roundTick(value));
+      return;
+    }
+    if (state.draft && state.draft.active && event.pointerId === state.draft.pointerId) {
+      state.draft.x1 = clamp(x, 0, chart.timeScale().width());
+      state.draft.y1 = clamp(y, 0, rect.height);
+      redraw();
+      return;
+    }
+    chartEl.classList.toggle('is-resize', Boolean(!event.buttons && handleAt(x, y)));
   }, true);
 
   chartEl.addEventListener('pointerup', event => {
+    if (state.handleDrag && event.pointerId === state.handleDrag.pointerId) {
+      state.handleDrag = null;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 0);
+      syncPointerModes(true);
+      return;
+    }
+    if (state.ideaClick && event.pointerId === state.ideaClick.pointerId) {
+      const click = state.ideaClick;
+      state.ideaClick = null;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 0);
+      placeIdea(click);
+      return;
+    }
     const draft = state.draft;
     if (!draft || !draft.active || event.pointerId !== draft.pointerId) return;
     draft.active = false;
@@ -1179,6 +1545,74 @@
     const rect = chartEl.getBoundingClientRect();
     openZonePop({ id: 0, valid_from: date, valid_to: 'open', price_low: roundTick(low), price_high: roundTick(high), type: guessZoneType(roundTick(low), roundTick(high), index), name: '', note: '' }, { x: rect.left + Math.max(draft.x0, draft.x1), y: rect.top + top }, date);
   }, true);
+
+  /* ------------------------------------------------------------------ potenciální obchod (L / S + klik) */
+
+  function syncPointerModes(force = false) {
+    const busy = state.zoneMode || Boolean(state.ideaMode) || Boolean(state.handleDrag);
+    if (!force && busy === state.pointerBusy) return;
+    state.pointerBusy = busy;
+    chart.applyOptions({ handleScroll: { pressedMouseMove: !busy, horzTouchDrag: !busy }, kineticScroll: { mouse: !busy, touch: !busy } });
+  }
+
+  function syncIdeaMode() {
+    const button = state.ideaKey || ['long', 'short'].find(direction => $(`[data-idea-mode="${direction}"]`).getAttribute('aria-pressed') === 'true') || null;
+    state.ideaMode = state.zoneMode ? null : button;
+    chartEl.classList.toggle('is-placing', Boolean(state.ideaMode));
+    syncPointerModes();
+  }
+
+  $$('[data-idea-mode]').forEach(button => button.addEventListener('click', () => {
+    const on = button.getAttribute('aria-pressed') !== 'true';
+    $$('[data-idea-mode]').forEach(other => other.setAttribute('aria-pressed', other === button && on ? 'true' : 'false'));
+    syncIdeaMode();
+  }));
+
+  /** Výchozí stop: dvojnásobek průměrného rozpětí 5m svíčky toho dne, cíl 2R. */
+  function defaultRisk(day) {
+    if (!day) return 8;
+    let sum = 0;
+    for (let k = day.first; k <= day.last; k++) sum += state.bars[k].high - state.bars[k].low;
+    const average = sum / Math.max(1, day.last - day.first + 1);
+    return clamp(roundTick(average * 2), 2, 30);
+  }
+
+  function placeIdea(click) {
+    updateFrame();
+    const index = clamp(Math.round(logicalAt(click.x)), 0, state.ts.length - 1);
+    const bar = state.bars[index];
+    const value = candles.coordinateToPrice(click.y);
+    if (!bar || value === null) return;
+    const date = T.tradeDate(bar.time);
+    const entry = roundTick(value);
+    const risk = defaultRisk(state.dayMap.get(date));
+    const long = click.direction === 'long';
+    const rect = chartEl.getBoundingClientRect();
+    openIdeaPop({
+      id: 0, date, direction: click.direction, entry, entry_ts: bar.time,
+      stop: long ? entry - risk : entry + risk, target: long ? entry + 2 * risk : entry - 2 * risk,
+      name: '', notes: '', outcome: '', trade_id: null,
+    }, { x: rect.left + click.x + 16, y: rect.top + click.y - 40 });
+  }
+
+  /** Posun táhla: stop a cíl zůstanou na správné straně vstupu, vstup posune celý obchod. */
+  function moveHandle(handle, value) {
+    const idea = state.ideaDraft;
+    if (!idea) return;
+    const long = idea.direction === 'long';
+    if (handle === 'entry') {
+      const shift = value - idea.entry;
+      idea.entry = value;
+      idea.stop = roundTick(idea.stop + shift);
+      idea.target = roundTick(idea.target + shift);
+    } else if (handle === 'stop') {
+      idea.stop = long ? Math.min(value, idea.entry - TICK) : Math.max(value, idea.entry + TICK);
+    } else {
+      idea.target = long ? Math.max(value, idea.entry + TICK) : Math.min(value, idea.entry - TICK);
+    }
+    syncIdeaInputs();
+    redraw();
+  }
 
   /** Zóna pod cenou = support, nad cenou = resistance. */
   function guessZoneType(low, high, index) {
@@ -1209,10 +1643,10 @@
     if (popEl.hidden) return;
     popEl.hidden = true;
     popEl.innerHTML = '';
-    if (state.draft && !state.draft.active) {
-      state.draft = null;
-      redraw();
-    }
+    if (state.draft && !state.draft.active) state.draft = null;
+    state.ideaDraft = null;
+    state.draftGeo = null;
+    redraw();
   }
 
   document.addEventListener('pointerdown', event => {
@@ -1237,7 +1671,10 @@
   popEl.addEventListener('click', event => {
     const segButton = event.target.closest('[data-seg] button');
     if (segButton) {
-      $$('button', segButton.parentElement).forEach(button => button.setAttribute('aria-pressed', button === segButton ? 'true' : 'false'));
+      // Výsledek jde i zrušit (druhým klikem), ostatní volby ne.
+      const clear = segButton.parentElement.dataset.toggle === '1' && segButton.getAttribute('aria-pressed') === 'true';
+      $$('button', segButton.parentElement).forEach(button => button.setAttribute('aria-pressed', button === segButton && !clear ? 'true' : 'false'));
+      segButton.parentElement.dispatchEvent(new CustomEvent('segchange', { bubbles: true }));
     }
     if (event.target.closest('[data-act="cancel"]')) closePop();
   });
@@ -1266,6 +1703,7 @@
       <label class="hs-field">Poznámka<textarea name="note" maxlength="1000" placeholder="Proč tenhle bias?">${escapeHtml(info.bias_note || '')}</textarea></label>
       ${rth ? `<p class="hs-hint">${escapeHtml(rth)}</p>` : ''}
       <p class="hs-hint">Stejný bias jako v denním náhledu ES.</p>
+      ${dayTradesHtml(date)}
       <p class="hs-error" hidden></p>
       <div class="hs-pop-actions"><span class="hs-grow"></span><button type="button" class="hs-btn" data-act="cancel">Zrušit</button><button type="button" class="hs-btn hs-primary" data-act="save">Uložit</button></div>`, anchor);
     popEl.querySelector('[data-act="save"]').addEventListener('click', async () => {
@@ -1282,6 +1720,186 @@
         popError(error.message);
       }
     });
+  }
+
+  /** Obchody ES dne v popoveru hlavičky: klik otevře detail, kde jdou doplnit časy. */
+  function dayTradesHtml(date) {
+    const trades = state.ann.trades.filter(trade => trade.date === date);
+    const ideas = state.ann.ideas.filter(idea => idea.date === date);
+    if (!trades.length && !ideas.length) return '';
+    const tradeRows = trades.map(trade => {
+      const time = trade.entry_ts !== null ? T.pragueTime(trade.entry_ts) : 'bez času';
+      const result = tradeResultLabel(trade);
+      return `<button type="button" class="hs-list-row" data-open-trade="${trade.id}"><span class="hs-dir is-${trade.direction}">${trade.direction === 'long' ? 'L' : 'S'}</span><span>${escapeHtml(time)}</span><span class="hs-mono">${trade.entry !== null ? price(trade.entry) : '—'}${trade.exit !== null ? ` → ${price(trade.exit)}` : ''}</span><b class="${(trade.result_r ?? trade.result_usd ?? 0) >= 0 ? 'is-up' : 'is-down'}">${escapeHtml(result)}</b></button>`;
+    }).join('');
+    const ideaRows = ideas.map(idea => {
+      const result = evaluateIdea(idea);
+      return `<button type="button" class="hs-list-row" data-open-idea="${idea.id}"><span class="hs-dir is-${idea.direction}">${idea.direction === 'long' ? 'L' : 'S'}</span><span>${escapeHtml(idea.name || 'Potenciální')}</span><span class="hs-mono">${price(idea.entry)}</span><b class="${result.state === 'tp' ? 'is-up' : result.state === 'sl' ? 'is-down' : ''}">${escapeHtml(resultText(result))}</b></button>`;
+    }).join('');
+    return `<div class="hs-list">${trades.length ? `<p class="hs-sub">Obchody ES z deníku</p>${tradeRows}` : ''}${ideas.length ? `<p class="hs-sub">Potenciální obchody</p>${ideaRows}` : ''}</div>`;
+  }
+
+  popEl.addEventListener('click', event => {
+    const tradeRow = event.target.closest('[data-open-trade]');
+    const ideaRow = event.target.closest('[data-open-idea]');
+    if (!tradeRow && !ideaRow) return;
+    const box = popEl.getBoundingClientRect();
+    const anchor = { x: box.left, y: box.top };
+    if (tradeRow) {
+      const trade = state.ann.trades.find(item => item.id === Number(tradeRow.dataset.openTrade));
+      if (trade) openTradePop(trade, anchor);
+    } else {
+      const idea = state.ann.ideas.find(item => item.id === Number(ideaRow.dataset.openIdea));
+      if (idea) {
+        const day = state.dayMap.get(idea.date);
+        if (day) goToDay(day);
+        openIdeaPop({ ...idea }, anchor);
+      }
+    }
+  });
+
+  function openTradePop(trade, anchor) {
+    const linked = state.ann.ideas.find(idea => idea.trade_id === trade.id);
+    openPop(`<h3>${trade.direction === 'long' ? 'Long' : 'Short'} ${escapeHtml(trade.market)} <small>${escapeHtml(T.dateLabel(trade.date))}</small></h3>
+      <p class="hs-mono hs-line">${trade.entry !== null ? price(trade.entry) : '—'}${trade.exit !== null ? ` → ${price(trade.exit)}` : ''}${trade.stop !== null ? ` · SL ${price(trade.stop)}` : ''} · ${escapeHtml([tradeResultLabel(trade), trade.result_usd !== null && trade.result_r !== null ? `${signed(trade.result_usd, 0)} $` : ''].filter(Boolean).join(' · ') || 'bez výsledku')}</p>
+      <div class="hs-row">
+        <label>Čas vstupu<input type="time" name="entry_time" value="${escapeHtml(trade.entry_time || '')}"></label>
+        <label>Čas výstupu<input type="time" name="exit_time" value="${escapeHtml(trade.exit_time || '')}"></label>
+      </div>
+      <p class="hs-hint">Pražský čas. Podle něj obchod sedí v grafu; stejné pole je u obchodu v deníku.${linked ? ` Propojený potenciální obchod: ${escapeHtml(linked.name || linked.direction)} ${price(linked.entry)}.` : ''}</p>
+      <p class="hs-error" hidden></p>
+      <div class="hs-pop-actions"><span class="hs-grow"></span><button type="button" class="hs-btn" data-act="cancel">Zavřít</button><button type="button" class="hs-btn hs-primary" data-act="save">Uložit časy</button></div>`, anchor);
+    popEl.querySelector('[data-act="save"]').addEventListener('click', async () => {
+      try {
+        await api('hindsight_trade_times', { method: 'POST', body: { id: trade.id, entry_time: popEl.querySelector('[name="entry_time"]').value, exit_time: popEl.querySelector('[name="exit_time"]').value } });
+        closePop();
+        await loadAnnotations();
+      } catch (error) {
+        popError(error.message);
+      }
+    });
+  }
+
+  function syncIdeaInputs() {
+    const idea = state.ideaDraft;
+    if (!idea || popEl.hidden) return;
+    for (const name of ['entry', 'stop', 'target']) {
+      const input = popEl.querySelector(`[name="${name}"]`);
+      if (input && document.activeElement !== input) input.value = price(idea[name]);
+    }
+    renderIdeaSummary();
+  }
+
+  function renderIdeaSummary() {
+    const idea = state.ideaDraft;
+    const el = popEl.querySelector('[data-idea-summary]');
+    if (!idea || !el) return;
+    const risk = Math.abs(idea.entry - idea.stop);
+    const reward = Math.abs(idea.target - idea.entry);
+    const result = evaluateIdea(idea);
+    const when = result.end !== undefined && state.ts[result.end] ? ` v ${T.pragueTime(state.ts[result.end])}` : '';
+    el.textContent = `Risk ${risk.toFixed(2)} b. · cíl ${reward.toFixed(2)} b. · ${risk > 0 ? (reward / risk).toFixed(2) : '–'}R\nV grafu: ${resultText(result)}${when}${result.ambiguous ? ' (stop i cíl v jedné svíčce, počítá se stop)' : ''}`;
+    el.className = `hs-hint hs-summary ${result.state === 'tp' ? 'is-up' : result.state === 'sl' ? 'is-down' : ''}`;
+  }
+
+  function openIdeaPop(idea, anchor) {
+    const isNew = !idea.id;
+    state.ideaDraft = idea;
+    const dirButton = (value, label) => `<button type="button" data-value="${value}" aria-pressed="${idea.direction === value ? 'true' : 'false'}">${label}</button>`;
+    const outcomeButton = value => `<button type="button" data-value="${value}" aria-pressed="${idea.outcome === value ? 'true' : 'false'}">${OUTCOMES[value]}</button>`;
+    const trades = state.ann.trades.filter(trade => trade.date === idea.date);
+    const tradeOptions = trades.map(trade => `<option value="${trade.id}"${idea.trade_id === trade.id ? ' selected' : ''}>${trade.direction === 'long' ? 'L' : 'S'} ${trade.entry !== null ? price(trade.entry) : '—'}${trade.exit !== null ? ` → ${price(trade.exit)}` : ''} ${escapeHtml(tradeResultLabel(trade))}${trade.entry_ts !== null ? ` · ${T.pragueTime(trade.entry_ts)}` : ''}</option>`).join('');
+    const when = idea.entry_ts !== null && idea.entry_ts !== undefined ? ` · ${T.pragueTime(idea.entry_ts)}` : ' · celý den';
+    openPop(`<h3>${isNew ? 'Nový potenciální obchod' : 'Potenciální obchod'} <small>${escapeHtml(T.dateLabel(idea.date))}${escapeHtml(when)}</small></h3>
+      <div class="hs-seg" data-seg="direction">${dirButton('long', '▲ Long')}${dirButton('short', '▼ Short')}</div>
+      <div class="hs-row hs-row3">
+        <label>Vstup<input class="hs-mono" name="entry" inputmode="decimal" value="${price(idea.entry)}"></label>
+        <label>Stop loss<input class="hs-mono" name="stop" inputmode="decimal" value="${price(idea.stop)}"></label>
+        <label>Cíl<input class="hs-mono" name="target" inputmode="decimal" value="${price(idea.target)}"></label>
+      </div>
+      <p class="hs-hint hs-summary" data-idea-summary></p>
+      <p class="hs-sub">Jak to dopadlo</p>
+      <div class="hs-seg" data-seg="outcome" data-toggle="1">${outcomeButton('skipped')}${outcomeButton('missed')}${outcomeButton('taken')}</div>
+      <label class="hs-field">Realizovaný obchod<select name="trade_id"><option value="">${trades.length ? '— nepropojovat —' : 'v deníku není obchod ES z toho dne'}</option>${tradeOptions}</select></label>
+      <label class="hs-field">Popisek<input name="name" maxlength="80" value="${escapeHtml(idea.name)}" placeholder="např. VAL reject"></label>
+      <label class="hs-field">Poznámka<textarea name="notes" maxlength="1000">${escapeHtml(idea.notes)}</textarea></label>
+      <p class="hs-hint">Stop, vstup a cíl jde táhnout přímo v grafu. Stejný scénář je v denním náhledu.</p>
+      <p class="hs-error" hidden></p>
+      <div class="hs-pop-actions">
+        ${isNew ? '' : '<button type="button" class="hs-btn hs-danger" data-act="delete">Smazat</button>'}
+        <span class="hs-grow"></span>
+        <button type="button" class="hs-btn" data-act="cancel">Zrušit</button>
+        <button type="button" class="hs-btn hs-primary" data-act="save">Uložit</button>
+      </div>`, anchor);
+    renderIdeaSummary();
+    redraw();
+    for (const name of ['entry', 'stop', 'target']) {
+      popEl.querySelector(`[name="${name}"]`).addEventListener('input', event => {
+        const value = Number(String(event.target.value).replace(',', '.'));
+        if (!Number.isFinite(value) || value <= 0 || !state.ideaDraft) return;
+        state.ideaDraft[name] = value;
+        renderIdeaSummary();
+        redraw();
+      });
+    }
+    popEl.querySelector('[data-seg="direction"]').addEventListener('segchange', () => {
+      const direction = segValue('direction');
+      const draft = state.ideaDraft;
+      if (!draft || !direction || direction === draft.direction) return;
+      // Otočení směru zrcadlí stop a cíl kolem vstupu.
+      draft.direction = direction;
+      draft.stop = roundTick(2 * draft.entry - draft.stop);
+      draft.target = roundTick(2 * draft.entry - draft.target);
+      syncIdeaInputs();
+      redraw();
+    });
+    popEl.querySelector('[data-seg="outcome"]').addEventListener('segchange', () => {
+      if (segValue('outcome') === 'taken' && !popEl.querySelector('[name="trade_id"]').value && trades.length === 1) {
+        popEl.querySelector('[name="trade_id"]').value = String(trades[0].id);
+      }
+    });
+    popEl.querySelector('[data-act="save"]').addEventListener('click', async () => {
+      const draft = state.ideaDraft;
+      if (!draft) return;
+      const tradeId = popEl.querySelector('[name="trade_id"]').value;
+      const body = {
+        id: draft.id || undefined,
+        date: draft.date,
+        direction: draft.direction,
+        entry: draft.entry,
+        stop: draft.stop,
+        target: draft.target,
+        entry_ts: draft.entry_ts ?? null,
+        outcome: segValue('outcome'),
+        trade_id: tradeId ? Number(tradeId) : null,
+        name: popEl.querySelector('[name="name"]').value,
+        notes: popEl.querySelector('[name="notes"]').value,
+      };
+      try {
+        await api('hindsight_idea', { method: draft.id ? 'PUT' : 'POST', body });
+        closePop();
+        await loadAnnotations();
+      } catch (error) {
+        popError(error.message);
+      }
+    });
+    const remove = popEl.querySelector('[data-act="delete"]');
+    if (remove) {
+      remove.addEventListener('click', async () => {
+        if (remove.dataset.confirm !== '1') {
+          remove.dataset.confirm = '1';
+          remove.textContent = 'Opravdu smazat?';
+          return;
+        }
+        try {
+          await api('hindsight_idea', { method: 'DELETE', query: { id: idea.id } });
+          closePop();
+          await loadAnnotations();
+        } catch (error) {
+          popError(error.message);
+        }
+      });
+    }
   }
 
   function openZonePop(zone, anchor, clickedDate) {

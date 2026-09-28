@@ -320,7 +320,23 @@ function migrate_schema(PDO $pdo): void
         }
     }
 
+    // Hindsight: potenciální obchod má čas vstupu v grafu, výsledek (nevzatý, propáslý,
+    // vzatý) a odkaz na realizovaný obchod.
+    $ideaColumns = table_columns($pdo, 'ideas');
+    foreach (['entry_ts' => 'INTEGER', 'outcome' => 'TEXT', 'trade_id' => 'INTEGER'] as $column => $type) {
+        if (!in_array($column, $ideaColumns, true)) {
+            add_column($pdo, 'ideas', $column, $type);
+        }
+    }
+
     $tradeColumns = table_columns($pdo, 'trades');
+    // Hindsight: časy vstupu a výstupu (UTC) a identifikátor z importu proti duplicitám.
+    foreach (['entry_ts' => 'INTEGER', 'exit_ts' => 'INTEGER', 'external_id' => 'TEXT'] as $column => $type) {
+        if (!in_array($column, $tradeColumns, true)) {
+            add_column($pdo, 'trades', $column, $type);
+        }
+    }
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_trades_external ON trades(external_id) WHERE external_id IS NOT NULL');
     $addedStrategyLink = !in_array('strategy_id', $tradeColumns, true);
     if ($addedStrategyLink) {
         $pdo->exec('ALTER TABLE trades ADD COLUMN strategy_id INTEGER REFERENCES strategies(id) ON DELETE SET NULL');
@@ -1043,7 +1059,7 @@ function save_plan(array $data): array
         }
 
         $pdo->prepare('DELETE FROM ideas WHERE plan_id = ?')->execute([$id]);
-        $ideaSql = 'INSERT INTO ideas (plan_id, sort_order, name, direction, zone_name, trigger, entry_price, stop_loss, tp1, tp2, final_tp, rr, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $ideaSql = 'INSERT INTO ideas (plan_id, sort_order, name, direction, zone_name, trigger, entry_price, stop_loss, tp1, tp2, final_tp, rr, status, notes, entry_ts, outcome, trade_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $ideaStatement = $pdo->prepare($ideaSql);
         foreach ((array)value($data, 'ideas', []) as $index => $idea) {
             if (!is_array($idea) || !row_has_content($idea, ['name', 'zone_name', 'trigger', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'final_tp', 'rr', 'notes'])) {
@@ -1053,7 +1069,8 @@ function save_plan(array $data): array
                 $id, $index, value($idea, 'name', ''), value($idea, 'direction', ''), value($idea, 'zone_name', ''),
                 value($idea, 'trigger', ''), nullable_float(value($idea, 'entry_price')), nullable_float(value($idea, 'stop_loss')),
                 nullable_float(value($idea, 'tp1')), nullable_float(value($idea, 'tp2')), nullable_float(value($idea, 'final_tp')),
-                nullable_float(value($idea, 'rr')), value($idea, 'status', 'waiting'), value($idea, 'notes', '')
+                nullable_float(value($idea, 'rr')), value($idea, 'status', 'waiting'), value($idea, 'notes', ''),
+                hs_entry_ts_in_day(value($idea, 'entry_ts'), $date), enum_value(value($idea, 'outcome'), HS_OUTCOMES), nullable_int(value($idea, 'trade_id')),
             ]);
         }
 
@@ -1653,6 +1670,12 @@ function save_trade(array $data): array
     $id = nullable_int(value($data, 'id'));
     $stored = $id === null ? '{}' : (string)(fetch_one('SELECT custom FROM trades WHERE id = ?', [$id])['custom'] ?? '{}');
     $fields['custom'] = merge_custom_values('trade', value($data, 'custom', []), $stored);
+    // Časy vstupu a výstupu (pražský čas „HH:MM“ v obchodním dni); bez nich zůstanou uložené.
+    foreach (['entry' => 'entry_ts', 'exit' => 'exit_ts'] as $prefix => $column) {
+        if (array_key_exists($prefix . '_time', $data)) {
+            $fields[$column] = hs_trade_time_field($id, $column, $date, (string)($data[$prefix . '_time'] ?? ''));
+        }
+    }
     if ($id === null) {
         $fields['created_at'] = utc_now();
         $fields['updated_at'] = utc_now();
@@ -1667,7 +1690,7 @@ function save_trade(array $data): array
         $statement = $pdo->prepare("UPDATE trades SET $sets WHERE id = ?");
         $statement->execute([...array_values($fields), $id]);
     }
-    return fetch_one('SELECT * FROM trades WHERE id = ?', [$id]) ?? [];
+    return hs_trade_times(fetch_one('SELECT * FROM trades WHERE id = ?', [$id]) ?? []);
 }
 
 const EMOTION_LABELS = [

@@ -19,7 +19,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - klíčové levely jako horizontální úrovně s cenou, charakterem a stylem čáry,
 - srovnání výkonnosti jednotlivých strategií a setupů,
 - měsíční kalendář s výsledky dnů, red news a svátky,
-- **Hindsight**: rok 5m svíček ES na jedné souvislé ose se seancemi, tvými zónami, biasem a red news; zóny a bias se zadávají přímo v grafu a jsou stejné jako v denním náhledu,
+- **Hindsight**: rok 5m svíček ES na jedné souvislé ose se seancemi, tvými zónami, biasem, red news, potenciálními a realizovanými obchody; zóny, bias i potenciální obchody se zadávají přímo v grafu a jsou stejné jako v denním náhledu,
 - vstupní psychologický profil se silnými a rizikovými oblastmi, ověřený proti vlastním obchodům,
 - rychlý test psychiky přizpůsobený profilu, s vlastními pravidly pro špatný den,
 - pravidlový rozbor dnů s porušenými pravidly,
@@ -277,7 +277,17 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 - **Kolotoč** drží na obrazovce vždy přesně jeden obchodní den, kolečko a šipky pak listují po dnech,
 - **hlavička dne** nahoře ukazuje datum, šipku biasu, ✓/✗ (RTH close proti RTH open), počet obchodů a P&L dne; klik na ni nastaví bias a poznámku,
 - **Z + tažení** v grafu nakreslí zónu (nebo tlačítko + Zóna): typ support / resistance / VPOC / jiná, popisek, poznámka a platnost *jen tento den*, *do data* nebo *dokud ji neukončím*; klik na zónu ji upraví, ukončí k danému dni nebo smaže,
-- **vrstvy** (seance, news, zóny, bias, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera.
+- **L / S + klik** (nebo tlačítka + Long / + Short) přidá potenciální long nebo short v místě kliknutí: vstup je cena a čas kliknutí, stop je dvojnásobek průměrného rozpětí svíčky toho dne a cíl 2R. Stop, vstup i cíl jde táhnout za čtverečky vpravo nebo přepsat v okénku; tam se zadá i výsledek *nevzatý / propáslý / vzatý* a propojení s obchodem z deníku,
+- klik na **box pozice** potenciální obchod upraví nebo smaže, klik na **šipku obchodu** ukáže detail a doplní časy vstupu a výstupu,
+- **vrstvy** (seance, news, zóny, bias, potenciální, realizované, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera.
+
+### Potenciální a realizované obchody
+
+Potenciální obchod je **scénář denního náhledu ES** (vstup, stop loss, TP): co přidáš v Hindsightu, je v náhledu mezi scénáři, a scénář z náhledu se ukáže v grafu. Nová pole *Výsledek* (nevzatý, propáslý, vzatý) a čas vstupu z grafu editor náhledu zachová; vzatý obchod se v náhledu označí jako *Realizovaný*.
+
+V grafu je potenciální obchod čárkovaný **box pozice**: zelená část od vstupu k cíli, červená ke stopu. Hindsight ho vyhodnotí proti svíčkám: od času vstupu (u scénáře bez času od začátku dne) čeká, až cena sáhne na vstup, a pak rozhodne, jestli přišel dřív stop, nebo cíl. Svíčka, která zasáhne obojí, se počítá jako stop (horší případ, u výsledku je otazník). Když nepřijde ani jedno, výsledek je k poslední svíčce dne. Popisek ukáže R a výsledek, třeba `L VAL reject · 2.0R · TP +2.0R · propáslý`.
+
+Realizované obchody jsou **obchody ES/MES z deníku**: šipka vstupu a výstupu se špičkou přesně na ceně, spojené čarou v barvě výsledku (zelená zisk, červená ztráta). Aby seděly v čase, potřebují čas vstupu a výstupu: v dialogu obchodu přibyla pole *Čas vstupu* a *Čas výstupu* (pražský čas), nebo je doplníš v Hindsightu (klik na hlavičku dne ukáže obchody dne, i ty bez času). Večerní čas před obchodním dnem (Asie) se přiřadí správně i v týdnech, kdy USA a Evropa mají jiný letní čas. Import obchodů z CSV (bez duplicit podle ID z platformy) přijde později.
 
 Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET) a zobrazují v pražském čase. Letní čas USA a Evropy se mění v jiné týdny; posun se počítá pro každý okamžik zvlášť, takže seance sedí na minutu i v březnu a na přelomu října a listopadu. Obchodní den začíná v 18:00 New York předchozího dne.
 
@@ -298,7 +308,7 @@ Opakovaný import stejného souboru nic nezdvojí, svíčky se jen přepíšou. 
 
 Graf kreslí [TradingView Lightweight Charts™](https://www.tradingview.com/) (Apache 2.0), písma jsou Inter a JetBrains Mono (SIL OFL). Vše je přibalené ve `static/hindsight/`, stránka nic nenačítá z cizích serverů.
 
-Hotovo je MVP (fáze 1 zadání). Další fáze: potenciální a realizované obchody v grafu s importem obchodů, zamykání zón a biasu k otevření NY s verzemi dodatečných úprav (správce bude moct doplňovat zpětně) a vyhodnocení zón, biasu a obchodů v souhrnném panelu.
+Hotové jsou fáze 1 a 2 zadání (bez importu obchodů z CSV). Další fáze: rok s minimapou a Kolotočem jsou hotové, zbývá zamykání zón a biasu k otevření NY s verzemi dodatečných úprav (správce bude moct doplňovat zpětně), vyhodnocení zón, biasu a obchodů v souhrnném panelu a import obchodů.
 
 ## Psychika a disciplína
 

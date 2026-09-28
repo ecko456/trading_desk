@@ -242,6 +242,7 @@ try {
         if ($trade === null) {
             json_response(['error' => 'Obchod nebyl nalezen.'], 404);
         }
+        $trade = hs_trade_times($trade);
         $trade['screenshots'] = fetch_all('SELECT id, plan_id, trade_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots WHERE trade_id = ? ORDER BY created_at, id', [$id]);
         json_response($trade);
     }
@@ -254,6 +255,7 @@ try {
         $id = (int)($_GET['id'] ?? 0);
         $screenshots = fetch_all('SELECT * FROM screenshots WHERE trade_id = ?', [$id]);
         db()->prepare('DELETE FROM trades WHERE id = ?')->execute([$id]);
+        db()->prepare('UPDATE ideas SET trade_id = NULL WHERE trade_id = ?')->execute([$id]);
         foreach ($screenshots as $screenshot) {
             delete_screenshot_file($screenshot);
         }
@@ -312,6 +314,19 @@ try {
     if ($action === 'hindsight_zone' && $method === 'DELETE') {
         hs_delete_zone((int)($_GET['id'] ?? 0));
         json_response(['ok' => true]);
+    }
+
+    if ($action === 'hindsight_idea' && in_array($method, ['POST', 'PUT'], true)) {
+        json_response(hs_save_idea(request_json()));
+    }
+
+    if ($action === 'hindsight_idea' && $method === 'DELETE') {
+        hs_delete_idea((int)($_GET['id'] ?? 0));
+        json_response(['ok' => true]);
+    }
+
+    if ($action === 'hindsight_trade_times' && $method === 'POST') {
+        json_response(hs_save_trade_times(request_json()));
     }
 
     if ($action === 'hindsight_bias' && $method === 'POST') {

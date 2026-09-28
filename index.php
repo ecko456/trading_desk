@@ -784,6 +784,8 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           <label>Exit<input type="number" step="any" name="exit_price"></label>
           <label>Stop loss<input type="number" step="any" name="stop_loss"></label>
           <label<?= el('trade.target') ?>>Plánovaný TP<input type="number" step="any" name="target_price"></label>
+          <label title="Pražský čas; podle něj se obchod ukáže v Hindsightu">Čas vstupu<input type="time" name="entry_time"></label>
+          <label title="Pražský čas">Čas výstupu<input type="time" name="exit_time"></label>
           <label>Risk na trade ($)<input type="number" step="any" min="0" name="risk_amount" placeholder="např. 500"></label>
           <label<?= el('trade.fees') ?>>Poplatky ($)<input type="number" step="0.01" name="fees" value="0"></label>
           <label>Výsledek R<input type="number" step="0.01" name="result_r" placeholder="dopočítá se"></label>

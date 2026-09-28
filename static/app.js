@@ -744,8 +744,11 @@ function ideaTemplate(idea = {}, index = 0) {
       <label>TP2<input type="number" step="any" name="tp2" value="${escapeHtml(idea.tp2)}"></label>
       <label>Finální TP<input type="number" step="any" name="final_tp" value="${escapeHtml(idea.final_tp)}"></label>
       <label>Stav<select name="status">${optionTag('waiting', 'Čeká', idea.status)}${optionTag('active', 'Aktivní', idea.status)}${optionTag('invalid', 'Neplatný', idea.status)}${optionTag('executed', 'Realizovaný', idea.status)}</select></label>
-      <label class="span-3">Poznámka<input name="notes" value="${escapeHtml(idea.notes)}"></label>
+      <label title="Jak to dopadlo: vyplníš tady, nebo v Hindsightu">Výsledek<select name="outcome">${optionTag('', '—', idea.outcome)}${optionTag('skipped', 'Nevzatý', idea.outcome)}${optionTag('missed', 'Propáslý', idea.outcome)}${optionTag('taken', 'Vzatý', idea.outcome)}</select></label>
+      <label class="span-2">Poznámka<input name="notes" value="${escapeHtml(idea.notes)}"></label>
     </div>
+    <input type="hidden" name="entry_ts" value="${escapeHtml(idea.entry_ts ?? '')}">
+    <input type="hidden" name="trade_id" value="${escapeHtml(idea.trade_id ?? '')}">
   </article>`;
 }
 
@@ -1505,7 +1508,7 @@ function serializePlan() {
   data.bias = data.bias || 'neutral';
   data.zones = collectRows('#zoneList', '.zone-row', zoneFields);
   data.levels = collectRows('#levelList', '.level-row', ['name', 'price', 'kind', 'source', 'line_style', 'note']);
-  data.ideas = collectRows('#ideaList', '.idea-row', ['name', 'direction', 'zone_name', 'trigger', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'final_tp', 'rr', 'status', 'notes']);
+  data.ideas = collectRows('#ideaList', '.idea-row', ['name', 'direction', 'zone_name', 'trigger', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'final_tp', 'rr', 'status', 'notes', 'outcome', 'entry_ts', 'trade_id']);
   data.refs = collectRows('#refList', '.ref-row', ['kind', 'price_low', 'price_high', 'status', 'note']);
   data.dn_levels = dnLevels();
   data.custom = extractCustomValues(data, 'plan');

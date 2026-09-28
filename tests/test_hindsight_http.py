@@ -273,6 +273,83 @@ class HindsightHttpTests(unittest.TestCase):
         self.assertNotIn(b"hsImportForm", body, "import vidí jen správce")
 
 
+    def test_6_trade_times_and_potential_trades(self):
+        client = self.member("tereza")
+        utc = lambda text: int(datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp())
+
+        # Časy obchodu v pražském čase; obchodní den začíná v 18:00 New York den předem.
+        status, trade = client.api("POST", "trade", {"trade_date": "2026-09-10", "market": "ES", "direction": "long", "entry_price": 6600, "exit_price": 6612, "stop_loss": 6594, "risk_amount": 300, "entry_time": "15:40", "exit_time": "16:25"})
+        self.assertEqual(status, 200, trade)
+        self.assertEqual((trade["entry_ts"], trade["exit_ts"]), (utc("2026-09-10T13:40:00"), utc("2026-09-10T14:25:00")))
+        self.assertEqual((trade["entry_time"], trade["exit_time"]), ("15:40", "16:25"))
+        self.assertEqual(client.api("GET", "trade", id=trade["id"])[1]["entry_time"], "15:40")
+        # Týden, kdy Evropa už má zimní čas a USA ještě letní: 23:30 v Praze je večer před obchodním dnem.
+        status, evening = client.api("POST", "trade", {"trade_date": "2026-10-27", "market": "ES", "direction": "short", "entry_price": 6700, "exit_price": 6690, "stop_loss": 6705, "risk_amount": 250, "entry_time": "23:30"})
+        self.assertEqual(evening["entry_ts"], utc("2026-10-26T22:30:00"))
+        self.assertEqual(client.api("POST", "trade", {"trade_date": "2026-09-10", "market": "ES", "direction": "long", "entry_time": "25:10"})[0], 422)
+        # Obchod bez polí pro čas (starší klient) časy nesmaže.
+        status, kept = client.api("POST", "trade", {"id": trade["id"], "trade_date": "2026-09-10", "market": "ES", "direction": "long", "entry_price": 6600, "exit_price": 6612, "stop_loss": 6594, "risk_amount": 300})
+        self.assertEqual(kept["entry_ts"], trade["entry_ts"])
+        status, times = client.api("POST", "hindsight_trade_times", {"id": trade["id"], "entry_time": "15:45", "exit_time": "15:30"})
+        self.assertEqual(status, 422, "výstup před vstupem")
+        status, times = client.api("POST", "hindsight_trade_times", {"id": trade["id"], "entry_time": "15:45", "exit_time": ""})
+        self.assertEqual((status, times["entry_ts"], times["exit_ts"]), (200, utc("2026-09-10T13:45:00"), None))
+        client.api("POST", "trade", {"trade_date": "2026-09-10", "market": "NQ", "direction": "long", "entry_price": 20000, "exit_price": 20010, "stop_loss": 19990, "risk_amount": 200, "entry_time": "15:50"})
+
+        # Potenciální obchod ze Hindsightu je scénář denního náhledu.
+        entry_ts = utc("2026-09-10T13:35:00")
+        status, idea = client.api("POST", "hindsight_idea", {"date": "2026-09-10", "direction": "long", "entry": 6601, "stop": 6595, "target": 6613, "entry_ts": entry_ts, "outcome": "taken", "trade_id": trade["id"], "name": "VAL reject", "notes": "vstup po odmítnutí"})
+        self.assertEqual(status, 200, idea)
+        plan = client.api("GET", "plan", id=idea["plan_id"])[1]
+        stored = plan["ideas"][0]
+        self.assertEqual((stored["direction"], stored["entry_price"], stored["stop_loss"], stored["tp1"], stored["rr"], stored["status"], stored["outcome"], stored["trade_id"], stored["entry_ts"]),
+                         ("long", 6601.0, 6595.0, 6613.0, 2.0, "executed", "taken", trade["id"], entry_ts))
+        self.assertEqual(plan["bias"], "", "náhled založený kvůli obchodu nemá vymyšlený bias")
+
+        for bad in (
+            {"direction": "long", "entry": 6601, "stop": 6605, "target": 6613},
+            {"direction": "short", "entry": 6601, "stop": 6595, "target": 6590},
+            {"direction": "up", "entry": 6601, "stop": 6595, "target": 6613},
+            {"direction": "long", "entry": 6601, "stop": 6595, "target": 6613, "entry_ts": utc("2026-09-11T13:35:00")},
+            {"direction": "long", "entry": 6601, "stop": 6595, "target": 6613, "trade_id": 999999},
+            {"direction": "long", "entry": 6601, "stop": 6595},
+        ):
+            self.assertEqual(client.api("POST", "hindsight_idea", {"date": "2026-09-10", **bad})[0], 422, bad)
+
+        # Úprava bez času vstupu čas nechá; výsledek jde zrušit.
+        status, _ = client.request("PUT", "/api.php?action=hindsight_idea", {"id": idea["id"], "direction": "long", "entry": 6601, "stop": 6596, "target": 6616, "outcome": "missed"})
+        self.assertEqual(status, 200)
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-07", "to": "2026-09-11"})[1]
+        mine = next(item for item in notes["ideas"] if item["id"] == idea["id"])
+        self.assertEqual((mine["stop"], mine["target"], mine["outcome"], mine["entry_ts"], mine["status"]), (6596.0, 6616.0, "missed", entry_ts, "waiting"))
+        self.assertEqual([(t["market"], t["entry_ts"]) for t in notes["trades"] if t["date"] == "2026-09-10"], [("ES", utc("2026-09-10T13:45:00"))], "jen ES/MES")
+
+        # Uložení denního náhledu v editoru čas vstupu, výsledek ani propojení neztratí.
+        plan = client.api("GET", "plan", id=idea["plan_id"])[1]
+        editor_ideas = [{key: ("" if value is None else value) for key, value in item.items() if key in ("name", "direction", "entry_price", "stop_loss", "tp1", "tp2", "final_tp", "rr", "status", "notes", "outcome", "entry_ts", "trade_id")} for item in plan["ideas"]]
+        editor_ideas[0]["trade_id"] = trade["id"]
+        status, saved = client.api("POST", "plan", {"id": plan["id"], "plan_type": "daily", "plan_date": "2026-09-10", "market": "ES", "session": "Intraday", "ideas": editor_ideas + [{"name": "Z náhledu", "direction": "short", "entry_price": 6620, "stop_loss": 6626, "tp1": 6608}]})
+        self.assertEqual(status, 200, saved)
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-10", "to": "2026-09-10"})[1]
+        by_name = {item["name"]: item for item in notes["ideas"]}
+        self.assertEqual((by_name["VAL reject"]["entry_ts"], by_name["VAL reject"]["outcome"], by_name["VAL reject"]["trade_id"]), (entry_ts, "missed", trade["id"]))
+        self.assertEqual((by_name["Z náhledu"]["entry_ts"], by_name["Z náhledu"]["target"]), (None, 6608.0))
+        # Náhled přesunutý na jiný den: čas vstupu z grafu už nepatří k jeho dni, zahodí se.
+        status, moved = client.api("POST", "plan", {"plan_type": "daily", "plan_date": "2026-09-14", "market": "ES", "session": "Intraday", "ideas": [dict(editor_ideas[0], name="Přesunutý")]})
+        self.assertEqual(client.api("GET", "plan", id=moved["id"])[1]["ideas"][0]["entry_ts"], None)
+
+        # Smazaný obchod zmizí i z propojení; scénáře týdenního náhledu Hindsight nemění.
+        self.assertEqual(client.request("DELETE", f"/api.php?action=trade&id={trade['id']}")[0], 200)
+        notes = client.api("GET", "hindsight_annotations", **{"from": "2026-09-10", "to": "2026-09-10"})[1]
+        self.assertIsNone(next(item for item in notes["ideas"] if item["name"] == "VAL reject")["trade_id"])
+        status, weekly = client.api("POST", "plan", {"plan_type": "weekly", "plan_date": "2026-09-07", "market": "ES", "session": "Intraday", "ideas": [{"name": "Týdenní", "direction": "long", "entry_price": 6500, "stop_loss": 6490, "tp1": 6520}]})
+        weekly_idea = client.api("GET", "plan", id=weekly["id"])[1]["ideas"][0]["id"]
+        self.assertEqual(client.request("PUT", "/api.php?action=hindsight_idea", {"id": weekly_idea, "direction": "long", "entry": 1, "stop": 0.5, "target": 2})[0], 404)
+        self.assertEqual(client.request("DELETE", f"/api.php?action=hindsight_idea&id={weekly_idea}")[0], 404)
+        by_name_id = by_name["Z náhledu"]["id"]
+        self.assertEqual(client.request("DELETE", f"/api.php?action=hindsight_idea&id={by_name_id}")[0], 200)
+
+
 @unittest.skipIf(PHP is None, "PHP není nainstalované")
 class HindsightTimeTests(unittest.TestCase):
     def test_sessions_and_contracts(self):

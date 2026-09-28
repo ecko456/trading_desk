@@ -51,15 +51,21 @@ $isAdmin = is_admin($viewer);
     </div>
 
     <div class="hs-layers" role="group" aria-label="Vrstvy">
-      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true"><i class="hs-dot hs-dot-session"></i>Seance</button>
-      <button type="button" class="hs-chip" data-layer="news" aria-pressed="true"><i class="hs-dot hs-dot-news"></i>News</button>
-      <button type="button" class="hs-chip" data-layer="zones" aria-pressed="true"><i class="hs-dot hs-dot-zone"></i>Zóny</button>
-      <button type="button" class="hs-chip" data-layer="bias" aria-pressed="true"><i class="hs-dot hs-dot-bias"></i>Bias</button>
-      <button type="button" class="hs-chip" data-layer="volume" aria-pressed="true"><i class="hs-dot hs-dot-volume"></i>Objem</button>
+      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true" title="Seance Asie, Evropa, New York"><i class="hs-dot hs-dot-session"></i>Seance</button>
+      <button type="button" class="hs-chip" data-layer="news" aria-pressed="true" title="Red news z kalendáře"><i class="hs-dot hs-dot-news"></i>News</button>
+      <button type="button" class="hs-chip" data-layer="zones" aria-pressed="true" title="Zóny z denního náhledu"><i class="hs-dot hs-dot-zone"></i>Zóny</button>
+      <button type="button" class="hs-chip" data-layer="bias" aria-pressed="true" title="Bias dne: šipka a podbarvení"><i class="hs-dot hs-dot-bias"></i>Bias</button>
+      <button type="button" class="hs-chip" data-layer="ideas" aria-pressed="true" title="Potenciální obchody (box pozice)"><i class="hs-dot hs-dot-idea"></i>Potenciální</button>
+      <button type="button" class="hs-chip" data-layer="trades" aria-pressed="true" title="Realizované obchody z deníku"><i class="hs-dot hs-dot-trade"></i>Realizované</button>
+      <button type="button" class="hs-chip" data-layer="volume" aria-pressed="true" title="Objem"><i class="hs-dot hs-dot-volume"></i>Objem</button>
     </div>
 
     <div class="hs-actions">
-      <button type="button" class="hs-btn hs-toggle" id="hsZoneMode" aria-pressed="false" title="Nakreslit zónu: podrž Z a táhni v grafu, nebo zapni tady">+ Zóna <kbd>Z</kbd></button>
+      <div class="hs-add" role="group" aria-label="Přidat do grafu">
+        <button type="button" class="hs-btn hs-toggle" id="hsZoneMode" aria-pressed="false" title="Nakreslit zónu: podrž Z a táhni v grafu, nebo zapni tady">+ Zóna <kbd>Z</kbd></button>
+        <button type="button" class="hs-btn hs-toggle" data-idea-mode="long" aria-pressed="false" title="Potenciální long: podrž L a klikni do grafu, nebo zapni tady">+ Long <kbd>L</kbd></button>
+        <button type="button" class="hs-btn hs-toggle" data-idea-mode="short" aria-pressed="false" title="Potenciální short: podrž S a klikni do grafu, nebo zapni tady">+ Short <kbd>S</kbd></button>
+      </div>
       <button type="button" class="hs-btn hs-icon" id="hsHelp" title="Ovládání" aria-label="Ovládání"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.3M12 16.6v.2"/></svg></button>
 <?php if ($isAdmin): ?>
       <button type="button" class="hs-btn" id="hsDataButton" title="Svíčky: import z ATAS, kontrakty">Data</button>
@@ -95,10 +101,13 @@ $isAdmin = is_admin($viewer);
         <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>první a poslední den</dd>
         <dt><kbd>Z</kbd> + táhnout</dt><dd>nová zóna (pak typ, popis, platnost)</dd>
         <dt>Klik na zónu</dt><dd>upravit, ukončit, smazat</dd>
+        <dt><kbd>L</kbd> / <kbd>S</kbd> + klik</dt><dd>potenciální long / short v místě kliknutí, pak táhni stop a cíl</dd>
+        <dt>Klik na box nebo šipku</dt><dd>potenciální obchod upravit; u obchodu z deníku doplnit časy</dd>
         <dt>Klik na hlavičku dne</dt><dd>bias dne a poznámka</dd>
         <dt>Minimapa dole</dt><dd>klik nebo tažení okna = skok v roce</dd>
         <dt>Kolotoč</dt><dd>na obrazovce vždy přesně jeden obchodní den</dd>
       </dl>
+      <p class="hs-note">Potenciální obchod se vyhodnotí proti svíčkám: od času vstupu čeká na dotek vstupní ceny, pak rozhodne, jestli přišel dřív stop, nebo cíl (svíčka se stopem i cílem se počítá jako stop). Bez obojího se počítá k poslední svíčce dne.</p>
       <p class="hs-note">Časy jsou v pražském čase. Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET), letní čas se posouvá sám. Zóny a bias jsou stejné jako v denním náhledu.</p>
       <p class="hs-credit">Graf: TradingView Lightweight Charts™, Copyright (c) 2026 TradingView, Inc., <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">tradingview.com</a> (Apache 2.0). Písma Inter a JetBrains Mono (SIL OFL).</p>
       <div class="hs-dialog-actions"><button class="hs-btn hs-primary" value="close">Zavřít</button></div>

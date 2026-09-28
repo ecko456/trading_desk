@@ -19,6 +19,8 @@ const HS_PLAN_MARKETS = ['ES', 'MES'];
 const HS_BAR_SECONDS = 300;
 const HS_ZONE_TYPES = ['support', 'resistance', 'vpoc', 'other'];
 const HS_MAX_RANGE_DAYS = 400;
+/** Výsledek potenciálního obchodu: nevzatý, propáslý, vzatý. */
+const HS_OUTCOMES = ['skipped', 'missed', 'taken'];
 const HS_MONTHS = ['F' => 1, 'G' => 2, 'H' => 3, 'J' => 4, 'K' => 5, 'M' => 6, 'N' => 7, 'Q' => 8, 'U' => 9, 'V' => 10, 'X' => 11, 'Z' => 12];
 
 function hs_db(): PDO
@@ -100,10 +102,16 @@ function hs_contract_expiry(string $contract): ?string
     return hs_third_friday($year, $month);
 }
 
+/** Posun kalendářního data o dny, nezávisle na časovém pásmu serveru. */
+function hs_add_days(string $date, int $days): string
+{
+    return (new DateTimeImmutable($date, new DateTimeZone('UTC')))->modify(sprintf('%+d days', $days))->format('Y-m-d');
+}
+
 /** Den rollu: čtvrtek osm dní před expirací (zvyk CME u ES). */
 function hs_roll_date(string $expiry): string
 {
-    return gmdate('Y-m-d', strtotime($expiry . ' -8 days'));
+    return hs_add_days($expiry, -8);
 }
 
 /** Začátek obchodního dne (předchozí den 18:00 v New Yorku) v UTC. */
@@ -129,7 +137,7 @@ function hs_contract_period(int $year, int $month): array
         'contract' => 'ES' . array_search($month, HS_MONTHS, true) . ($year % 10),
         'expiry' => $expiry,
         'from_date' => $fromDate,
-        'last_date' => gmdate('Y-m-d', strtotime($rollDate . ' -1 day')),
+        'last_date' => hs_add_days($rollDate, -1),
         'roll_date' => $rollDate,
         'from_ts' => hs_trade_day_start($fromDate),
         'to_ts' => hs_trade_day_start($rollDate),
@@ -784,7 +792,252 @@ function hs_annotations(string $from, string $to): array
             $news[] = ['id' => (int)$row['id'], 'ts' => $ts, 'title' => (string)$row['title'], 'date' => (string)$row['event_date'], 'time' => (string)$row['time_label']];
         }
     }
-    return ['from' => $from, 'to' => $to, 'days' => array_values($days), 'zones' => $zones, 'news' => $news];
+    return ['from' => $from, 'to' => $to, 'days' => array_values($days), 'zones' => $zones, 'news' => $news, 'ideas' => hs_ideas($from, $to), 'trades' => hs_trades($from, $to)];
+}
+
+/** Potenciální obchody = scénáře denního náhledu ES/MES se vstupem, stopem a cílem. */
+function hs_ideas(string $from, string $to): array
+{
+    $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
+    $ideas = [];
+    foreach (fetch_all("SELECT i.*, p.plan_date, t.id AS linked_trade FROM ideas i JOIN plans p ON p.id = i.plan_id LEFT JOIN trades t ON t.id = i.trade_id WHERE p.plan_type = 'daily' AND p.market IN ($markets) AND p.plan_date BETWEEN ? AND ? AND i.direction IN ('long', 'short') AND i.entry_price IS NOT NULL AND i.stop_loss IS NOT NULL AND COALESCE(i.tp1, i.tp2, i.final_tp) IS NOT NULL ORDER BY p.plan_date, i.entry_ts, i.sort_order", [...HS_PLAN_MARKETS, $from, $to]) as $row) {
+        $ideas[] = [
+            'id' => (int)$row['id'],
+            'plan_id' => (int)$row['plan_id'],
+            'date' => (string)$row['plan_date'],
+            'direction' => (string)$row['direction'],
+            'name' => (string)($row['name'] ?? ''),
+            'notes' => (string)($row['notes'] ?? ''),
+            'entry' => (float)$row['entry_price'],
+            'stop' => (float)$row['stop_loss'],
+            'target' => (float)($row['tp1'] ?? $row['tp2'] ?? $row['final_tp']),
+            'tp2' => $row['tp2'] !== null ? (float)$row['tp2'] : null,
+            'final_tp' => $row['final_tp'] !== null ? (float)$row['final_tp'] : null,
+            'entry_ts' => $row['entry_ts'] !== null ? (int)$row['entry_ts'] : null,
+            'outcome' => in_array((string)($row['outcome'] ?? ''), HS_OUTCOMES, true) ? (string)$row['outcome'] : '',
+            'trade_id' => $row['linked_trade'] !== null ? (int)$row['linked_trade'] : null,
+            'status' => (string)($row['status'] ?? ''),
+        ];
+    }
+    return $ideas;
+}
+
+/** Realizované obchody ES/MES z deníku (s časy, pokud je mají). */
+function hs_trades(string $from, string $to): array
+{
+    $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
+    $trades = [];
+    foreach (fetch_all("SELECT id, trade_date, market, direction, entry_price, exit_price, stop_loss, target_price, quantity, result_r, result_usd, entry_ts, exit_ts, strategy FROM trades WHERE market IN ($markets) AND trade_date BETWEEN ? AND ? ORDER BY trade_date, entry_ts, id", [...HS_PLAN_MARKETS, $from, $to]) as $row) {
+        $trades[] = hs_trade_times([
+            'id' => (int)$row['id'],
+            'date' => (string)$row['trade_date'],
+            'market' => (string)$row['market'],
+            'direction' => (string)$row['direction'],
+            'entry' => $row['entry_price'] !== null ? (float)$row['entry_price'] : null,
+            'exit' => $row['exit_price'] !== null ? (float)$row['exit_price'] : null,
+            'stop' => $row['stop_loss'] !== null ? (float)$row['stop_loss'] : null,
+            'target' => $row['target_price'] !== null ? (float)$row['target_price'] : null,
+            'quantity' => (float)$row['quantity'],
+            'result_r' => $row['result_r'] !== null ? round((float)$row['result_r'], 2) : null,
+            'result_usd' => $row['result_usd'] !== null ? round((float)$row['result_usd'], 2) : null,
+            'entry_ts' => $row['entry_ts'] !== null ? (int)$row['entry_ts'] : null,
+            'exit_ts' => $row['exit_ts'] !== null ? (int)$row['exit_ts'] : null,
+            'strategy' => (string)($row['strategy'] ?? ''),
+        ]);
+    }
+    return $trades;
+}
+
+/* ---------------------------------------------------------------- časy obchodů */
+
+/** Okamžik v UTC sekundách z grafu; mimo rozumný rozsah = žádný. */
+function hs_entry_ts(mixed $value): ?int
+{
+    if ($value === null || $value === '' || !is_numeric($value)) {
+        return null;
+    }
+    $ts = (int)$value;
+    return $ts >= 946684800 && $ts <= time() + 400 * 86400 ? $ts : null;
+}
+
+/** Čas vstupu scénáře, jen když patří do obchodního dne náhledu (jinak se zahodí). */
+function hs_entry_ts_in_day(mixed $value, string $date): ?int
+{
+    $ts = hs_entry_ts($value);
+    if ($ts === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        return null;
+    }
+    return $ts >= hs_trade_day_start($date) && $ts < hs_trade_day_start(hs_add_days($date, 1)) ? $ts : null;
+}
+
+/**
+ * Čas „HH:MM“ v pražském čase v obchodním dni ES na UTC. Obchodní den začíná
+ * v 18:00 New York den předem, v Praze tedy o půlnoci, v týdnech s rozdílným
+ * letním časem už ve 23:00 předchozího dne: taková večerní hodina patří k němu.
+ */
+function hs_trade_time_ts(string $date, string $time): ?int
+{
+    if (!preg_match('/^(\d{1,2})[:.](\d{2})$/', trim($time), $m) || (int)$m[1] > 23 || (int)$m[2] > 59) {
+        return null;
+    }
+    $moment = DateTimeImmutable::createFromFormat('!Y-m-d H:i', sprintf('%s %02d:%02d', $date, (int)$m[1], (int)$m[2]), new DateTimeZone('Europe/Prague'));
+    if (!$moment instanceof DateTimeImmutable) {
+        return null;
+    }
+    $ts = $moment->getTimestamp();
+    $dayEnd = hs_trade_day_start(hs_add_days($date, 1)) - 3600;
+    if ($ts >= $dayEnd) {
+        $evening = $moment->modify('-1 day')->getTimestamp();
+        if ($evening >= hs_trade_day_start($date)) {
+            return $evening;
+        }
+    }
+    return $ts;
+}
+
+/** UTC → „HH:MM“ v pražském čase. */
+function hs_ts_time(?int $ts): string
+{
+    return $ts === null ? '' : (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('Europe/Prague'))->format('H:i');
+}
+
+/** Čas z formuláře obchodu; nezměněný čas nechá přesný okamžik (třeba z importu) beze změny. */
+function hs_trade_time_field(?int $id, string $column, string $date, string $time): ?int
+{
+    $time = trim($time);
+    if ($time === '') {
+        return null;
+    }
+    if ($id !== null) {
+        $stored = fetch_one("SELECT trade_date, $column AS ts FROM trades WHERE id = ?", [$id]);
+        if ($stored !== null && $stored['ts'] !== null && (string)$stored['trade_date'] === $date && hs_ts_time((int)$stored['ts']) === $time) {
+            return (int)$stored['ts'];
+        }
+    }
+    $ts = hs_trade_time_ts($date, $time);
+    if ($ts === null) {
+        json_response(['error' => 'Čas obchodu zadej jako HH:MM (pražský čas).'], 422);
+    }
+    return $ts;
+}
+
+/** K obchodu doplní časy vstupu a výstupu jako „HH:MM“ (pro formulář). */
+function hs_trade_times(array $trade): array
+{
+    if ($trade === []) {
+        return $trade;
+    }
+    $trade['entry_time'] = hs_ts_time(isset($trade['entry_ts']) && $trade['entry_ts'] !== null ? (int)$trade['entry_ts'] : null);
+    $trade['exit_time'] = hs_ts_time(isset($trade['exit_ts']) && $trade['exit_ts'] !== null ? (int)$trade['exit_ts'] : null);
+    return $trade;
+}
+
+/** Časy obchodu zadané v Hindsightu. */
+function hs_save_trade_times(array $data): array
+{
+    $id = (int)($data['id'] ?? 0);
+    $trade = fetch_one('SELECT id, trade_date FROM trades WHERE id = ?', [$id]);
+    if ($trade === null) {
+        json_response(['error' => 'Obchod už neexistuje, načti graf znovu.'], 404);
+    }
+    $date = (string)$trade['trade_date'];
+    $entry = hs_trade_time_field($id, 'entry_ts', $date, (string)($data['entry_time'] ?? ''));
+    $exit = hs_trade_time_field($id, 'exit_ts', $date, (string)($data['exit_time'] ?? ''));
+    if ($entry !== null && $exit !== null && $exit < $entry) {
+        json_response(['error' => 'Výstup nemůže být dřív než vstup.'], 422);
+    }
+    db()->prepare('UPDATE trades SET entry_ts = ?, exit_ts = ?, updated_at = ? WHERE id = ?')->execute([$entry, $exit, utc_now(), $id]);
+    return hs_trade_times(['id' => $id, 'entry_ts' => $entry, 'exit_ts' => $exit]);
+}
+
+/* ---------------------------------------------------------------- potenciální obchody */
+
+/** Scénář z denního náhledu ES/MES; jiné scénáře Hindsight nemění. */
+function hs_idea_row(int $id): ?array
+{
+    $markets = implode(',', array_fill(0, count(HS_PLAN_MARKETS), '?'));
+    return fetch_one("SELECT i.id, i.status, p.plan_date FROM ideas i JOIN plans p ON p.id = i.plan_id WHERE i.id = ? AND p.plan_type = 'daily' AND p.market IN ($markets)", [$id, ...HS_PLAN_MARKETS]);
+}
+
+function hs_idea_fields(array $data, string $date, string $status): array
+{
+    $direction = (string)($data['direction'] ?? '');
+    if (!in_array($direction, ['long', 'short'], true)) {
+        json_response(['error' => 'Potenciální obchod je long, nebo short.'], 422);
+    }
+    $entry = nullable_float($data['entry'] ?? null);
+    $stop = nullable_float($data['stop'] ?? null);
+    $target = nullable_float($data['target'] ?? null);
+    if ($entry === null || $stop === null || $target === null || $entry <= 0 || $stop <= 0 || $target <= 0) {
+        json_response(['error' => 'Zadej vstup, stop loss i cíl.'], 422);
+    }
+    $valid = $direction === 'long' ? $stop < $entry && $entry < $target : $target < $entry && $entry < $stop;
+    if (!$valid) {
+        json_response(['error' => $direction === 'long' ? 'U longu musí být stop loss pod vstupem a cíl nad ním.' : 'U shortu musí být stop loss nad vstupem a cíl pod ním.'], 422);
+    }
+    $entryTs = hs_entry_ts($data['entry_ts'] ?? null);
+    if ($entryTs !== null && ($entryTs < hs_trade_day_start($date) || $entryTs >= hs_trade_day_start(hs_add_days($date, 1)))) {
+        json_response(['error' => 'Čas vstupu nepatří do obchodního dne ' . hs_czech_date($date) . '.'], 422);
+    }
+    $outcome = in_array((string)($data['outcome'] ?? ''), HS_OUTCOMES, true) ? (string)$data['outcome'] : '';
+    $tradeId = nullable_int($data['trade_id'] ?? null);
+    if ($tradeId !== null && fetch_one('SELECT id FROM trades WHERE id = ?', [$tradeId]) === null) {
+        json_response(['error' => 'Propojený obchod v deníku neexistuje.'], 422);
+    }
+    return [
+        'direction' => $direction,
+        'entry_price' => $entry,
+        'stop_loss' => $stop,
+        'tp1' => $target,
+        'rr' => round(abs($target - $entry) / abs($entry - $stop), 2),
+        'name' => mb_substr(trim((string)($data['name'] ?? '')), 0, 80),
+        'notes' => mb_substr(trim((string)($data['notes'] ?? '')), 0, 1000),
+        'entry_ts' => $entryTs,
+        'outcome' => $outcome,
+        'trade_id' => $tradeId,
+        // Vzatý obchod je v náhledu „Realizovaný“; jinak zůstane stav z náhledu.
+        'status' => $outcome === 'taken' ? 'executed' : ($status === 'executed' || $status === '' ? 'waiting' : $status),
+    ];
+}
+
+function hs_save_idea(array $data): array
+{
+    $id = (int)($data['id'] ?? 0);
+    if ($id > 0) {
+        $row = hs_idea_row($id);
+        if ($row === null) {
+            json_response(['error' => 'Potenciální obchod už neexistuje, načti graf znovu.'], 404);
+        }
+        $fields = hs_idea_fields($data, (string)$row['plan_date'], (string)$row['status']);
+        // Úprava mění jen poslaná pole; co v požadavku chybí, zůstane uložené.
+        foreach (['entry_ts' => 'entry_ts', 'name' => 'name', 'notes' => 'notes', 'trade_id' => 'trade_id', 'outcome' => 'outcome', 'status' => 'outcome'] as $column => $key) {
+            if (!array_key_exists($key, $data)) {
+                unset($fields[$column]);
+            }
+        }
+        $sets = implode(', ', array_map(static fn(string $column): string => "$column = ?", array_keys($fields)));
+        db()->prepare("UPDATE ideas SET $sets WHERE id = ?")->execute([...array_values($fields), $id]);
+        db()->prepare('UPDATE plans SET updated_at = ? WHERE id = (SELECT plan_id FROM ideas WHERE id = ?)')->execute([utc_now(), $id]);
+        return ['id' => $id];
+    }
+    $date = hs_date($data['date'] ?? '');
+    $fields = hs_idea_fields($data, $date, '');
+    $planId = hs_plan_for($date);
+    $order = (int)(fetch_one('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ideas WHERE plan_id = ?', [$planId])['next'] ?? 0);
+    $columns = ['plan_id', 'sort_order', ...array_keys($fields)];
+    db()->prepare('INSERT INTO ideas (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')')
+        ->execute([$planId, $order, ...array_values($fields)]);
+    $newId = (int)db()->lastInsertId();
+    db()->prepare('UPDATE plans SET updated_at = ? WHERE id = ?')->execute([utc_now(), $planId]);
+    return ['id' => $newId, 'plan_id' => $planId];
+}
+
+function hs_delete_idea(int $id): void
+{
+    if (hs_idea_row($id) === null) {
+        json_response(['error' => 'Potenciální obchod už neexistuje, načti graf znovu.'], 404);
+    }
+    db()->prepare('DELETE FROM ideas WHERE id = ?')->execute([$id]);
 }
 
 function hs_zone_type(array $row): string
@@ -809,7 +1062,8 @@ function hs_plan_for(string $date): int
         return (int)$plan['id'];
     }
     $now = utc_now();
-    db()->prepare("INSERT INTO plans (plan_type, plan_date, market, session, status, bias, created_at, updated_at) VALUES ('daily', ?, 'ES', 'intraday', 'draft', 'neutral', ?, ?)")->execute([$date, $now, $now]);
+    // Bias zůstane nezadaný (''), dokud ho trader nezvolí; náhled ho ukáže jako Balance.
+    db()->prepare("INSERT INTO plans (plan_type, plan_date, market, session, status, bias, created_at, updated_at) VALUES ('daily', ?, 'ES', 'intraday', 'draft', '', ?, ?)")->execute([$date, $now, $now]);
     return (int)db()->lastInsertId();
 }
 
