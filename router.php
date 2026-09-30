@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 $path = rawurldecode((string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/'));
 
-if (preg_match('#(^|/)(data|tests|deploy|lib|bin|odmeny)(/|$)#i', $path) || preg_match('#(^|/)\.#', $path)
+if (preg_match('#(^|/)(data|tests|deploy|lib|bin|odmeny|odmeny_v2)(/|$)#i', $path) || preg_match('#(^|/)\.#', $path)
     || basename($path) === 'hodnoceni-operatoru.html'
     || preg_match('#\.(md|txt|zip|py|sh|bat|command|ini|json|sqlite3|sealed|lock|log|bak|csv|docx)$#i', $path)) {
     http_response_code(404);

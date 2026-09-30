@@ -187,6 +187,9 @@ class AccountsHttpTests(unittest.TestCase):
         # Poznámky pro vývoj (CLAUDE.md) se z webu nečtou, ani ve static/.
         for path in ("/CLAUDE.md", "/static/hindsight/CLAUDE.md"):
             self.assertEqual(anonymous.request("GET", path)[0], 404, path)
+        # Odměny jsou samostatná aplikace; přes Trading Desk se z webu nečtou.
+        for path in ("/odmeny_v2/index.php", "/odmeny_v2/api.php?action=state", "/odmeny_v2/private/app.js"):
+            self.assertEqual(anonymous.request("GET", path)[0], 404, path)
 
     def test_journals_are_isolated(self):
         alice, _, _ = self.register_and_approve("alice")
