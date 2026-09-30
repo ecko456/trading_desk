@@ -51,7 +51,7 @@ $isAdmin = is_admin($viewer);
     </div>
 
     <div class="hs-layers" role="group" aria-label="Vrstvy">
-      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true" title="Pás seancí dole v grafu: Asie, Evropa, New York s časem, rozsahem a změnou; najetí ukáže high a low seance, klik ji přiblíží"><i class="hs-dot hs-dot-session"></i>Seance</button>
+      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true" title="Pás seancí dole v grafu: Asie, Evropa, New York s časem, rozsahem a změnou; najetí ukáže high a low seance, klik ji přiblíží, další klik vrátí zobrazení"><i class="hs-dot hs-dot-session"></i>Seance</button>
       <button type="button" class="hs-chip" data-layer="news" aria-pressed="true" title="Red news z kalendáře"><i class="hs-dot hs-dot-news"></i>News</button>
       <button type="button" class="hs-chip" data-layer="zones" aria-pressed="true" title="Zóny z denního náhledu"><i class="hs-dot hs-dot-zone"></i>Zóny</button>
       <button type="button" class="hs-chip" data-layer="bias" aria-pressed="true" title="Bias dne: šipka a podbarvení"><i class="hs-dot hs-dot-bias"></i>Bias</button>
@@ -133,7 +133,7 @@ $isAdmin = is_admin($viewer);
         <dt><kbd>L</kbd> / <kbd>S</kbd> + klik</dt><dd>potenciální long / short v místě kliknutí, pak táhni stop a cíl</dd>
         <dt>Klik na box nebo šipku</dt><dd>potenciální obchod upravit; u obchodu z deníku doplnit časy</dd>
         <dt>Klik na hlavičku dne</dt><dd>bias dne a poznámka</dd>
-        <dt>Pás seancí dole</dt><dd>najetí ukáže high a low seance, klik seanci přiblíží</dd>
+        <dt>Pás seancí dole</dt><dd>najetí ukáže high a low seance, klik seanci přiblíží, další klik na pás vrátí původní zobrazení</dd>
         <dt><kbd>A</kbd></dt><dd>svislé měřítko zpět na automatiku (i dvojklik na cenovou osu). Po ručním přiblížení osy se svíčky při posunu samy dorovnávají do obrazu</dd>
         <dt>Minimapa dole</dt><dd>klik nebo tažení okna = skok v roce</dd>
         <dt>Den po dni</dt><dd>na obrazovce vždy přesně jeden obchodní den, kolečko a šipky listují po dnech</dd>

@@ -273,7 +273,7 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 
 - **kolečko** posouvá v čase se setrvačností, **Ctrl + kolečko** přibližuje kolem kurzoru, graf jde i táhnout myší,
 - **svislé měřítko** drží svíčky v obraze samo (AUTO v rohu pod cenovou osou). Když si ho ručně přiblížíš tažením cenové osy, zvolený rozsah zůstane, ale při posunu v čase se plynule dorovná, takže svíčky nikdy neutečou z obrazu; **A**, klik na AUTO nebo dvojklik na osu vrátí plnou automatiku,
-- **pás seancí** dole v grafu (místo objemu): Asie, Evropa a New York v barvách seancí, u každé čas v Praze, rozsah high–low a změna open → close; seance pod kurzorem se zvýrazní, najetí na pás ukáže high a low seance (do konce dne tečkovaně) a klik seanci přiblíží. Oddálený graf ukazuje jen rytmus seancí. Seance svítí zdola (záře od pásu), bias dne shora,
+- **pás seancí** dole v grafu (místo objemu): Asie, Evropa a New York v barvách seancí, u každé čas v Praze, rozsah high–low a změna open → close; seance pod kurzorem se zvýrazní, najetí na pás ukáže high a low seance (do konce dne tečkovaně) a klik seanci přiblíží; další klik na pás vrátí předchozí zobrazení (i s režimem Den po dni). Oddálený graf ukazuje jen rytmus seancí. Seance svítí zdola (záře od pásu), bias dne shora,
 - svíčky: rostoucí dutá, klesající plná (rozdíl je vidět i tvarem, nejen barvou),
 - **← →** skočí na předchozí a další den, **Home / End** na první a poslední,
 - **datum** nahoře nebo **minimapa** dole (celý rok, barevný pruh = bias vyšel / nevyšel) skočí kamkoli, okno v minimapě jde táhnout,

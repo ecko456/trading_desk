@@ -161,6 +161,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .hs-main > * { min-width: 0; }
 .hs-chart.is-drawing, .hs-chart.is-drawing * { cursor: crosshair !important; }
 .hs-chart.is-pointer:not(.is-drawing) canvas { cursor: pointer !important; }
+.hs-chart.is-zoom-in:not(.is-drawing) canvas { cursor: zoom-in !important; }
+.hs-chart.is-zoom-out:not(.is-drawing) canvas { cursor: zoom-out !important; }
 .hs-chart.is-placing canvas { cursor: copy !important; }
 .hs-chart.is-resize canvas { cursor: ns-resize !important; }
 

@@ -162,6 +162,7 @@
     railRects: [],
     railHover: null,
     cursorSession: null,
+    sessionZoom: null,
   };
 
   /* ------------------------------------------------------------------ graf */
@@ -1365,6 +1366,7 @@
     if (event.ctrlKey || event.metaKey) {
       // Přiblížení kolem kurzoru; režim Den po dni se tím vypne.
       if (state.prefs.snap) setSnap(false);
+      forgetSessionZoom();
       stopMotion();
       updateFrame();
       const anchor = logicalAt(event.offsetX);
@@ -1484,16 +1486,19 @@
   }));
   $('#hsDate').addEventListener('change', event => goToDate(event.target.value));
 
-  function setSnap(on) {
+  function setSnap(on, day = null) {
     state.prefs.snap = on;
     $('#hsSnap').setAttribute('aria-pressed', on ? 'true' : 'false');
     savePrefs();
     if (on) {
-      const day = centerDay();
-      if (day) animateTo(dayRange(day));
+      const target = day || centerDay();
+      if (target) animateTo(dayRange(target));
     }
   }
-  $('#hsSnap').addEventListener('click', () => setSnap(!state.prefs.snap));
+  $('#hsSnap').addEventListener('click', () => {
+    forgetSessionZoom();
+    setSnap(!state.prefs.snap);
+  });
 
   /* ------------------------------------------------------------------ vrstvy a nastavení */
 
@@ -1753,6 +1758,7 @@
       state.cursorSession = cursorKey;
       redraw();
     }
+    syncRailCursor(railKey);
     if (railKey) {
       if (state.hover) { state.hover = null; redraw(); }
       showTooltip(null);
@@ -1773,14 +1779,52 @@
     return `${hit.kind}:${item ? item.id : ''}`;
   }
 
+  /** Kurzor nad pásem seancí: lupa +, když klik seanci přiblíží, lupa −, když vrátí zpět. */
+  function syncRailCursor(railKey) {
+    chartEl.classList.toggle('is-zoom-in', Boolean(railKey && !state.sessionZoom));
+    chartEl.classList.toggle('is-zoom-out', Boolean(railKey && state.sessionZoom));
+  }
+
+  function forgetSessionZoom() {
+    state.sessionZoom = null;
+    syncRailCursor(state.railHover);
+  }
+
+  /**
+   * Klik na pás seancí přepíná: poprvé seanci přiblíží (režim Den po dni se vypne), další klik
+   * vrátí předchozí zobrazení. Seance zůstane na stejném místě a Den po dni se zase zapne.
+   * Když mezitím graf posuneš na jinou seanci, oddálí se kolem ní.
+   */
+  function toggleSessionZoom({ day, session }) {
+    const key = `${day.date}|${session.key}`;
+    const middle = (edgeOf(session.start) + edgeOf(session.end)) / 2;
+    const zoom = state.sessionZoom;
+    if (zoom) {
+      forgetSessionZoom();
+      if (zoom.snap) {
+        setSnap(true, day);
+        return;
+      }
+      const from = middle - zoom.width * (key === zoom.key ? zoom.fraction : 0.5);
+      animateTo({ from, to: from + zoom.width });
+      return;
+    }
+    const range = getRange();
+    if (range) {
+      const width = range.to - range.from;
+      state.sessionZoom = { key, width, fraction: (middle - range.from) / width, snap: state.prefs.snap };
+      syncRailCursor(state.railHover);
+    }
+    if (state.prefs.snap) setSnap(false);
+    const pad = 3;
+    animateTo({ from: edgeOf(session.start) - pad, to: edgeOf(session.end) + pad });
+  }
+
   chart.subscribeClick(param => {
     if (!param.point || state.zoneMode || state.ideaMode || suppressClick) return;
     const railHit = railLookup(state.railHover);
     if (railHit) {
-      // Klik na seanci v pásu: přiblížit na ni (režim Den po dni se tím vypne).
-      if (state.prefs.snap) setSnap(false);
-      const pad = 3;
-      animateTo({ from: edgeOf(railHit.session.start) - pad, to: edgeOf(railHit.session.end) + pad });
+      toggleSessionZoom(railHit);
       return;
     }
     const hit = hitTest(param.point.x, param.point.y);
