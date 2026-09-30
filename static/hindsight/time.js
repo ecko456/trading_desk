@@ -96,7 +96,8 @@
   const DEFAULT_SESSIONS = [
     { key: 'asia', label: 'Asie', from: -6 * 60, to: 3 * 60 },
     { key: 'eu', label: 'EU', from: 3 * 60, to: 9 * 60 + 30 },
-    { key: 'ny', label: 'NY', from: 9 * 60 + 30, to: 16 * 60 },
+    // RTH ES do 16:15 New York (v Praze běžně 22:15); futures se obchodují ještě čtvrt hodiny po závěru akcií.
+    { key: 'ny', label: 'NY', from: 9 * 60 + 30, to: 16 * 60 + 15 },
   ];
 
   /** Seance obchodního dne v UTC; minuty jsou vůči půlnoci dne v New Yorku (záporné = předchozí večer). */

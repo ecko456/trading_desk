@@ -356,6 +356,8 @@ async function loadWorkspace() {
 const PRAGUE = 'Europe/Prague';
 const NEW_YORK = 'America/New_York';
 const EU_OPEN = '09:00';
+// Konec RTH (New York): indexové futures se obchodují do 16:15, v Praze běžně 22:15.
+const RTH_CLOSE = '16:15';
 const RTH_OPEN = { ES: '09:30', MES: '09:30', NQ: '09:30', MNQ: '09:30', YM: '09:30', MYM: '09:30', RTY: '09:30', M2K: '09:30', CL: '09:00', MCL: '09:00', GC: '08:20', MGC: '08:20', SI: '08:25', '6E': '08:20', ZN: '08:20', ZB: '08:20' };
 
 function zoneOffsetMinutes(instant, timeZone) {
@@ -406,7 +408,7 @@ function sessionSchedule(sessionDate, market) {
     eu: zonedInstant(sessionDate, EU_OPEN, PRAGUE),
     rth,
     ib: new Date(rth.getTime() + 60 * 60000),
-    close: zonedInstant(sessionDate, '16:00', NEW_YORK),
+    close: zonedInstant(sessionDate, RTH_CLOSE, NEW_YORK),
   };
 }
 
@@ -416,7 +418,7 @@ function nextSessionDate(now = new Date()) {
   const day = weekdayOf(date);
   if (day === 6) return addDays(date, 2);
   if (day === 0) return addDays(date, 1);
-  if (now >= zonedInstant(date, '16:00', NEW_YORK)) return addDays(date, day === 5 ? 3 : 1);
+  if (now >= zonedInstant(date, RTH_CLOSE, NEW_YORK)) return addDays(date, day === 5 ? 3 : 1);
   return date;
 }
 

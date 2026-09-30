@@ -1467,7 +1467,7 @@ function hs_versions(string $date): array
 
 /* ---------------------------------------------------------------- osobní nastavení grafu */
 
-const HS_LAYERS = ['sessions', 'news', 'zones', 'bias', 'ideas', 'trades', 'volume'];
+const HS_LAYERS = ['sessions', 'news', 'zones', 'bias', 'ideas', 'trades'];
 
 function hs_prefs(): array
 {

@@ -272,6 +272,9 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 ### Ovládání
 
 - **kolečko** posouvá v čase se setrvačností, **Ctrl + kolečko** přibližuje kolem kurzoru, graf jde i táhnout myší,
+- **svislé měřítko** drží svíčky v obraze samo (AUTO v rohu pod cenovou osou). Když si ho ručně přiblížíš tažením cenové osy, zvolený rozsah zůstane, ale při posunu v čase se plynule dorovná, takže svíčky nikdy neutečou z obrazu; **A**, klik na AUTO nebo dvojklik na osu vrátí plnou automatiku,
+- **pás seancí** dole v grafu (místo objemu): Asie, Evropa a New York v barvách seancí, u každé čas v Praze, rozsah high–low a změna open → close; seance pod kurzorem se zvýrazní, najetí na pás ukáže high a low seance (do konce dne tečkovaně) a klik seanci přiblíží. Oddálený graf ukazuje jen rytmus seancí. Seance svítí zdola (záře od pásu), bias dne shora,
+- svíčky: rostoucí dutá, klesající plná (rozdíl je vidět i tvarem, nejen barvou),
 - **← →** skočí na předchozí a další den, **Home / End** na první a poslední,
 - **datum** nahoře nebo **minimapa** dole (celý rok, barevný pruh = bias vyšel / nevyšel) skočí kamkoli, okno v minimapě jde táhnout,
 - **Kolotoč** drží na obrazovce vždy přesně jeden obchodní den, kolečko a šipky pak listují po dnech,
@@ -279,7 +282,7 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 - **Z + tažení** v grafu nakreslí zónu (nebo tlačítko + Zóna): typ support / resistance / VPOC / jiná, popisek, poznámka a platnost *jen tento den*, *do data* nebo *dokud ji neukončím*; klik na zónu ji upraví, ukončí k danému dni nebo smaže,
 - **L / S + klik** (nebo tlačítka + Long / + Short) přidá potenciální long nebo short v místě kliknutí: vstup je cena a čas kliknutí, stop je dvojnásobek průměrného rozpětí svíčky toho dne a cíl 2R. Stop, vstup i cíl jde táhnout za čtverečky vpravo nebo přepsat v okénku; tam se zadá i výsledek *nevzatý / propáslý / vzatý* a propojení s obchodem z deníku,
 - klik na **box pozice** potenciální obchod upraví nebo smaže, klik na **šipku obchodu** ukáže detail a doplní časy vstupu a výstupu,
-- **vrstvy** (seance, news, zóny, bias, potenciální, realizované, objem) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera,
+- **vrstvy** (seance, news, zóny, bias, potenciální, realizované) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera,
 - zóny a bias se při otevření NY **zamknou**, pozdější změny jsou dodatečné verze (viz níže),
 - **E** (nebo tlačítko Vyhodnocení) vysune panel s vyhodnocením: drží moje zóny, sedí můj bias, kde nechávám obchody na stole.
 
@@ -291,7 +294,7 @@ V grafu je potenciální obchod čárkovaný **box pozice**: zelená část od v
 
 Realizované obchody jsou **obchody ES/MES z deníku**: šipka vstupu a výstupu se špičkou přesně na ceně, spojené čarou v barvě výsledku (zelená zisk, červená ztráta). Aby seděly v čase, potřebují čas vstupu a výstupu: v dialogu obchodu přibyla pole *Čas vstupu* a *Čas výstupu* (pražský čas), nebo je doplníš v Hindsightu (klik na hlavičku dne ukáže obchody dne, i ty bez času). Večerní čas před obchodním dnem (Asie) se přiřadí správně i v týdnech, kdy USA a Evropa mají jiný letní čas. Import obchodů z CSV (bez duplicit podle ID z platformy) přijde později.
 
-Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET) a zobrazují v pražském čase. Letní čas USA a Evropy se mění v jiné týdny; posun se počítá pro každý okamžik zvlášť, takže seance sedí na minutu i v březnu a na přelomu října a listopadu. Obchodní den začíná v 18:00 New York předchozího dne.
+Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York = RTH 09:30–16:15 ET, v Praze běžně 15:30–22:15) a zobrazují v pražském čase. Letní čas USA a Evropy se mění v jiné týdny; posun se počítá pro každý okamžik zvlášť, takže seance sedí na minutu i v březnu a na přelomu října a listopadu. Obchodní den začíná v 18:00 New York předchozího dne.
 
 Zóny a bias jsou **stejná data jako denní náhled ES** (případně MES): co zadáš v Hindsightu, uvidíš v náhledu, a naopak. Zóna ze staršího náhledu platí jen svůj den; v editoru zóny v náhledu je nově *Platnost zóny*, *Typ zóny* a *Poznámka k zóně*. Zadávat jde i zpětně, třeba pro prezentaci. Red news bere Hindsight z kalendáře (dopad *vysoký* nebo nezadaný) v čase, který je u nich uvedený (pražský čas).
 

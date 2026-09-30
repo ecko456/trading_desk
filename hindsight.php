@@ -51,13 +51,12 @@ $isAdmin = is_admin($viewer);
     </div>
 
     <div class="hs-layers" role="group" aria-label="Vrstvy">
-      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true" title="Seance Asie, Evropa, New York"><i class="hs-dot hs-dot-session"></i>Seance</button>
+      <button type="button" class="hs-chip" data-layer="sessions" aria-pressed="true" title="Pás seancí dole v grafu: Asie, Evropa, New York s časem, rozsahem a změnou; najetí ukáže high a low seance, klik ji přiblíží"><i class="hs-dot hs-dot-session"></i>Seance</button>
       <button type="button" class="hs-chip" data-layer="news" aria-pressed="true" title="Red news z kalendáře"><i class="hs-dot hs-dot-news"></i>News</button>
       <button type="button" class="hs-chip" data-layer="zones" aria-pressed="true" title="Zóny z denního náhledu"><i class="hs-dot hs-dot-zone"></i>Zóny</button>
       <button type="button" class="hs-chip" data-layer="bias" aria-pressed="true" title="Bias dne: šipka a podbarvení"><i class="hs-dot hs-dot-bias"></i>Bias</button>
       <button type="button" class="hs-chip" data-layer="ideas" aria-pressed="true" title="Potenciální obchody (box pozice)"><i class="hs-dot hs-dot-idea"></i>Potenciální</button>
       <button type="button" class="hs-chip" data-layer="trades" aria-pressed="true" title="Realizované obchody z deníku"><i class="hs-dot hs-dot-trade"></i>Realizované</button>
-      <button type="button" class="hs-chip" data-layer="volume" aria-pressed="true" title="Objem"><i class="hs-dot hs-dot-volume"></i>Objem</button>
     </div>
 
     <div class="hs-actions">
@@ -79,6 +78,7 @@ $isAdmin = is_admin($viewer);
     <div class="hs-days" id="hsDays" aria-label="Hlavičky dnů"></div>
     <div class="hs-chart" id="hsChart">
       <div class="hs-legend" id="hsLegend" aria-live="off"></div>
+      <button type="button" class="hs-scale" id="hsScale" aria-pressed="true" title="Svislé měřítko: automaticky podle svíček (A)"><i></i>AUTO</button>
       <div class="hs-tooltip" id="hsTooltip" hidden></div>
       <div class="hs-empty" id="hsEmpty" hidden></div>
       <div class="hs-loading" id="hsLoading" hidden>Načítám svíčky…</div>
@@ -133,6 +133,8 @@ $isAdmin = is_admin($viewer);
         <dt><kbd>L</kbd> / <kbd>S</kbd> + klik</dt><dd>potenciální long / short v místě kliknutí, pak táhni stop a cíl</dd>
         <dt>Klik na box nebo šipku</dt><dd>potenciální obchod upravit; u obchodu z deníku doplnit časy</dd>
         <dt>Klik na hlavičku dne</dt><dd>bias dne a poznámka</dd>
+        <dt>Pás seancí dole</dt><dd>najetí ukáže high a low seance, klik seanci přiblíží</dd>
+        <dt><kbd>A</kbd></dt><dd>svislé měřítko zpět na automatiku (i dvojklik na cenovou osu). Po ručním přiblížení osy se svíčky při posunu samy dorovnávají do obrazu</dd>
         <dt>Minimapa dole</dt><dd>klik nebo tažení okna = skok v roce</dd>
         <dt>Kolotoč</dt><dd>na obrazovce vždy přesně jeden obchodní den</dd>
         <dt><kbd>E</kbd></dt><dd>panel vyhodnocení: drží zóny, sedí bias, co zůstalo na stole</dd>
@@ -140,7 +142,7 @@ $isAdmin = is_admin($viewer);
       <p class="hs-note">Zámek: zóny a bias denního náhledu se zamknou při otevření NY (9:30 New York, v Praze 15:30 nebo 14:30). Pozdější změna ceny, typu zóny nebo biasu se uloží jako dodatečná verze a v grafu je označená (tečkovaná zóna, ✎ u biasu); vyhodnocení bere verzi z otevření. Poznámky, platnost zóny a potenciální obchody jde měnit kdykoli.</p>
       <p class="hs-note">Zóna v každém dni své platnosti: první dotek, strana podle toho, odkud cena přišla (shora = má podržet jako support, zdola jako resistance). Držela = odraz aspoň o 8 bodů od okraje zóny dřív, než 5m svíčka zavře za zónou o víc než 4 body; jinak proražená, nebo bez rozhodnutí. Bias: RTH close proti RTH open. Hodnoty jdou změnit v panelu vyhodnocení.</p>
       <p class="hs-note">Potenciální obchod se vyhodnotí proti svíčkám: od času vstupu čeká na dotek vstupní ceny, pak rozhodne, jestli přišel dřív stop, nebo cíl (svíčka se stopem i cílem se počítá jako stop). Bez obojího se počítá k poslední svíčce dne.</p>
-      <p class="hs-note">Časy jsou v pražském čase. Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York 09:30–16:00 ET), letní čas se posouvá sám. Zóny a bias jsou stejné jako v denním náhledu.</p>
+      <p class="hs-note">Časy jsou v pražském čase. Seance se počítají v newyorském čase (Asie 18:00–03:00, Evropa 03:00–09:30, New York = RTH 09:30–16:15 ET, v Praze běžně 15:30–22:15). Letní čas se posouvá sám: v týdnech, kdy USA a Evropa ještě nemají stejný čas (jaro asi 3 týdny, podzim asi týden), začíná RTH v Praze o hodinu dřív, ve 14:30. Zóny a bias jsou stejné jako v denním náhledu.</p>
       <p class="hs-credit">Graf: TradingView Lightweight Charts™, Copyright (c) 2026 TradingView, Inc., <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">tradingview.com</a> (Apache 2.0). Písma Inter a JetBrains Mono (SIL OFL).</p>
       <div class="hs-dialog-actions"><button class="hs-btn hs-primary" value="close">Zavřít</button></div>
     </form>

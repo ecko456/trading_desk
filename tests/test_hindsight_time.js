@@ -24,11 +24,11 @@ for (let ts = utc('2020-01-01T00:00:00Z'); ts < utc('2031-01-01T00:00:00Z'); ts 
 function prague(date) {
   return Object.fromEntries(T.sessions(date).map(session => [session.key, `${T.pragueTime(session.start)}-${T.pragueTime(session.end)}`]));
 }
-assert.deepEqual(prague('2026-03-06'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:00' }, 'oba zimní čas');
-assert.deepEqual(prague('2026-03-10'), { asia: '23:00-08:00', eu: '08:00-14:30', ny: '14:30-21:00' }, 'USA letní, Evropa zimní');
-assert.deepEqual(prague('2026-03-30'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:00' }, 'oba letní čas');
-assert.deepEqual(prague('2026-10-27'), { asia: '23:00-08:00', eu: '08:00-14:30', ny: '14:30-21:00' }, 'Evropa už zimní, USA ještě letní');
-assert.deepEqual(prague('2026-11-03'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:00' }, 'oba zimní čas');
+assert.deepEqual(prague('2026-03-06'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:15' }, 'oba zimní čas');
+assert.deepEqual(prague('2026-03-10'), { asia: '23:00-08:00', eu: '08:00-14:30', ny: '14:30-21:15' }, 'USA letní, Evropa zimní');
+assert.deepEqual(prague('2026-03-30'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:15' }, 'oba letní čas');
+assert.deepEqual(prague('2026-10-27'), { asia: '23:00-08:00', eu: '08:00-14:30', ny: '14:30-21:15' }, 'Evropa už zimní, USA ještě letní');
+assert.deepEqual(prague('2026-11-03'), { asia: '00:00-09:00', eu: '09:00-15:30', ny: '15:30-22:15' }, 'oba zimní čas');
 
 // Den přechodu na letní čas v USA (neděle 8. 3. 2026): obchodní den 9. 3. začíná v 18:00 EDT.
 assert.equal(iso(T.dayBounds('2026-03-09').start), '2026-03-08T22:00');

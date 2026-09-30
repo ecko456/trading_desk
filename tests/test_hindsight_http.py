@@ -255,6 +255,7 @@ class HindsightHttpTests(unittest.TestCase):
         self.assertEqual(prefs, saved["prefs"])
         self.assertEqual((prefs["layers"]["news"], prefs["layers"]["zones"], prefs["layers"]["sessions"], prefs["snap"]), (False, False, True, True))
         self.assertNotIn("cizí", prefs["layers"])
+        self.assertNotIn("volume", prefs["layers"], "objem v grafu nahradil pás seancí")
         # Pravidla vyhodnocení a panel: hodnoty se očistí a omezí.
         status, saved = client.api("POST", "hindsight_prefs", {"panel": True, "eval": {"window": "rth", "bounce": -3, "breakBy": "x", "includeLater": 1, "neutralBand": 9999, "sameBar": "cokoli", "period": "60", "navíc": 1}})
         self.assertEqual(saved["prefs"]["eval"], {"window": "rth", "bounce": 0.25, "breakBy": 4.0, "includeLater": True, "neutralBand": 500.0, "sameBar": "stop", "period": "60"})

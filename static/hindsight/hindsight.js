@@ -14,37 +14,47 @@
   if (!T || !E || !LWC) return;
 
   /** Všechny barvy grafu na jednom místě (rozhraní: :root v hindsight.css). */
+  /* Svíčky a seance ověřené validátorem palet (tmavý podklad, světlost, barvoslepost):
+     rostoucí svíčka je dutá, klesající plná, ať je rozdíl vidět i tvarem, nejen barvou. */
   const COLORS = {
-    background: '#0E1117',
-    grid: '#1A1F2B',
-    text: '#7C8496',
-    crosshair: '#4B5264',
-    up: '#26A69A',
-    down: '#EF5350',
-    volumeUp: 'rgba(38, 166, 154, 0.32)',
-    volumeDown: 'rgba(239, 83, 80, 0.32)',
-    sessions: { asia: '#6C7BFF', eu: '#2EC4B6', ny: '#FFB547' },
-    sessionAlpha: 0.05,
-    sessionLabelAlpha: 0.55,
+    background: '#0C0F16',
+    backgroundTop: '#121722',
+    grid: 'rgba(148, 160, 190, 0.07)',
+    text: '#6F7890',
+    crosshair: 'rgba(210, 218, 235, 0.3)',
+    crosshairLabel: '#1B2130',
+    up: '#00AC7C',
+    down: '#CC3148',
+    upBody: 'rgba(0, 172, 124, 0.14)',
+    sessions: { asia: '#814EC6', eu: '#08A4C6', ny: '#CB8117' },
+    sessionText: { asia: '#BFA2F2', eu: '#7AD6EC', ny: '#F2B866' },
+    upText: '#1FC592',
+    downText: '#F0556E',
+    sessionAlpha: 0.11,
+    railFill: 0.16,
+    railFillActive: 0.32,
+    railBack: 'rgba(12, 15, 22, 0.78)',
     news: '#FF4D4F',
     newsAlpha: 0.4,
-    zones: { support: '#26A69A', resistance: '#EF5350', vpoc: '#FFB547', other: '#8C96AA' },
+    zones: { support: '#00AC7C', resistance: '#CC3148', vpoc: '#CB8117', other: '#8C96AA' },
     zoneFill: 0.12,
     zoneFillHover: 0.2,
-    biasLong: 'rgba(38, 166, 154, 0.045)',
-    biasShort: 'rgba(239, 83, 80, 0.045)',
-    dayLine: '#2A3142',
+    // Bias (plán) svítí shora, seance (hodiny trhu) zdola.
+    biasLong: '#00AC7C',
+    biasShort: '#CC3148',
+    biasAlpha: 0.1,
+    dayLine: 'rgba(120, 132, 160, 0.34)',
     watermark: 'rgba(214, 218, 227, 0.04)',
     roll: '#B18CFF',
     draft: '#FFB547',
     minimapLine: '#5B6478',
     minimapWindow: '#FFB547',
-    ideaProfit: 'rgba(38, 166, 154, 0.13)',
-    ideaLoss: 'rgba(239, 83, 80, 0.13)',
+    ideaProfit: 'rgba(0, 172, 124, 0.14)',
+    ideaLoss: 'rgba(204, 49, 72, 0.14)',
     ideaBorder: 'rgba(214, 218, 227, 0.42)',
     ideaEntry: 'rgba(214, 218, 227, 0.75)',
-    tradeWin: '#26A69A',
-    tradeLoss: '#EF5350',
+    tradeWin: '#1FC592',
+    tradeLoss: '#F0556E',
     tradeFlat: '#A3ABBD',
   };
   const FONT = "'Inter', system-ui, sans-serif";
@@ -54,7 +64,11 @@
   const ANIM_MS = 260;
   const CHUNK_DAYS = 40;
   const ZONE_TYPES = { support: 'Support', resistance: 'Resistance', vpoc: 'VPOC', other: 'Jiná' };
-  const LAYERS = ['sessions', 'news', 'zones', 'bias', 'ideas', 'trades', 'volume'];
+  const LAYERS = ['sessions', 'news', 'zones', 'bias', 'ideas', 'trades'];
+  /* Pás seancí dole v grafu: výška a odsazení od časové osy. */
+  const RAIL_H = 28;
+  const RAIL_PAD = 6;
+  const SESSION_NAMES = { asia: 'Asie', eu: 'Evropa', ny: 'New York' };
   const OUTCOMES = { skipped: 'Nevzatý', missed: 'Propáslý', taken: 'Vzatý' };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -133,6 +147,10 @@
     ideaClick: null,
     evalCache: new Map(),
     generation: 0,
+    railTop: 0,
+    railRects: [],
+    railHover: null,
+    cursorSession: null,
   };
 
   /* ------------------------------------------------------------------ graf */
@@ -141,22 +159,23 @@
   const chart = LWC.createChart(chartEl, {
     autoSize: true,
     layout: {
-      background: { type: 'solid', color: COLORS.background },
+      background: { type: 'gradient', topColor: COLORS.backgroundTop, bottomColor: COLORS.background },
       textColor: COLORS.text,
       fontFamily: FONT,
       fontSize: 11,
       // Logo knihovny si vkládá vlastní <style>, který CSP nepustí; odkaz na TradingView je pod grafem.
       attributionLogo: false,
     },
-    grid: { vertLines: { color: COLORS.grid }, horzLines: { color: COLORS.grid } },
+    // Čas nese pás seancí a hranice dní; svislá mřížka by jen rušila.
+    grid: { vertLines: { visible: false }, horzLines: { color: COLORS.grid, style: 1 } },
     crosshair: {
       mode: 0,
-      vertLine: { color: COLORS.crosshair, labelBackgroundColor: '#262D3D' },
-      horzLine: { color: COLORS.crosshair, labelBackgroundColor: '#262D3D' },
+      vertLine: { color: COLORS.crosshair, style: 3, labelBackgroundColor: COLORS.crosshairLabel },
+      horzLine: { color: COLORS.crosshair, style: 3, labelBackgroundColor: COLORS.crosshairLabel },
     },
-    rightPriceScale: { borderColor: COLORS.grid, scaleMargins: { top: 0.08, bottom: 0.12 } },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.16 } },
     timeScale: {
-      borderColor: COLORS.grid,
+      borderVisible: false,
       timeVisible: true,
       secondsVisible: false,
       rightOffset: 6,
@@ -191,7 +210,7 @@
   });
 
   const candles = chart.addSeries(LWC.CandlestickSeries, {
-    upColor: COLORS.up,
+    upColor: COLORS.upBody,
     downColor: COLORS.down,
     borderUpColor: COLORS.up,
     borderDownColor: COLORS.down,
@@ -200,13 +219,6 @@
     priceFormat: { type: 'price', precision: 2, minMove: TICK },
     priceLineVisible: false,
   });
-  const volume = chart.addSeries(LWC.HistogramSeries, {
-    priceScaleId: 'volume',
-    priceFormat: { type: 'volume' },
-    lastValueVisible: false,
-    priceLineVisible: false,
-  });
-  chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 }, visible: false });
 
   /* ------------------------------------------------------------------ čas → souřadnice */
 
@@ -271,7 +283,8 @@
         const date = T.tradeDate(bar.time);
         if (!current || current.date !== date) {
           const bounds = T.dayBounds(date);
-          const sessions = T.sessions(date);
+          // Seance s vlastním rozsahem (pás seancí): první/poslední svíčka, open, close, high, low.
+          const sessions = T.sessions(date).map(session => ({ ...session, first: -1, last: -1, open: null, close: null, high: -Infinity, low: Infinity }));
           const ny = sessions.find(session => session.key === 'ny');
           current = {
             date,
@@ -295,6 +308,14 @@
         nextStart = current.next;
       }
       current.last = index;
+      for (const session of current.sessions) {
+        if (bar.time < session.start || bar.time >= session.end) continue;
+        if (session.first < 0) { session.first = index; session.open = bar.open; }
+        session.last = index;
+        session.close = bar.close;
+        session.high = Math.max(session.high, bar.high);
+        session.low = Math.min(session.low, bar.low);
+      }
       current.high = Math.max(current.high, bar.high);
       current.low = Math.min(current.low, bar.low);
       current.close = bar.close;
@@ -468,31 +489,46 @@
           const info = state.ann.days.get(day.date);
           const tint = officialBias(info);
           if (layers.bias && (tint === 'long' || tint === 'short')) {
-            ctx.fillStyle = tint === 'long' ? COLORS.biasLong : COLORS.biasShort;
-            ctx.fillRect(x0, 0, x1 - x0, height);
+            const sky = ctx.createLinearGradient(0, 0, 0, height * 0.5);
+            sky.addColorStop(0, rgba(tint === 'long' ? COLORS.biasLong : COLORS.biasShort, COLORS.biasAlpha));
+            sky.addColorStop(1, rgba(tint === 'long' ? COLORS.biasLong : COLORS.biasShort, 0));
+            ctx.fillStyle = sky;
+            ctx.fillRect(x0, 0, x1 - x0, height * 0.5);
           }
           const dayWidth = x1 - x0;
-          if (layers.sessions && dayWidth >= 60) {
+          const railTop = height - RAIL_H - RAIL_PAD;
+          if (layers.sessions && dayWidth >= 12) {
+            // Záře seance: vychází z pásu dole a nahoru slábne; otevření seance tenká linka.
             for (const session of day.sessions) {
               const color = COLORS.sessions[session.key];
               const s0 = xOf(edgeOf(session.start));
               const s1 = xOf(edgeOf(session.end));
-              if (s1 <= 0 || s0 >= width || s1 - s0 < 1) continue;
-              ctx.fillStyle = rgba(color, COLORS.sessionAlpha);
-              ctx.fillRect(s0, 0, s1 - s0, height);
-              const label = `${session.label} ${T.pragueTime(session.start)}`;
-              ctx.font = `500 10px ${FONT}`;
-              if (Math.min(s1, width) - Math.max(s0, 0) > ctx.measureText(label).width + 12) {
-                ctx.fillStyle = rgba(color, COLORS.sessionLabelAlpha);
-                ctx.textBaseline = 'bottom';
-                ctx.fillText(label, Math.max(s0, 0) + 5, height - 5);
+              // Oddálený graf bez záře: úzké pruhy by dělaly čárový kód.
+              if (s1 <= 0 || s0 >= width || s1 - s0 < 36) continue;
+              const glow = ctx.createLinearGradient(0, railTop, 0, height * 0.45);
+              glow.addColorStop(0, rgba(color, COLORS.sessionAlpha));
+              glow.addColorStop(1, rgba(color, 0));
+              ctx.fillStyle = glow;
+              ctx.fillRect(s0, 0, s1 - s0, railTop);
+              if (s1 - s0 > 40 && s0 > 0) {
+                const line = ctx.createLinearGradient(0, railTop, 0, height * 0.42);
+                line.addColorStop(0, rgba(color, 0.5));
+                line.addColorStop(1, rgba(color, 0));
+                ctx.fillStyle = line;
+                ctx.fillRect(Math.round(s0), height * 0.42, 1, railTop - height * 0.42);
               }
             }
           }
-          // Hranice dne a vodoznak s datem.
+          // Hranice dne (přerušovaná) a vodoznak s datem.
           if (x0 > 0 && x0 < width && dayWidth >= 10) {
-            ctx.fillStyle = COLORS.dayLine;
-            ctx.fillRect(Math.round(x0), 0, 1, height);
+            ctx.strokeStyle = COLORS.dayLine;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 4]);
+            ctx.beginPath();
+            ctx.moveTo(Math.round(x0) + 0.5, 0);
+            ctx.lineTo(Math.round(x0) + 0.5, railTop - 4);
+            ctx.stroke();
+            ctx.setLineDash([]);
           }
           if (dayWidth > 150) {
             const size = clamp(dayWidth / 9, 18, 44);
@@ -805,6 +841,12 @@
         state.tradeMarks = [];
         if (state.prefs.layers.trades) drawTrades(ctx, width);
         drawIdeaDraft(ctx, width);
+        if (state.prefs.layers.sessions) {
+          drawSessionLevels(ctx, width, height);
+          drawRail(ctx, width, height);
+        } else {
+          state.railRects = [];
+        }
         if (state.draft) {
           const d = state.draft;
           const left = Math.min(d.x0, d.x1);
@@ -829,6 +871,176 @@
       });
     },
   };
+
+  /* ------------------------------------------------------------------ pás seancí */
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  }
+  const pts = value => (Math.round(value * 100) / 100).toFixed(2);
+
+  function railLookup(key) {
+    if (!key) return null;
+    const [date, which] = key.split('|');
+    const day = state.dayMap.get(date);
+    const session = day ? day.sessions.find(item => item.key === which) : null;
+    return session ? { day, session } : null;
+  }
+
+  /** Seance, do které patří okamžik (pro zvýraznění pod kurzorem). */
+  function sessionKeyAt(time) {
+    const index = barAtOrBefore(time);
+    const day = index >= 0 ? dayOfIndex(index) : null;
+    const session = day ? day.sessions.find(item => time >= item.start && time < item.end) : null;
+    return session ? `${day.date}|${session.key}` : null;
+  }
+
+  /**
+   * Pás seancí dole v grafu místo objemu: každá seance je dílek v její barvě s názvem, časem
+   * (Praha), rozsahem high–low a změnou open→close. Co se nevejde, se nekreslí; oddálený graf
+   * tak ukazuje jen rytmus barev. Pod kurzorem je seance zvýrazněná, klik ji přiblíží.
+   */
+  function drawRail(ctx, width, height) {
+    const top = height - RAIL_H - RAIL_PAD;
+    state.railTop = top;
+    state.railRects = [];
+    const back = ctx.createLinearGradient(0, top - 14, 0, height);
+    back.addColorStop(0, 'rgba(12, 15, 22, 0)');
+    back.addColorStop(0.35, COLORS.railBack);
+    back.addColorStop(1, COLORS.railBack);
+    ctx.fillStyle = back;
+    ctx.fillRect(0, top - 14, width, height - top + 14);
+    for (const day of visibleDays(width)) {
+      for (const session of day.sessions) {
+        const x0 = xOf(edgeOf(session.start)) + 1.5;
+        const x1 = xOf(edgeOf(session.end)) - 1.5;
+        if (x1 <= 0 || x0 >= width || x1 - x0 < 2) continue;
+        const key = `${day.date}|${session.key}`;
+        const active = state.railHover === key || state.cursorSession === key;
+        const color = COLORS.sessions[session.key];
+        const w = x1 - x0;
+        const alpha = active ? COLORS.railFillActive : COLORS.railFill;
+        roundRect(ctx, x0, top, w, RAIL_H, Math.min(7, w / 2));
+        const fill = ctx.createLinearGradient(x0, 0, x1, 0);
+        fill.addColorStop(0, rgba(color, alpha));
+        fill.addColorStop(1, rgba(color, alpha * 0.4));
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.save();
+        ctx.clip();
+        ctx.fillStyle = rgba(color, active ? 1 : 0.75);
+        ctx.fillRect(x0, top, w, 2);
+        ctx.restore();
+        if (state.railHover === key) {
+          ctx.strokeStyle = rgba(color, 0.7);
+          ctx.lineWidth = 1;
+          roundRect(ctx, x0 + 0.5, top + 0.5, w - 1, RAIL_H - 1, Math.min(7, w / 2));
+          ctx.stroke();
+        }
+        state.railRects.push({ x0, x1, key });
+        // Popisky podle místa: název, čas, rozsah a změna.
+        const left = Math.max(x0, 0) + 9;
+        const right = Math.min(x1, width) - 9;
+        const room = right - left;
+        if (room < 16) continue;
+        const mid = top + RAIL_H / 2 + 1;
+        ctx.textBaseline = 'middle';
+        ctx.font = `600 10px ${FONT}`;
+        const name = (SESSION_NAMES[session.key] || session.label).toUpperCase();
+        const short = session.key === 'ny' ? 'NY' : name.slice(0, 2);
+        const title = ctx.measureText(name).width <= room ? name : short;
+        const titleW = ctx.measureText(title).width;
+        if (titleW > room) continue;
+        ctx.fillStyle = COLORS.sessionText[session.key];
+        ctx.fillText(title, left, mid);
+        let used = titleW + 10;
+        ctx.font = `400 10px ${MONO}`;
+        const time = `${T.pragueTime(session.start)}–${T.pragueTime(session.end)}`;
+        const timeW = ctx.measureText(time).width;
+        if (session.first < 0) {
+          if (used + timeW <= room) {
+            ctx.fillStyle = COLORS.text;
+            ctx.fillText(time, left + used, mid);
+          }
+          continue;
+        }
+        const change = session.close - session.open;
+        const move = `${change > 0 ? '↑' : change < 0 ? '↓' : ''}${pts(Math.abs(change))}`;
+        const range = `${pts(session.high - session.low)} b`;
+        ctx.font = `500 10px ${MONO}`;
+        const moveW = ctx.measureText(move).width;
+        const rangeW = ctx.measureText(range).width;
+        if (used + moveW + 8 <= room) {
+          ctx.fillStyle = change > 0 ? COLORS.upText : change < 0 ? COLORS.downText : COLORS.text;
+          ctx.textAlign = 'right';
+          ctx.fillText(move, right, mid);
+          ctx.textAlign = 'left';
+          let tail = moveW + 12;
+          if (used + tail + rangeW <= room) {
+            ctx.fillStyle = 'rgba(214, 222, 240, 0.72)';
+            ctx.textAlign = 'right';
+            ctx.fillText(range, right - tail, mid);
+            ctx.textAlign = 'left';
+            tail += rangeW + 12;
+          }
+          ctx.font = `400 10px ${MONO}`;
+          if (used + timeW + tail <= room) {
+            ctx.fillStyle = COLORS.text;
+            ctx.fillText(time, left + used, mid);
+          }
+        }
+      }
+    }
+  }
+
+  /** Najetí na seanci v pásu: její high a low, v seanci plně, do konce dne tečkovaně. */
+  function drawSessionLevels(ctx, width, height) {
+    const hit = railLookup(state.railHover);
+    if (!hit || hit.session.first < 0) return;
+    const { day, session } = hit;
+    const top = height - RAIL_H - RAIL_PAD;
+    const color = COLORS.sessionText[session.key];
+    const x0 = xOf(edgeOf(session.start));
+    const x1 = xOf(edgeOf(session.end));
+    const xEnd = Math.min(width, xOf(edgeOf(day.next)));
+    ctx.fillStyle = rgba(COLORS.sessions[session.key], 0.05);
+    ctx.fillRect(x0, 0, x1 - x0, top);
+    const name = SESSION_NAMES[session.key] || session.label;
+    for (const [value, tag] of [[session.high, 'high'], [session.low, 'low']]) {
+      const y = candles.priceToCoordinate(value);
+      if (y === null) continue;
+      const yy = Math.round(y) + 0.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, yy);
+      ctx.lineTo(x1, yy);
+      ctx.stroke();
+      if (xEnd > x1) {
+        ctx.globalAlpha = 0.55;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x1, yy);
+        ctx.lineTo(xEnd, yy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      const text = `${name} ${tag} ${price(value)}`;
+      ctx.font = `500 10.5px ${MONO}`;
+      const tw = ctx.measureText(text).width;
+      const lx = clamp(x1 + 6, 4, width - tw - 14);
+      const ly = tag === 'high' ? yy - 10 : yy + 10;
+      roundRect(ctx, lx - 5, ly - 8, tw + 10, 16, 5);
+      ctx.fillStyle = 'rgba(12, 15, 22, 0.88)';
+      ctx.fill();
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, lx, ly);
+    }
+  }
 
   const layers = {
     requestUpdate: () => {},
@@ -857,7 +1069,6 @@
     state.ts = state.bars.map(bar => bar.time);
     state.hasVolume = state.bars.some(bar => bar.volume > 0);
     candles.setData(state.bars.map(bar => ({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close })));
-    volume.setData(state.hasVolume ? state.bars.map(bar => ({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? COLORS.volumeUp : COLORS.volumeDown })) : []);
     buildDays();
     state.evalCache.clear();
     if (before && centerTime !== null && centerTime !== undefined) {
@@ -870,7 +1081,6 @@
         chart.timeScale().setVisibleLogicalRange({ from: before.from + shift, to: before.to + shift });
       }
     }
-    syncVolumeChip();
     redraw();
   }
 
@@ -1291,13 +1501,6 @@
     $('#hsSnap').setAttribute('aria-pressed', state.prefs.snap ? 'true' : 'false');
     const backfill = $('#hsBackfill');
     if (backfill) backfill.setAttribute('aria-pressed', state.prefs.backfill ? 'true' : 'false');
-    volume.applyOptions({ visible: state.prefs.layers.volume !== false });
-  }
-
-  function syncVolumeChip() {
-    const chip = $('[data-layer="volume"]');
-    chip.disabled = !state.hasVolume;
-    chip.title = state.hasVolume ? '' : 'V nahraných svíčkách není objem (export z ATAS ho nemusí obsahovat).';
   }
 
   // Správce: zpětné doplňování pro prezentaci; ukládá se hned, ať platí pro další úpravu.
@@ -1516,8 +1719,10 @@
   chart.subscribeCrosshairMove(param => {
     if (!param.point || param.time === undefined) {
       renderLegend(state.bars[state.bars.length - 1]);
-      if (state.hover) {
+      if (state.hover || state.railHover || state.cursorSession) {
         state.hover = null;
+        state.railHover = null;
+        state.cursorSession = null;
         redraw();
       }
       showTooltip(null);
@@ -1526,6 +1731,23 @@
     const index = barAtOrBefore(param.time);
     renderLegend(state.bars[index]);
     if (state.draft || state.handleDrag) return;
+    // Pás seancí: seance pod kurzorem se zvýrazní; najetí přímo na pás ukáže její high a low.
+    const sessionsOn = state.prefs.layers.sessions;
+    const onRail = sessionsOn && param.point.y >= state.railTop && param.point.y <= state.railTop + RAIL_H;
+    const railRect = onRail ? state.railRects.find(rect => param.point.x >= rect.x0 && param.point.x <= rect.x1) : null;
+    const railKey = railRect ? railRect.key : null;
+    const cursorKey = sessionsOn ? sessionKeyAt(param.time) : null;
+    if (railKey !== state.railHover || cursorKey !== state.cursorSession) {
+      state.railHover = railKey;
+      state.cursorSession = cursorKey;
+      redraw();
+    }
+    if (railKey) {
+      if (state.hover) { state.hover = null; redraw(); }
+      showTooltip(null);
+      chartEl.classList.add('is-pointer');
+      return;
+    }
     const hit = hitTest(param.point.x, param.point.y);
     const changed = hitKey(hit) !== hitKey(state.hover);
     state.hover = hit;
@@ -1542,6 +1764,14 @@
 
   chart.subscribeClick(param => {
     if (!param.point || state.zoneMode || state.ideaMode || suppressClick) return;
+    const railHit = railLookup(state.railHover);
+    if (railHit) {
+      // Klik na seanci v pásu: přiblížit na ni (Kolotoč se tím vypne).
+      if (state.prefs.snap) setSnap(false);
+      const pad = 3;
+      animateTo({ from: edgeOf(railHit.session.start) - pad, to: edgeOf(railHit.session.end) + pad });
+      return;
+    }
     const hit = hitTest(param.point.x, param.point.y);
     if (!hit || hit.kind === 'news') return;
     const rect = chartEl.getBoundingClientRect();
@@ -2315,10 +2545,96 @@
   /* ------------------------------------------------------------------ překreslení při pohybu */
 
   let uiFrame = 0;
+  /* ------------------------------------------------------------------ svislé měřítko */
+  // Automatika knihovny drží svíčky v obraze, dokud nikdo nesáhne na cenovou osu; pak ji
+  // knihovna vypne a svíčky při posunu v čase utíkají z obrazu. Tady po ručním přiblížení
+  // zůstane zvolený svislý rozsah, ale při posunu se plynule dorovná na viditelné svíčky.
+  // AUTO (klávesa A, dvojklik na osu) vrátí plnou automatiku.
+  const priceScale = chart.priceScale('right');
+  const focus = { target: null, frame: 0 };
+  const scaleButton = $('#hsScale');
+
+  function visiblePriceBounds() {
+    const range = chart.timeScale().getVisibleLogicalRange();
+    if (!range || !state.bars.length) return null;
+    const from = clamp(Math.floor(range.from), 0, state.bars.length - 1);
+    const to = clamp(Math.ceil(range.to), 0, state.bars.length - 1);
+    let low = Infinity;
+    let high = -Infinity;
+    for (let index = from; index <= to; index++) {
+      const bar = state.bars[index];
+      if (bar.low < low) low = bar.low;
+      if (bar.high > high) high = bar.high;
+    }
+    return Number.isFinite(low) ? { low, high } : null;
+  }
+
+  function syncScaleButton() {
+    const auto = priceScale.options().autoScale !== false;
+    scaleButton.setAttribute('aria-pressed', auto ? 'true' : 'false');
+    scaleButton.title = auto
+      ? 'Svislé měřítko: automaticky podle svíček (A)'
+      : 'Svislé měřítko nastavené ručně: svíčky se při posunu dorovnávají do obrazu. Klik (nebo A) = zpět na automatiku';
+    const width = priceScale.width();
+    if (width > 0) scaleButton.style.width = `${Math.max(44, width - 10)}px`;
+  }
+
+  function autoPrice() {
+    focus.target = null;
+    priceScale.applyOptions({ autoScale: true });
+    syncScaleButton();
+  }
+
+  function stepFocus() {
+    focus.frame = 0;
+    const current = priceScale.getVisibleRange();
+    if (!focus.target || !current || priceScale.options().autoScale) {
+      focus.target = null;
+      return;
+    }
+    const goal = focus.target;
+    const span = goal.to - goal.from;
+    const next = { from: current.from + (goal.from - current.from) * 0.3, to: current.to + (goal.to - current.to) * 0.3 };
+    const done = Math.abs(goal.from - next.from) < span * 0.002 && Math.abs(goal.to - next.to) < span * 0.002;
+    priceScale.setVisibleRange(done ? goal : next);
+    if (done) focus.target = null;
+    else focus.frame = requestAnimationFrame(stepFocus);
+  }
+
+  function followPrice() {
+    syncScaleButton();
+    if (priceScale.options().autoScale !== false) {
+      focus.target = null;
+      return;
+    }
+    const bounds = visiblePriceBounds();
+    const base = focus.target || priceScale.getVisibleRange();
+    if (!bounds || !base) return;
+    const span = base.to - base.from;
+    const pad = span * 0.08;
+    let shift = 0;
+    if (bounds.high - bounds.low + 2 * pad > span) shift = (bounds.high + bounds.low) / 2 - (base.from + base.to) / 2;
+    else if (bounds.low < base.from + pad) shift = bounds.low - pad - base.from;
+    else if (bounds.high > base.to - pad) shift = bounds.high + pad - base.to;
+    if (Math.abs(shift) < span * 0.002) return;
+    focus.target = { from: base.from + shift, to: base.to + shift };
+    if (!focus.frame) focus.frame = requestAnimationFrame(stepFocus);
+  }
+
+  scaleButton.addEventListener('click', autoPrice);
+  // Ruční zásah do osy (tažení, dvojklik) změní měřítko bez posunu v čase.
+  ['pointerup', 'dblclick'].forEach(type => chartEl.addEventListener(type, () => setTimeout(syncScaleButton, 0)));
+  chartEl.addEventListener('pointerdown', () => { focus.target = null; });
+  document.addEventListener('keydown', event => {
+    if (event.target.closest && event.target.closest('input, textarea, select, [contenteditable], dialog[open]')) return;
+    if ((event.key === 'a' || event.key === 'A') && !event.ctrlKey && !event.metaKey && !event.altKey) autoPrice();
+  });
+
   function scheduleUi() {
     if (uiFrame) return;
     uiFrame = requestAnimationFrame(() => {
       uiFrame = 0;
+      followPrice();
       renderHeaders();
       renderMinimap();
       const day = centerDay();
