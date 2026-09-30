@@ -125,7 +125,7 @@ class DeployConfigTests(unittest.TestCase):
         self.assertIn("php_value upload_max_filesize 100M", conf)
         self.assertIn("php_value post_max_size 128M", conf)
         install = (ROOT / "deploy" / "install.sh").read_text()
-        for pattern in ("--exclude '/.git/'", "--exclude '*.zip'", "--exclude '/README.md'", 'rm -rf "${TARGET_DIR}/.git"'):
+        for pattern in ("--exclude '/.git/'", "--exclude '*.zip'", "--exclude '/README.md'", "--exclude 'CLAUDE.md'", 'rm -rf "${TARGET_DIR}/.git"'):
             self.assertIn(pattern, install)
 
     def test_builtin_server_hides_the_same_files(self):

@@ -36,6 +36,7 @@ rsync -a --delete \
   --exclude '/start-macos.command' \
   --exclude '/INSTALL.md' \
   --exclude '/README.md' \
+  --exclude 'CLAUDE.md' \
   --exclude '/ZACNI-TADY.txt' \
   --exclude '/odmeny/' \
   --exclude '/hodnoceni-operatoru.html' \
