@@ -47,7 +47,7 @@ $isAdmin = is_admin($viewer);
       </label>
       <button type="button" class="hs-btn hs-icon" data-go="next" title="Další den (→)" aria-label="Další den"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
       <button type="button" class="hs-btn hs-icon" data-go="last" title="Poslední den (End)" aria-label="Poslední den"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13M7 5.5l6.5 6.5L7 18.5"/></svg></button>
-      <button type="button" class="hs-btn hs-toggle" id="hsSnap" aria-pressed="false" title="Kolotoč: na obrazovce vždy přesně jeden den">Kolotoč</button>
+      <button type="button" class="hs-btn hs-toggle" id="hsSnap" aria-pressed="false" title="Den po dni: na obrazovce vždy přesně jeden obchodní den, kolečko a šipky listují po dnech">Den po dni</button>
     </div>
 
     <div class="hs-layers" role="group" aria-label="Vrstvy">
@@ -136,7 +136,7 @@ $isAdmin = is_admin($viewer);
         <dt>Pás seancí dole</dt><dd>najetí ukáže high a low seance, klik seanci přiblíží</dd>
         <dt><kbd>A</kbd></dt><dd>svislé měřítko zpět na automatiku (i dvojklik na cenovou osu). Po ručním přiblížení osy se svíčky při posunu samy dorovnávají do obrazu</dd>
         <dt>Minimapa dole</dt><dd>klik nebo tažení okna = skok v roce</dd>
-        <dt>Kolotoč</dt><dd>na obrazovce vždy přesně jeden obchodní den</dd>
+        <dt>Den po dni</dt><dd>na obrazovce vždy přesně jeden obchodní den, kolečko a šipky listují po dnech</dd>
         <dt><kbd>E</kbd></dt><dd>panel vyhodnocení: drží zóny, sedí bias, co zůstalo na stole</dd>
       </dl>
       <p class="hs-note">Zámek: zóny a bias denního náhledu se zamknou při otevření NY (9:30 New York, v Praze 15:30 nebo 14:30). Pozdější změna ceny, typu zóny nebo biasu se uloží jako dodatečná verze a v grafu je označená (tečkovaná zóna, ✎ u biasu); vyhodnocení bere verzi z otevření. Poznámky, platnost zóny a potenciální obchody jde měnit kdykoli.</p>

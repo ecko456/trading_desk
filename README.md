@@ -277,12 +277,12 @@ Samostatná stránka přes celou obrazovku (menu **Hindsight**, adresa `hindsigh
 - svíčky: rostoucí dutá, klesající plná (rozdíl je vidět i tvarem, nejen barvou),
 - **← →** skočí na předchozí a další den, **Home / End** na první a poslední,
 - **datum** nahoře nebo **minimapa** dole (celý rok, barevný pruh = bias vyšel / nevyšel) skočí kamkoli, okno v minimapě jde táhnout,
-- **Kolotoč** drží na obrazovce vždy přesně jeden obchodní den, kolečko a šipky pak listují po dnech,
+- **Den po dni** drží na obrazovce vždy přesně jeden obchodní den, kolečko a šipky pak listují po dnech,
 - **hlavička dne** nahoře ukazuje datum, šipku biasu, ✓/✗ (RTH close proti RTH open), počet obchodů a P&L dne; klik na ni nastaví bias a poznámku,
 - **Z + tažení** v grafu nakreslí zónu (nebo tlačítko + Zóna): typ support / resistance / VPOC / jiná, popisek, poznámka a platnost *jen tento den*, *do data* nebo *dokud ji neukončím*; klik na zónu ji upraví, ukončí k danému dni nebo smaže,
 - **L / S + klik** (nebo tlačítka + Long / + Short) přidá potenciální long nebo short v místě kliknutí: vstup je cena a čas kliknutí, stop je dvojnásobek průměrného rozpětí svíčky toho dne a cíl 2R. Stop, vstup i cíl jde táhnout za čtverečky vpravo nebo přepsat v okénku; tam se zadá i výsledek *nevzatý / propáslý / vzatý* a propojení s obchodem z deníku,
 - klik na **box pozice** potenciální obchod upraví nebo smaže, klik na **šipku obchodu** ukáže detail a doplní časy vstupu a výstupu,
-- **vrstvy** (seance, news, zóny, bias, potenciální, realizované) jdou vypnout; volba i Kolotoč se pamatují pro každého tradera,
+- **vrstvy** (seance, news, zóny, bias, potenciální, realizované) jdou vypnout; volba i režim Den po dni se pamatují pro každého tradera,
 - zóny a bias se při otevření NY **zamknou**, pozdější změny jsou dodatečné verze (viz níže),
 - **E** (nebo tlačítko Vyhodnocení) vysune panel s vyhodnocením: drží moje zóny, sedí můj bias, kde nechávám obchody na stole.
 

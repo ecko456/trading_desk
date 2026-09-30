@@ -1352,7 +1352,7 @@
     if (!range) return;
     const scale = event.deltaMode === 1 ? 32 : event.deltaMode === 2 ? chartEl.clientWidth : 1;
     if (event.ctrlKey || event.metaKey) {
-      // Přiblížení kolem kurzoru; Kolotoč se tím vypne.
+      // Přiblížení kolem kurzoru; režim Den po dni se tím vypne.
       if (state.prefs.snap) setSnap(false);
       stopMotion();
       updateFrame();
@@ -1405,7 +1405,7 @@
     inertiaFrame = requestAnimationFrame(inertia);
   }
 
-  // Po tažení myší v režimu Kolotoč graf dojede na nejbližší den.
+  // Po tažení myší v režimu Den po dni graf dojede na nejbližší den.
   chartEl.addEventListener('pointerup', () => {
     if (state.prefs.snap && !state.zoneMode && !state.ideaMode && !state.handleDrag && popEl.hidden) setTimeout(snapToCenter, 380);
   });
@@ -1766,7 +1766,7 @@
     if (!param.point || state.zoneMode || state.ideaMode || suppressClick) return;
     const railHit = railLookup(state.railHover);
     if (railHit) {
-      // Klik na seanci v pásu: přiblížit na ni (Kolotoč se tím vypne).
+      // Klik na seanci v pásu: přiblížit na ni (režim Den po dni se tím vypne).
       if (state.prefs.snap) setSnap(false);
       const pad = 3;
       animateTo({ from: edgeOf(railHit.session.start) - pad, to: edgeOf(railHit.session.end) + pad });
