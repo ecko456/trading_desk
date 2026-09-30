@@ -19,6 +19,9 @@ const HS_PLAN_MARKETS = ['ES', 'MES'];
 const HS_BAR_SECONDS = 300;
 const HS_ZONE_TYPES = ['support', 'resistance', 'vpoc', 'other'];
 const HS_MAX_RANGE_DAYS = 400;
+/** Import svíček: soubor se čte po řádcích a v paměti zůstane jen období kontraktu, stačí i velký export. */
+const HS_MAX_IMPORT_BYTES = 100 * 1024 * 1024;
+const HS_IMPORT_SECONDS = 300;
 /** Výsledek potenciálního obchodu: nevzatý, propáslý, vzatý. */
 const HS_OUTCOMES = ['skipped', 'missed', 'taken'];
 const HS_MONTHS = ['F' => 1, 'G' => 2, 'H' => 3, 'J' => 4, 'K' => 5, 'M' => 6, 'N' => 7, 'Q' => 8, 'U' => 9, 'V' => 10, 'X' => 11, 'Z' => 12];
@@ -374,11 +377,22 @@ function hs_parse_datetime(string $text, DateTimeZone $zone, bool $dayFirst, boo
     } elseif ($meridiem === 'AM' && $hour === 12) {
         $hour = 0;
     }
-    if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59) {
+    if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
         return null;
     }
-    $moment = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second), $zone);
-    return $moment instanceof DateTimeImmutable ? $moment->getTimestamp() : null;
+    // Posun časového pásma se mění jen při změně času, stačí ho spočítat jednou za hodinu
+    // (u exportu s milionem řádků je to hlavní zrychlení). Začátek hodiny + minuty dává
+    // i v noc změny času stejný výsledek jako převod celého času.
+    static $hours = [];
+    $key = $zone->getName() . '|' . $year . '-' . $month . '-' . $day . ' ' . $hour;
+    if (!array_key_exists($key, $hours)) {
+        if (count($hours) > 50000) {
+            $hours = [];
+        }
+        $moment = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', sprintf('%04d-%02d-%02d %02d:00:00', $year, $month, $day, $hour), $zone);
+        $hours[$key] = $moment instanceof DateTimeImmutable ? $moment->getTimestamp() : null;
+    }
+    return $hours[$key] === null ? null : $hours[$key] + $minute * 60 + $second;
 }
 
 /** Sloupce podle hlavičky (anglicky i česky); bez hlavičky podle počtu sloupců. */
@@ -486,6 +500,10 @@ function hs_date_order(array $stamps, callable $parse): ?bool
  */
 function hs_import_bars(string $path, string $contract, string $timeZone, string $source = 'csv', string $dateOrder = 'auto'): array
 {
+    // Velký export (roky 1m svíček) se čte déle než výchozích 30 s.
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(HS_IMPORT_SECONDS);
+    }
     $period = strlen($contract) <= 20 ? hs_contract_info($contract) : null;
     if ($period === null) {
         json_response(['error' => 'Vyber kontrakt ES, ke kterému soubor patří (třeba ESZ6 = prosinec 2026).'], 422);
@@ -568,10 +586,15 @@ function hs_import_bars(string $path, string $contract, string $timeZone, string
     }
     unset($stamps);
 
-    // 2. průchod: svíčky do 5m.
+    // 2. průchod: svíčky do 5m, jen z období vybraného kontraktu. Spojitý export (continuous)
+    // má i svíčky jiných kontraktů (často s posunutými cenami): ty se jen spočítají a do
+    // paměti se nedávají, takže paměť neroste s délkou souboru.
     $buckets = [];
     $skipped = 0;
     $read = 0;
+    $outside = [];
+    $lastOutside = null;
+    $contractAt = [];
     foreach (hs_csv_rows($handle, $delimiter, $hasHeader) as $row) {
         $ts = hs_parse_datetime(hs_row_stamp($row, $map), $zone, $dayFirst, $yearDayMonth);
         $open = hs_parse_number((string)($row[$map['open']] ?? ''), $delimiter);
@@ -585,6 +608,15 @@ function hs_import_bars(string $path, string $contract, string $timeZone, string
         }
         $read++;
         $bucket = intdiv($ts, HS_BAR_SECONDS) * HS_BAR_SECONDS;
+        if ($bucket < $period['from_ts'] || $bucket >= $period['to_ts']) {
+            if ($bucket !== $lastOutside) {
+                $hourKey = intdiv($bucket, 3600);
+                $other = $contractAt[$hourKey] ??= hs_contract_at($bucket)['contract'];
+                $outside[$other] = ($outside[$other] ?? 0) + 1;
+                $lastOutside = $bucket;
+            }
+            continue;
+        }
         if (!isset($buckets[$bucket])) {
             $buckets[$bucket] = [$ts, $open, $high, $low, $close, (float)($volume ?? 0), $ts];
             continue;
@@ -604,21 +636,11 @@ function hs_import_bars(string $path, string $contract, string $timeZone, string
         unset($current);
     }
     fclose($handle);
-    if ($buckets === []) {
+    if ($read === 0) {
         json_response(['error' => 'V souboru není žádná použitelná svíčka. Zkontroluj formát data a čísel.', 'skipped' => $skipped], 422);
     }
     ksort($buckets);
-
-    // Jen období vybraného kontraktu. Spojitý export (continuous) má před rollem
-    // svíčky starého kontraktu, často i s posunutými cenami, ty se neukládají.
-    $outside = [];
-    foreach (array_keys($buckets) as $bucket) {
-        if ($bucket < $period['from_ts'] || $bucket >= $period['to_ts']) {
-            $other = hs_contract_at($bucket)['contract'];
-            $outside[$other] = ($outside[$other] ?? 0) + 1;
-            unset($buckets[$bucket]);
-        }
-    }
+    $contractAt = [];
     $outsideList = [];
     foreach ($outside as $name => $count) {
         $outsideList[] = ['contract' => $name, 'bars' => $count] + array_intersect_key((array)hs_contract_info($name), ['from_date' => 1, 'last_date' => 1]);

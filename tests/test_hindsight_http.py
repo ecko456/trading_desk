@@ -436,6 +436,24 @@ class HindsightHttpTests(unittest.TestCase):
         self.admin.api("POST", "hindsight_prefs", {"backfill": False})
         self.assertTrue(self.admin.api("POST", "hindsight_bias", {"date": "2026-09-02", "bias": "short"})[1]["later"])
 
+    def test_8_minute_bars_of_a_continuous_export(self):
+        """1m svíčky ze spojitého exportu přes roll ESM6 -> ESU6: sloučí se do 5m a starý kontrakt se jen spočítá."""
+        roll = int(datetime(2026, 6, 10, 22, 0, tzinfo=timezone.utc).timestamp())  # 18:00 New York (letní čas)
+        minutes = []
+        for start, count in ((roll - 3 * 3600, 120), (roll, 120)):  # 15:00–17:00 NY (ESZ6), pak 18:00–20:00 NY (ESH7)
+            for i in range(count):
+                o = 6700 + i * 0.25
+                minutes.append((start + i * 60, o, o + 0.5, o - 0.5, o + 0.25))
+        status, result = upload(self.admin, "ESU6", atas_csv(minutes))
+        self.assertEqual(status, 201, result)
+        self.assertEqual((result["contract"], result["rows"], result["bars"], result["from_ts"]), ("ESU6", 240, 24, roll))
+        self.assertEqual([(item["contract"], item["bars"]) for item in result["outside"]], [("ESM6", 24)])
+        status, bars = self.admin.api("GET", "hindsight_bars", **{"from": "2026-06-11", "to": "2026-06-11"})
+        self.assertEqual(status, 200, bars)
+        first = next(bar for bar in bars["bars"] if bar[0] == roll)
+        # 5 minut: open první minuty, close poslední, high a low z celé pětiminutovky.
+        self.assertEqual(first[1:5], [6700.0, 6701.5, 6699.5, 6701.25])
+
 
 @unittest.skipIf(PHP is None, "PHP není nainstalované")
 class HindsightTimeTests(unittest.TestCase):

@@ -121,7 +121,9 @@ class DeployConfigTests(unittest.TestCase):
         conf = (ROOT / "deploy" / "apache-trading.conf").read_text()
         self.assertIn(r"(\.[^/]*|data|lib|bin|tests|deploy)(/|$)", conf)
         self.assertIn("md|txt|zip|py", conf)
-        self.assertIn("php_value upload_max_filesize 20M", conf)
+        # Import svíček z ATAS smí mít až 100 MB, celý požadavek o kus víc.
+        self.assertIn("php_value upload_max_filesize 100M", conf)
+        self.assertIn("php_value post_max_size 128M", conf)
         install = (ROOT / "deploy" / "install.sh").read_text()
         for pattern in ("--exclude '/.git/'", "--exclude '*.zip'", "--exclude '/README.md'", 'rm -rf "${TARGET_DIR}/.git"'):
             self.assertIn(pattern, install)

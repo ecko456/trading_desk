@@ -239,7 +239,7 @@ Po aktualizaci dej v prohlížeči Ctrl+Shift+R (na Macu Cmd+Shift+R), ať se na
 
 **Screenshot se nenahraje, protože je prý moc velký**
 
-Aplikace bere obrázky do 20 MB. Na Ubuntu to nastavuje konfigurace Apache z instalace; po aktualizaci na starší instalaci proto spusť znovu `sudo bash deploy/install.sh`. Velké PNG z 4K monitoru pomůže uložit jako JPEG.
+Aplikace bere obrázky do 20 MB a export svíček z ATAS pro Hindsight do 100 MB. Na Ubuntu to nastavuje konfigurace Apache z instalace; po aktualizaci na starší instalaci proto spusť znovu `sudo bash deploy/install.sh`. Velké PNG z 4K monitoru pomůže uložit jako JPEG.
 
 **Prohlížeč hlásí, že se nelze připojit**
 

@@ -93,13 +93,24 @@
 
   async function api(action, options = {}) {
     const query = options.query ? `&${new URLSearchParams(options.query)}` : '';
-    const response = await fetch(`api.php?action=${encodeURIComponent(action)}${query}`, {
-      method: options.method || 'GET',
-      headers: options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : undefined,
-      body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined,
-    });
+    let response;
+    try {
+      response = await fetch(`api.php?action=${encodeURIComponent(action)}${query}`, {
+        method: options.method || 'GET',
+        headers: options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : undefined,
+        body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined,
+      });
+    } catch {
+      throw new Error('Spojení se serverem se přerušilo. Zkontroluj připojení a zkus to znovu.');
+    }
     const type = response.headers.get('content-type') || '';
-    const payload = type.includes('application/json') ? await response.json() : { error: await response.text() };
+    // Chybová stránka serveru (HTML) se nevypisuje; stačí srozumitelná věta s kódem.
+    const payload = type.includes('application/json') ? await response.json().catch(() => ({})) : {};
+    if (!response.ok && !payload.error) {
+      payload.error = response.status === 413 ? 'Soubor je na server příliš velký.'
+        : response.status >= 500 ? `Server požadavek nedokončil (chyba ${response.status}). Zkus to znovu, u importu třeba s menším souborem.`
+          : `Server požadavek odmítl (chyba ${response.status}).`;
+    }
     if (response.status === 401 && payload.auth) {
       location.replace('./');
       throw new Error(payload.error);
@@ -2970,7 +2981,9 @@
       }
       submit.disabled = true;
       result.className = 'hs-result';
-      result.textContent = 'Nahrávám…';
+      result.textContent = form.file.files[0].size > 10 * 1024 * 1024
+        ? 'Nahrávám a zpracovávám… Velký export může trvat i minutu, nech stránku otevřenou.'
+        : 'Nahrávám…';
       try {
         const payload = await api('hindsight_import', { method: 'POST', body: new FormData(form) });
         result.className = 'hs-result is-ok';

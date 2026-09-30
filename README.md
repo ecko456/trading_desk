@@ -309,7 +309,7 @@ Svíčky jsou tržní data, ne osobní deník, proto jsou společné pro všechn
 
 Proč po kontraktech: spojitý (continuous) export z ATAS nemá v den rollu skok, protože starší kontrakty v něm mají posunuté ceny. Zóny, obchody a news ale musí sedět na skutečných cenách daného kontraktu. Graf pak skládá kontrakty za sebou bez úprav cen a den rollu označí svislou čarou `ROLL ESU6 → ESZ6`.
 
-Opakovaný import stejného souboru nic nezdvojí, svíčky se jen přepíšou. 1m svíčky se sloučí do 5m. Když z dat nejde poznat, jestli je v datu napřed den, nebo měsíc (třeba soubor jen s 3. 4.), import se zeptá na formát. Soubor může mít nejvýš 20 MB; rok 5m svíček je kolem 4 MB. Dokud nejsou nahraná skutečná data, jde modul vyzkoušet na **ukázkových datech** (vymyšlených, jedním kliknutím smazatelných).
+Opakovaný import stejného souboru nic nezdvojí, svíčky se jen přepíšou. 1m svíčky se sloučí do 5m. Když z dat nejde poznat, jestli je v datu napřed den, nebo měsíc (třeba soubor jen s 3. 4.), import se zeptá na formát. Soubor může mít nejvýš 100 MB (rok 1m svíček je kolem 20 MB, rok 5m kolem 4 MB). Import čte soubor po řádcích a v paměti drží jen období vybraného kontraktu, takže zvládne i dlouhý spojitý (continuous) export; svíčky jiných kontraktů jen spočítá. Kdyby server přesto nestihl import dokončit (čas, paměť), aplikace to napíše místo prázdné stránky. Dokud nejsou nahraná skutečná data, jde modul vyzkoušet na **ukázkových datech** (vymyšlených, jedním kliknutím smazatelných).
 
 Graf kreslí [TradingView Lightweight Charts™](https://www.tradingview.com/) (Apache 2.0), písma jsou Inter a JetBrains Mono (SIL OFL). Vše je přibalené ve `static/hindsight/`, stránka nic nenačítá z cizích serverů.
 

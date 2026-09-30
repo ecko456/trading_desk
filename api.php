@@ -3,6 +3,25 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 
+// Fatální chyba PHP (došla paměť, vypršel čas) by jinak vrátila prázdnou stránku a aplikace
+// by nevěděla, co se stalo. Chyba se dál zapisuje do logu serveru.
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if ($error === null || !in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true) || headers_sent()) {
+        return;
+    }
+    $message = (string)$error['message'];
+    $text = str_contains($message, 'Allowed memory size')
+        ? 'Serveru při zpracování došla paměť. Zkus menší soubor nebo kratší období.'
+        : (str_contains($message, 'Maximum execution time')
+            ? 'Server požadavek nestihl dokončit v časovém limitu. Zkus menší soubor nebo kratší období.'
+            : 'Na serveru nastala chyba, požadavek se nedokončil. Podrobnosti jsou v logu serveru.');
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['error' => $text], JSON_UNESCAPED_UNICODE);
+});
+
 $action = (string)($_GET['action'] ?? 'health');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (!in_array($method, ['GET', 'HEAD'], true)) {
@@ -356,8 +375,8 @@ try {
         if (!is_array($file) || $uploadError !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
             json_response(['error' => 'Vyber soubor CSV se svíčkami.'], 422);
         }
-        if ((int)$file['size'] > MAX_UPLOAD_BYTES) {
-            json_response(['error' => 'Soubor je větší než ' . (MAX_UPLOAD_BYTES / 1024 / 1024) . ' MB. Rozděl export na menší části.'], 413);
+        if ((int)$file['size'] > HS_MAX_IMPORT_BYTES) {
+            json_response(['error' => 'Soubor je větší než ' . (HS_MAX_IMPORT_BYTES / 1024 / 1024) . ' MB. Vyexportuj kratší období, nebo 5m svíčky místo 1m.'], 413);
         }
         $dateOrder = (string)($_POST['date_order'] ?? 'auto');
         json_response(hs_import_bars((string)$file['tmp_name'], (string)($_POST['contract'] ?? ''), (string)($_POST['tz'] ?? 'Europe/Prague'), 'CSV ' . mb_substr((string)($file['name'] ?? ''), 0, 60), in_array($dateOrder, ['ydm', 'ymd', 'dmy', 'mdy'], true) ? $dateOrder : 'auto'), 201);
