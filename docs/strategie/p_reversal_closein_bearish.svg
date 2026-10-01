@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 770" width="1280" height="770" font-family="Segoe UI, Arial, sans-serif">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d1d4dc"/></marker><marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4caf50"/></marker><marker id="arY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffb300"/></marker></defs>
+<rect width="1280" height="770" fill="#131722"/>
+<text x="40" y="44" fill="#ffffff" font-size="24" font-weight="700">P reversal close-in BEARISH (short) – vykopnutí rotace a close zpět dovnitř</text>
+<text x="40" y="70" fill="#9598a1" font-size="14">Po impulzu nahoru a rotaci jedna svíčka vykopne všechny highs rotace a zavře zpět v rotaci → market sell, SL nad nové high, TP 1:2</text>
+<line x1="50" x2="1240" y1="610" y2="610" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="560" y2="560" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="510" y2="510" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="460" y2="460" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="410" y2="410" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="360" y2="360" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="310" y2="310" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="260" y2="260" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="210" y2="210" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="160" y2="160" stroke="#1e222d"/>
+<line x1="50" x2="1240" y1="110" y2="110" stroke="#1e222d"/>
+<rect x="264" y="190" width="192" height="58.0" fill="#7e57c2" opacity="0.14" stroke="#7e57c2" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="360.0" y="160" fill="#b39ddb" font-size="13" font-weight="700" text-anchor="middle">Akumulace / rotace</text>
+<text x="360.0" y="176" fill="#b39ddb" font-size="11" text-anchor="middle">≥ 4 close uvnitř předchozích svíček</text>
+<line x1="80" x2="80" y1="430" y2="400" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="70" y="405.0" width="20" height="15.0" fill="#26a69a"/>
+<text x="80" y="625" fill="#787b86" font-size="12" text-anchor="middle">1</text>
+<line x1="120" x2="120" y1="410" y2="385.0" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="110" y="390" width="20" height="15.0" fill="#26a69a"/>
+<text x="120" y="625" fill="#787b86" font-size="12" text-anchor="middle">2</text>
+<line x1="160" x2="160" y1="395.0" y2="330" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="150" y="335.0" width="20" height="55.0" fill="#26a69a"/>
+<text x="160" y="625" fill="#787b86" font-size="12" text-anchor="middle">3</text>
+<line x1="200" x2="200" y1="340" y2="270" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="190" y="275.0" width="20" height="60.0" fill="#26a69a"/>
+<text x="200" y="625" fill="#787b86" font-size="12" text-anchor="middle">4</text>
+<line x1="240" x2="240" y1="280" y2="215.0" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="230" y="220" width="20" height="55.0" fill="#26a69a"/>
+<text x="240" y="625" fill="#787b86" font-size="12" text-anchor="middle">5</text>
+<line x1="280" x2="280" y1="240" y2="195.0" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="270" y="220" width="20" height="10" fill="#ef5350"/>
+<text x="280" y="625" fill="#787b86" font-size="12" text-anchor="middle">6</text>
+<line x1="320" x2="320" y1="245.0" y2="200" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="310" y="208.0" width="20" height="22.0" fill="#26a69a"/>
+<text x="320" y="625" fill="#787b86" font-size="12" text-anchor="middle">7</text>
+<line x1="360" x2="360" y1="240" y2="190" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="350" y="208.0" width="20" height="24.0" fill="#ef5350"/>
+<text x="360" y="625" fill="#787b86" font-size="12" text-anchor="middle">8</text>
+<line x1="400" x2="400" y1="248.0" y2="205.0" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="390" y="212.0" width="20" height="20.0" fill="#26a69a"/>
+<text x="400" y="625" fill="#787b86" font-size="12" text-anchor="middle">9</text>
+<line x1="440" x2="440" y1="240" y2="202.0" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="430" y="212.0" width="20" height="23.0" fill="#ef5350"/>
+<text x="440" y="625" fill="#787b86" font-size="12" text-anchor="middle">10</text>
+<line x1="480" x2="480" y1="240" y2="150" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="470" y="225.0" width="20" height="10.0" fill="#26a69a"/>
+<text x="480" y="625" fill="#787b86" font-size="12" text-anchor="middle">11</text>
+<line x1="520" x2="520" y1="260" y2="220" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="510" y="225.0" width="20" height="30.0" fill="#ef5350"/>
+<text x="520" y="625" fill="#787b86" font-size="12" text-anchor="middle">12</text>
+<line x1="560" x2="560" y1="295.0" y2="250" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="550" y="255.0" width="20" height="35.0" fill="#ef5350"/>
+<text x="560" y="625" fill="#787b86" font-size="12" text-anchor="middle">13</text>
+<line x1="600" x2="600" y1="310" y2="275.0" stroke="#26a69a" stroke-width="1.6"/>
+<rect x="590" y="280" width="20" height="10" fill="#26a69a"/>
+<text x="600" y="625" fill="#787b86" font-size="12" text-anchor="middle">14</text>
+<line x1="640" x2="640" y1="330" y2="275.0" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="630" y="280" width="20" height="45.0" fill="#ef5350"/>
+<text x="640" y="625" fill="#787b86" font-size="12" text-anchor="middle">15</text>
+<line x1="680" x2="680" y1="360" y2="320" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="670" y="325.0" width="20" height="30.0" fill="#ef5350"/>
+<text x="680" y="625" fill="#787b86" font-size="12" text-anchor="middle">16</text>
+<line x1="720" x2="720" y1="390" y2="350" stroke="#ef5350" stroke-width="1.6"/>
+<rect x="710" y="355.0" width="20" height="30.0" fill="#ef5350"/>
+<text x="720" y="625" fill="#787b86" font-size="12" text-anchor="middle">17</text>
+<text x="40" y="625" fill="#555a66" font-size="11" text-anchor="end">#</text>
+<line x1="50" x2="1000" y1="605" y2="605" stroke="#2a2e39"/>
+<line x1="134" x2="134" y1="395.0" y2="215.0" stroke="#d1d4dc" stroke-width="1.2" marker-end="url(#ar)" opacity="0.8"/>
+<text x="258" y="377.0" fill="#d1d4dc" font-size="13" font-weight="700">Impulz 1 (nahoru)</text>
+<text x="258" y="393.0" fill="#9598a1" font-size="11">ideálně 3 svíčky jedním směrem</text>
+<rect x="468" y="145.0" width="542" height="80.0" fill="#ef5350" opacity="0.13"/>
+<rect x="468" y="225.0" width="542" height="160.0" fill="#4caf50" opacity="0.10"/>
+<line x1="264" x2="510" y1="190" y2="190" stroke="#42a5f5" stroke-width="1.6" stroke-dasharray="5 3"/>
+<line x1="468" x2="1010" y1="385.0" y2="385.0" stroke="#4caf50" stroke-width="2" stroke-dasharray="8 4"/>
+<text x="1018" y="390.0" fill="#4caf50" font-size="14" font-weight="700">TP – RR 1:2</text>
+<line x1="468" x2="1010" y1="225.0" y2="225.0" stroke="#ffb300" stroke-width="2" stroke-dasharray=""/>
+<text x="1018" y="230.0" fill="#ffb300" font-size="14" font-weight="700">VSTUP – market sell na close</text>
+<line x1="468" x2="1010" y1="145.0" y2="145.0" stroke="#ef5350" stroke-width="2" stroke-dasharray="8 4"/>
+<text x="1018" y="150.0" fill="#ef5350" font-size="14" font-weight="700">SL – nad nové high</text>
+<text x="1000" y="190.0" fill="#ef5350" font-size="12" text-anchor="end">1R</text>
+<text x="1000" y="310.0" fill="#4caf50" font-size="12" text-anchor="end">2R</text>
+<circle cx="480" cy="150" r="6" fill="none" stroke="#42a5f5" stroke-width="2"/>
+<text x="496" y="132" fill="#42a5f5" font-size="13" font-weight="700">vykopnutí všech highs rotace</text>
+<circle cx="480" cy="225.0" r="5" fill="#ffb300"/>
+<text x="500" y="205.0" fill="#ffb300" font-size="13" font-weight="700">close zpět v rotaci → vstup</text>
+<text x="40" y="666" fill="#9598a1" font-size="13">1. Impulz 1: jedna velká, ideálně 3 svíčky jedním směrem (nahoru).</text>
+<text x="40" y="686" fill="#9598a1" font-size="13">2. Akumulace / rotace: aspoň 4 close vedle sebe uvnitř předchozích svíček.</text>
+<text x="40" y="706" fill="#9598a1" font-size="13">3. Jedna svíčka (sv. 11) vykopne všechny highs rotace a zavře zpět uvnitř rotace.</text>
+<text x="40" y="726" fill="#9598a1" font-size="13">4. Vstup market sell na close této svíčky.</text>
+<text x="40" y="746" fill="#9598a1" font-size="13">5. SL nad nové high (knot sv. 11), TP = 2 × riziko (RR 1:2).</text>
+</svg>
