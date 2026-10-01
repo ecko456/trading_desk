@@ -66,10 +66,9 @@ http://localhost/trading/
 
 Instalátor pouze přidá Apache alias `/trading/`. Existující aplikace na `/` zůstane beze změny.
 
-V repozitáři je i samostatná aplikace **Odměny** (hodnocení operátorů). S Trading Deskem nemá
-nic společného a instaluje se zvlášť. Verze 2 běží na adrese `/odmeny_v2/` vedle ostré verze
-na `/odmeny/` a instaluje se příkazem `sudo bash odmeny_v2/deploy/install.sh`.
-Podrobnosti v [`odmeny_v2/README.md`](odmeny_v2/README.md).
+Na stejném serveru běží i aplikace **Odměny** (hodnocení operátorů). S Trading Deskem nemá nic
+společného a má vlastní repozitáře: ostrá verze [`odmeny`](https://github.com/ecko456/odmeny)
+na `/odmeny/` a verze 2 [`odmeny_v2`](https://github.com/ecko456/odmeny_v2) na `/odmeny_v2/`.
 
 ## Uložení dat
 

@@ -1,17 +1,30 @@
 # Trading Desk: poznámky pro Clauda
 
 Claude Code si tenhle soubor načte sám na začátku každé session. Je v něm, kde jsme
-skončili, jak je projekt poskládaný a jak s ním pracovat. Podrobnosti k modulům:
+skončili, jak je projekt poskládaný a jak s ním pracovat. Podrobnosti k Hindsightu jsou
+ve `static/hindsight/CLAUDE.md`.
 
-- `odmeny_v2/CLAUDE.md`: Odměny (načte se sám při práci v `odmeny_v2/`)
-- `static/hindsight/CLAUDE.md`: Hindsight
+Dokumentace pro uživatele je v `README.md` a `INSTALL.md`.
 
-Dokumentace pro uživatele je v `README.md`, `INSTALL.md` a `odmeny_v2/README.md`.
+## Tři oddělené projekty
+
+Od 1. 10. 2026 je **tenhle repozitář jen Trading Desk**. Odměny mají vlastní repozitáře
+s vlastním `CLAUDE.md` a pracuje se na nich v samostatných sessions.
+
+| projekt | repozitář | adresa | klon na serveru |
+|---|---|---|---|
+| **Trading Desk (tady)** | `ecko456/trading_desk` | `/trading/` | `/root/trading_desk` |
+| Odměny, ostrá verze 1.0 | `ecko456/odmeny` | `/odmeny/` | `/root/odmeny` |
+| Odměny, verze 2 | `ecko456/odmeny_v2` | `/odmeny_v2/` | `/root/odmeny_v2` |
+
+Když uživatel v téhle session chce něco v Odměnách, připomeň mu, ať otevře session
+nad repozitářem `odmeny_v2` (nebo `odmeny`).
+
 Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a poznámky modulu.
 
 ## Kde jsme skončili
 
-Stav k 30. 9. 2026:
+Stav k 1. 10. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
@@ -20,16 +33,9 @@ Stav k 30. 9. 2026:
 - Poslední práce (Hindsight):
   - import velkého exportu z ATAS bez pádu serveru (`f96ed9e`); uživatel potvrdil, že funguje;
   - klik na pás seancí přiblíží, další klik vrátí zobrazení (`6cb4b69`).
-- **Odměny verze 2 jsou oddělené od ostré verze.** Uživatel chtěl, ať V2 nepoškodí
-  fungující `/odmeny/`. Proto:
-  - V2 je v repu v `odmeny_v2/` a běží na `/odmeny_v2/` s vlastním kódem, daty i Apache conf;
-  - kopii ostrých dat jde udělat jen pro čtení;
-  - zapamatovaná zařízení s PINem má V2 zvlášť.
-
-  Ostrá verze v aktuální větvi není (jen v historii, `ffe47d2`). Podrobnosti jsou
-  v `odmeny_v2/CLAUDE.md`. Další zadání k Odměnám se čeká.
+- **Projekty jsou rozdělené do tří repozitářů** (1. 10. 2026). Odměny odsud zmizely i s původní
+  aplikací `hodnoceni-operatoru.html`, jejich historie je v nových repozitářích.
 - Od uživatele se čeká:
-  - vzorek skutečného exportu evidence práce (Odměny);
   - vzorek CSV s obchody pro import do Hindsightu.
 
 ## Začátek nové session
@@ -51,8 +57,7 @@ Stav k 30. 9. 2026:
   žádná data. **Repozitář je veřejný.**
 - Aplikace běží jen za HTTPS, Apache ho obsluhuje přímo.
 - Opatrně, ať nic nerozbiješ. **Nepushuj neotestovaný kód** a v prohlížeči ověř i vzhled
-  (screenshot). **Při aktualizaci se nesmí ztratit data**, u Odměn to platí dvojnásob.
-- Odměny musí zůstat šifrované a přístupné jen po přihlášení.
+  (screenshot). **Při aktualizaci se nesmí ztratit data.**
 - Do commitů, PR, kódu ani dokumentace nepiš identifikátor modelu. Patičku commitu
   (Co-Authored-By, Claude-Session) ber z pokynů aktuální session.
 - Commit message česky: `Modul: co se změnilo`, v těle proč a odrážky.
@@ -66,25 +71,15 @@ přímo pracovní větev:
 ```bash
 # Trading Desk (včetně Hindsightu)
 cd /root/trading_desk && git pull origin claude/elegant-clarke-vl5n7d && sudo bash deploy/install.sh
-# Odměny verze 2 na /odmeny_v2/ (ostré /odmeny/ nemění; ODMENY_KOPIE=1 = s kopií ostrých dat)
-cd /root/trading_desk && git pull origin claude/elegant-clarke-vl5n7d && sudo ODMENY_KOPIE=1 bash odmeny_v2/deploy/install.sh
-# další aktualizace V2 (data V2 zůstanou, před aktualizací se zazálohují)
-cd /root/trading_desk && git pull origin claude/elegant-clarke-vl5n7d && sudo bash odmeny_v2/deploy/install.sh
 ```
 
 Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo navrhni sloučení do `main`.
 
-| | Trading Desk | Odměny ostré (nesahat) | Odměny verze 2 |
-|---|---|---|---|
-| URL | `/trading/` | `/odmeny/` | `/odmeny_v2/` |
-| kód na serveru | `/var/www/trading-journal` | `/var/www/odmeny` | `/var/www/odmeny_v2` |
-| data | `/var/lib/trading-journal` | `/var/lib/odmeny` | `/var/lib/odmeny_v2` (+ `backups/`) |
-| Apache conf | `deploy/apache-trading.conf` | `odmeny.conf` (jen na serveru) | `odmeny_v2/deploy/apache-odmeny_v2.conf` |
-| instalace | `deploy/install.sh` | žádná (historie `ffe47d2`) | `odmeny_v2/deploy/install.sh` |
-
-- Instalace kopírují kód rsyncem s výjimkami. Dokumentace, testy, `deploy/`, `.git`,
-  podklady (`*.csv`, `*.docx`), `odmeny/` a `odmeny_v2/` (u Trading Desku) a `CLAUDE.md` se na web
-  nedostanou. Hlídají to testy a Apache i vestavěný router navíc odmítají `.md`, `.py`,
+- Kód na serveru: `/var/www/trading-journal`, data: `/var/lib/trading-journal`.
+- Apache conf: `deploy/apache-trading.conf` → `/etc/apache2/conf-available/trading-journal.conf`.
+- Odměny mají vlastní instalace ve svých repozitářích. Instalace Trading Desku se jich nedotýká.
+- Instalace kopíruje kód rsyncem s výjimkami. Dokumentace, testy, `deploy/`, `.git`,
+  podklady (`*.csv`, `*.docx`) a `CLAUDE.md` se na web nedostanou. Hlídají to testy a Apache i vestavěný router navíc odmítají `.md`, `.py`,
   `.sqlite3` a podobné soubory.
 - PHP limity nastavuje Apache conf, protože mod_php nečte `.user.ini`. Trading Desk má
   upload 100M a post 128M (kvůli importu z ATAS), screenshoty drží aplikace na 20 MB.
@@ -119,12 +114,6 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - Jiné způsoby spuštění: `start-*.bat/.command` a `.devcontainer/` (Codespaces).
 - `tests/`: Python HTTP testy (spouští vlastní `php -S`) a Node testy (`*.js`).
 
-**Odměny:** `odmeny_v2/`, samostatná šifrovaná aplikace, verze 2 na `/odmeny_v2/`.
-
-- Ostrá verze `/odmeny/` v aktuální větvi není (viz `odmeny_v2/CLAUDE.md`).
-- `hodnoceni-operatoru.html` v kořeni je původní aplikace. Neinstaluje se; slouží jako
-  reference pro `odmeny_v2/tests/test_core.js`.
-
 **Ostatní:** `trading-desk-v16.zip` je původní nahraná verze. Nic se z ní nenasazuje.
 
 ## Vývoj a testy v cloudové session
@@ -138,10 +127,6 @@ aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory
-
-# Odměny: 19 testů, pár vteřin
-python3 -m unittest discover -s odmeny_v2/tests
-node odmeny_v2/tests/test_core.js
 ```
 
 - Testy spouštěj přes `discover` z kořene repa. `python3 -m unittest tests.x` selže na importu.
@@ -154,8 +139,6 @@ node odmeny_v2/tests/test_core.js
   - Správce založíš přes `POST api.php?action=setup` s údaji
     `{token, login, display_name, secret_mode:'key'}`.
   - Větší uploady potřebují `php -d upload_max_filesize=100M -d post_max_size=128M -S …`.
-- Lokální Odměny: `ODMENY_DATA_DIR=$S/odm php -S 127.0.0.1:8490 -t odmeny_v2 odmeny_v2/dev-router.php`.
-  Víc je v `odmeny_v2/CLAUDE.md`.
 - Playwright:
   - `require('/opt/node22/lib/node_modules/playwright')`;
   - `chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })`;

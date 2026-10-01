@@ -50,7 +50,7 @@ rm -rf "${TARGET_DIR}/.git" "${TARGET_DIR}/.devcontainer"
 rm -f "${TARGET_DIR}/.gitignore" "${TARGET_DIR}/README.md" "${TARGET_DIR}/ZACNI-TADY.txt" "${TARGET_DIR}"/*.zip
 # Podklady nahrané do repozitáře (exporty z ATAS, zadání) na web nepatří.
 rm -f "${TARGET_DIR}"/*.csv "${TARGET_DIR}"/*.docx
-# Odměny jsou samostatná aplikace s vlastní instalací (odmeny_v2/deploy/install.sh).
+# Odměny jsou samostatné projekty ve vlastních repozitářích (odmeny, odmeny_v2); na web Trading Desku nepatří.
 rm -rf "${TARGET_DIR}/odmeny" "${TARGET_DIR}/odmeny_v2"
 rm -f "${TARGET_DIR}/hodnoceni-operatoru.html"
 

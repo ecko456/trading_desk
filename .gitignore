@@ -7,7 +7,3 @@
 !/data/uploads/.gitkeep
 
 __pycache__/
-
-# Odměny: šifrovaná databáze a kód pro první spuštění.
-/odmeny/data/
-/odmeny_v2/data/
