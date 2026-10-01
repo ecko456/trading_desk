@@ -10,9 +10,10 @@ STD = BASE_UP + [
  (34,41,33,40),(40,47,39,46),(46,52,45,48),(48,57.5,47,50),
  (50,51,44,45),(45,46,38,39),(39,40,32,33),(33,35,28,29),(29,30,25,26)]
 ANOM = BASE_UP + [
- (57,64,48,50),(50,54,49,53),(53,55,46,47),(47,48,42,43),
+ (57,64,48,50),(50,54,49,53),(53,53.8,46,47),(47,48,42,43),
  (43,49,42.5,48),(48,54,47,53),(53,56,52,54),(54,59.5,53,55),
  (55,56,50,51),(51,52,45,46),(46,47,41,42),(42,43,37,38)]
+TRAP = [list(c) for c in ANOM]; TRAP[14] = (53,55,46,47)
 F5R, F7R = 0.618, 0.789
 
 def build(fname, candles, bull, sc):
@@ -26,9 +27,9 @@ def build(fname, candles, bull, sc):
     rng = Ap - Bp
     F5 = Bp + F5R * rng; F7 = Bp + F7R * rng; OP = Cp - rng; SL = Ap + 2
     # text variants
-    T = dict(HH='LL', LL='HH', HL='LH', High='Low', high='low', low='high', Low='High',
+    T = dict(HH='LL', LL='HH', LH='HL', HL='LH', High='Low', high='low', low='high', Low='High',
              short='long', nad='pod', pod='nad', vyssi='nižší', nejv='nejnižšího', up='downtrend', bearish='bullish') if bull else \
-        dict(HH='HH', LL='LL', HL='HL', High='High', high='high', low='low', Low='Low',
+        dict(HH='HH', LL='LL', LH='LH', HL='HL', High='High', high='high', low='low', Low='Low',
              short='short', nad='nad', pod='pod', vyssi='vyšší', nejv='nejvyššího', up='uptrend', bearish='bearish')
     up = lambda above: (not above) if bull else above   # flip label side
     o = []; a = o.append
@@ -92,11 +93,23 @@ def build(fname, candles, bull, sc):
     a(f'<text x="{bx-8}" y="{my+16}" fill="#9598a1" font-size="11" text-anchor="end">(break struktury)</text>')
     a(f'<line x1="1000" x2="1000" y1="{y(Cp)}" y2="{y(OP)}" stroke="#4caf50" stroke-width="1.2" marker-start="url(#arG)" marker-end="url(#arG)" opacity="0.8"/>')
     a(f'<text x="992" y="{y(OP) + (22 if not bull else -12)}" fill="#4caf50" font-size="12" text-anchor="end">C→OP = A→B</text>')
+    ecol = sc.get('ecol', '#ffb300'); etxt = sc.get('etxt', 'VSTUP ({short}) v F5 / F7').format(**T)
     ex = x(Cc); ey = y(F7); s = -1 if not bull else 1; ed = sc.get('edy', 40)
     a(f'<line x1="{ex+60}" x2="{ex+14}" y1="{ey+s*ed}" y2="{ey+s*3}" stroke="#ffb300" stroke-width="2" marker-end="url(#arY)"/>')
-    a(f'<text x="{ex+64}" y="{ey+s*(ed+6) + (10 if bull else 0)}" fill="#ffb300" font-size="14" font-weight="700">VSTUP ({T["short"]}) v F5 / F7</text>')
+    a(f'<text x="{ex+64}" y="{ey+s*(ed+6) + (10 if bull else 0)}" fill="{ecol}" font-size="14" font-weight="700">{etxt}</text>')
     a(f'<circle cx="{ex}" cy="{ey}" r="5" fill="#ffb300"/>')
     a(f'<circle cx="{x(sc["f5"])}" cy="{y(F5)}" r="4" fill="none" stroke="#ffb300" stroke-width="2"/>')
+    for m in sc.get('marks', []):
+        a(f'<circle cx="{x(m[0])}" cy="{y(m[1])}" r="7" fill="none" stroke="#ef5350" stroke-width="2.5"/>')
+    for co in sc.get('callouts', []):
+        bx0, by0, bw, bh = co['box']
+        if bull: by0 = 680 - by0 - bh
+        for (ti, tp) in co['to']:
+            a(f'<line x1="{bx0+40}" y1="{by0 + (0 if not bull else bh)}" x2="{x(ti)}" y2="{y(tp)}" stroke="#ef5350" stroke-width="1.2" stroke-dasharray="4 3"/>')
+        a(f'<rect x="{bx0}" y="{by0}" width="{bw}" height="{bh}" rx="6" fill="#2a1416" stroke="#ef5350" stroke-width="1.2"/>')
+        bold = ' font-weight="700"'
+        for k, ln in enumerate(co['lines']):
+            a(f'<text x="{bx0+12}" y="{by0+22+k*18}" fill="{"#ef5350" if k==0 else "#d1d4dc"}" font-size="{13 if k==0 else 12}"{bold if k==0 else ""}>{ln.format(**T)}</text>')
     for k, st in enumerate(sc['steps']):
         a(f'<text x="40" y="{666 + k*20}" fill="#9598a1" font-size="13">{st.format(**T)}</text>')
     a('</svg>')
@@ -122,7 +135,22 @@ anom = dict(A=13, B=16, C=20, f5=19, edy=14, swings=SW,
            '4. Fibo A→B, čekám na návrat do F5 (61.8 %) nebo F7 (78.9 %) → vstup {short}.',
            '5. SL {nad} {high} (A), TP na OP expanze (100 % A→B promítnuto od C).'])
 anom['Alabel'] = 'A – nové {HH} + {low} {pod} sv. 12'
-for name, cs, sc, ttl in (('reversal', STD, std, 'Reversal'), ('reversal_anomalie', ANOM, anom, 'Reversal – anomálie')):
+trap = dict(anom)
+trap.update(subtitle='Ukázka, čemu se vyhnout: svíčka v impulsu je outside bar → její {high} je {LH} a návrat do F5/F7 ho prorazí',
+    ecol='#ef5350', etxt='VSTUP ✗ – struktura už je proti {short}u',
+    marks=[(19, 55)],
+    lines=anom['lines'] + [dict(i0=15, p=55, i1=19, col='#ef5350', lab='', w=1.6, dash='5 3')],
+    callouts=[dict(box=(600, 420, 400, 100), to=[(15, 55), (19, 55)], lines=[
+        'POZOR: sv. 15 = outside bar → {high} sv. 15 je {LH}',
+        '{High} nad sv. 14 a zároveň {low} {pod} sv. 14.',
+        'Sv. 19 prorazí jeho {high} → BOS PROTI {short}u.',
+        'Vstup v F7 (sv. 20) je až po změně struktury.'])],
+    steps=['1. Anomálie: sv. 13 nové {HH} + {LL} → break jejího {low} (sv. 15) = BOS.',
+           '2. POZOR: sv. 15 je sama outside bar ({high} nad sv. 14, {low} {pod} sv. 14) → její {high} je {LH}.',
+           '3. Návrat k F5/F7 prorazí {high} sv. 15 (sv. 19) → struktura se otočí PROTI směru obchodu → NEBRAT.',
+           '4. Výjimka: na vyšším TF proběhl také break a během návratu se tam neutvořilo {high}, které mění strukturu proti obchodu.',
+           '5. Jinak platí: SL {nad} {high} (A), TP na OP expanze – ale jen pokud setup není zneplatněný.'])
+for name, cs, sc, ttl in (('reversal', STD, std, 'Reversal'), ('reversal_anomalie', ANOM, anom, 'Reversal – anomálie'), ('reversal_past', TRAP, trap, 'POZOR – past')):
     for bull in (False, True):
         s = dict(sc); 
         s['title'] = f'{ttl} {"BULLISH (long)" if bull else "BEARISH (short)"} – break struktury + návrat do Fibo F5 / F7'
