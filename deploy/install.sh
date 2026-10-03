@@ -17,7 +17,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 apt-get update
-apt-get install -y apache2 php php-cli php-sqlite3 php-mbstring php-zip rsync python3-reportlab python3-pil fonts-dejavu-core
+apt-get install -y apache2 php php-cli php-sqlite3 php-mbstring php-xml php-zip rsync python3-reportlab python3-pil fonts-dejavu-core
 
 install -d -m 0750 -o root -g www-data "${TARGET_DIR}"
 install -d -m 0770 -o www-data -g www-data "${DATA_DIR}" "${DATA_DIR}/uploads"

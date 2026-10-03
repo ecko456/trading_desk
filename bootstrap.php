@@ -12,6 +12,7 @@ require_once __DIR__ . '/lib/accounts.php';
 require_once __DIR__ . '/lib/wall.php';
 require_once __DIR__ . '/lib/workspace.php';
 require_once __DIR__ . '/lib/hindsight.php';
+require_once __DIR__ . '/lib/svg.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -1190,7 +1191,7 @@ function strategy_payload(int $id): ?array
     if ($strategy === null) {
         return null;
     }
-    $strategy['screenshots'] = fetch_all('SELECT id, strategy_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots WHERE strategy_id = ? ORDER BY created_at, id', [$id]);
+    $strategy['screenshots'] = fetch_all('SELECT id, strategy_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots WHERE strategy_id = ? ORDER BY created_at, rowid', [$id]);
     $strategy['trade_count'] = (int)(fetch_one('SELECT COUNT(*) AS total FROM trades WHERE strategy_id = ?', [$id])['total'] ?? 0);
     return $strategy;
 }

@@ -12,6 +12,8 @@ const state = {
   currentPlan: null,
   currentScreenshots: [],
   currentStrategy: null,
+  strategyStats: {},
+  strategyPreview: null,
   stats: null,
   auditIntervalDays: 30,
   calendarMonth: null,
@@ -1710,6 +1712,7 @@ function resetPlan({ type = planType(), date = null, market = null } = {}) {
   $('#planForm').reset();
   setPlanType(type);
   $('#planId').value = '';
+  $('#dnPatterns').value = '';
   $('#planDate').value = date || defaultPlanDate(type);
   $('#planMarket').value = market || $('#globalMarket').value || lastMarket || prefs().defaults?.market || marketList()[0]?.symbol || 'ES';
   $('#planSession').value = tradeTypeLabel(null);
@@ -2064,6 +2067,8 @@ async function refreshStrategyStats() {
 
     $('#strategyCount').textContent = String(named.length);
     $('#strategyOrphans').textContent = String(orphans);
+    state.strategyStats = Object.fromEntries(named.map(item => [String(item.strategy_id), item]));
+    renderStrategyRail();
     const ranked = items.filter(item => Number(item.rated_trades) > 0);
     const best = ranked[0];
     const worst = ranked[ranked.length - 1];
@@ -2595,7 +2600,92 @@ async function refreshStrategies() {
     const result = await api('strategies');
     state.strategies = result.items || [];
     renderStrategyOptions();
+    renderStrategyRail();
   } catch (error) { toast(error.message, 'error'); }
+}
+
+/* Sloupec strategií vpravo ve Strategiích: rychlý náhled s obrázkem a popisem, statistiky vlevo zůstávají. */
+function strategyMeta(strategy) {
+  return [strategy.timeframe, strategyStyleLabels[strategy.style]].filter(Boolean).join(' · ');
+}
+
+const STRATEGY_UPLOAD_HINT = 'Vlož schéma nebo ukázkové grafy setupu (PNG, JPEG, WebP, SVG). První obrázek je náhled.';
+
+function countWord(count, one, few, many) {
+  return count === 1 ? one : count >= 2 && count <= 4 ? few : many;
+}
+
+function strategyStatsLine(strategy) {
+  const stats = state.strategyStats[String(strategy.id)];
+  if (!stats || !Number(stats.trades)) return 'Zatím bez obchodů';
+  const total = Number(stats.total_r);
+  const count = Number(stats.trades);
+  return `<b class="${total >= 0 ? 'value-positive' : 'value-negative'}">${signedR(stats.total_r)}</b> · ${count} ${countWord(count, 'obchod', 'obchody', 'obchodů')}`;
+}
+
+function strategyInitials(name) {
+  return String(name || '?').trim().split(/\s+/).slice(0, 2).map(word => word[0] || '').join('').toUpperCase() || '?';
+}
+
+function renderStrategyRail() {
+  const root = $('#strategyCards');
+  if (!root) return;
+  const search = $('#strategySearch');
+  search.hidden = state.strategies.length <= 6;
+  const query = search.hidden ? '' : search.value.trim().toLocaleLowerCase('cs');
+  const items = state.strategies.filter(item => !query || `${item.name} ${item.timeframe || ''} ${item.notes || ''}`.toLocaleLowerCase('cs').includes(query));
+  if (!state.strategies.length) {
+    root.innerHTML = '<div class="strategy-empty"><strong>Zatím žádná strategie.</strong><span>Přidej první setup a vlož k němu schéma nebo graf (PNG, JPEG, WebP i SVG). Uvidíš ho tady vždy po ruce.</span></div>';
+    return;
+  }
+  root.innerHTML = items.map(item => {
+    const cover = item.cover_id
+      ? `<span class="strategy-thumb"><img src="file.php?id=${encodeURIComponent(item.cover_id)}" alt="" loading="lazy"></span>`
+      : `<span class="strategy-thumb is-empty" aria-hidden="true">${escapeHtml(strategyInitials(item.name))}</span>`;
+    const meta = strategyMeta(item);
+    const images = Number(item.screenshot_count || 0);
+    return `<button class="strategy-card" type="button" data-strategy-preview="${escapeHtml(item.id)}">
+      ${cover}
+      <span class="strategy-card-body">
+        <strong>${escapeHtml(item.name)}</strong>
+        ${meta || images > 1 ? `<span class="strategy-meta">${escapeHtml(meta)}${meta && images > 1 ? ' · ' : ''}${images > 1 ? `${images} ${countWord(images, 'obrázek', 'obrázky', 'obrázků')}` : ''}</span>` : ''}
+        ${item.notes ? `<span class="strategy-desc">${escapeHtml(item.notes)}</span>` : ''}
+        <span class="strategy-stats">${strategyStatsLine(item)}</span>
+      </span>
+    </button>`;
+  }).join('') || '<div class="strategy-empty"><span>Žádná strategie neodpovídá hledání.</span></div>';
+}
+
+function showStrategyPreviewImage(id) {
+  const strategy = state.strategyPreview;
+  const shots = strategy?.screenshots || [];
+  const shot = shots.find(item => item.id === id) || shots[0];
+  const figure = $('#strategyPreviewFigure');
+  figure.hidden = !shot;
+  if (shot) {
+    $('#strategyPreviewImage').src = `file.php?id=${encodeURIComponent(shot.id)}`;
+    $('#strategyPreviewImage').alt = shot.caption || shot.original_name || strategy.name;
+    figure.dataset.screenshot = shot.id;
+  }
+  $$('[data-preview-shot]', $('#strategyPreviewThumbs')).forEach(button => button.classList.toggle('is-on', button.dataset.previewShot === shot?.id));
+}
+
+async function openStrategyPreview(id) {
+  let strategy;
+  try { strategy = await api('strategy', { query: { id } }); } catch (error) { toast(error.message, 'error'); return; }
+  state.strategyPreview = strategy;
+  const shots = strategy.screenshots || [];
+  $('#strategyPreviewTitle').textContent = strategy.name;
+  $('#strategyPreviewMeta').textContent = strategyMeta(strategy) || 'Strategie';
+  $('#strategyPreviewThumbs').innerHTML = shots.length > 1
+    ? shots.map(shot => `<button type="button" data-preview-shot="${escapeHtml(shot.id)}" aria-label="${escapeHtml(shot.caption || shot.original_name)}"><img src="file.php?id=${encodeURIComponent(shot.id)}" alt="" loading="lazy"></button>`).join('')
+    : '';
+  $('#strategyPreviewStats').innerHTML = strategyStatsLine(strategy);
+  const notes = $('#strategyPreviewNotes');
+  notes.textContent = strategy.notes || 'Bez popisu. Pravidla a poznámky doplníš přes Upravit strategii.';
+  notes.classList.toggle('is-empty', !strategy.notes);
+  showStrategyPreviewImage(shots[0]?.id);
+  $('#strategyPreview').showModal();
 }
 
 function renderStrategyGallery() {
@@ -2606,8 +2696,10 @@ function renderStrategyGallery() {
 async function openStrategyDialog(id = null) {
   const form = $('#strategyForm');
   form.reset();
+  // Skryté pole reset nevyprázdní; bez toho by nová strategie přepsala naposledy otevřenou.
+  form.elements.id.value = '';
   $('#strategyScreenshots').value = '';
-  $('#strategyScreenshotNames').textContent = 'Vlož ukázkové grafy setupu.';
+  $('#strategyScreenshotNames').textContent = STRATEGY_UPLOAD_HINT;
   state.currentStrategy = null;
   if (id) {
     try {
@@ -2637,7 +2729,8 @@ async function saveStrategyForm() {
   await refreshStrategies();
   renderStrategyOptions(String(strategy.id));
   $('#strategyDialog').close();
-  toast(files.length ? `Strategie a ${files.length} screenshotů jsou uložené.` : 'Strategie je uložená.');
+  if ($('#view-strategies').classList.contains('is-active')) refreshStrategyStats();
+  toast(files.length ? `Strategie a ${files.length} ${countWord(files.length, 'obrázek', 'obrázky', 'obrázků')} jsou uložené.` : 'Strategie je uložená.');
   await refreshTrades();
 }
 
@@ -3008,6 +3101,8 @@ refreshTrades.sequence = 0;
 async function openTrade(trade = null) {
   const form = $('#tradeForm');
   form.reset();
+  // Skryté pole reset nevyprázdní; bez toho by nový obchod přepsal naposledy otevřený.
+  form.elements.id.value = '';
   $('#tradeScreenshots').value = '';
   $('#tradeScreenshotNames').textContent = 'Volitelně přidej entry, exit nebo výsledný graf.';
   renderStrategyOptions('');
@@ -3065,7 +3160,7 @@ async function saveTrade() {
       await api('upload', { method: 'POST', body: upload });
     }
     $('#tradeDialog').close();
-    toast(files.length ? `Obchod a ${files.length} screenshotů jsou uložené.` : 'Obchod je uložený v deníku.');
+    toast(files.length ? `Obchod a ${files.length} ${countWord(files.length, 'screenshot', 'screenshoty', 'screenshotů')} jsou uložené.` : 'Obchod je uložený v deníku.');
     await Promise.all([refreshTrades(), refreshDashboard(), refreshPlans(), refreshAccounts()]);
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -3370,7 +3465,7 @@ function bindEvents() {
   });
   $('#strategyScreenshots').addEventListener('change', event => {
     const names = [...event.target.files].map(file => file.name);
-    $('#strategyScreenshotNames').textContent = names.length ? names.join(' · ') : 'Vlož ukázkové grafy setupu.';
+    $('#strategyScreenshotNames').textContent = names.length ? names.join(' · ') : STRATEGY_UPLOAD_HINT;
   });
   $('#strategyForm').addEventListener('submit', async event => {
     event.preventDefault();
@@ -3389,7 +3484,8 @@ function bindEvents() {
         await api('upload', { method: 'DELETE', query: { id: deleteButton.dataset.deleteStrategyScreenshot } });
         state.currentStrategy.screenshots = (state.currentStrategy.screenshots || []).filter(item => item.id !== deleteButton.dataset.deleteStrategyScreenshot);
         renderStrategyGallery();
-        toast('Screenshot byl odstraněn.');
+        refreshStrategies();
+        toast('Obrázek byl odstraněn.');
       } catch (error) { toast(error.message, 'error'); }
       return;
     }
@@ -3401,6 +3497,35 @@ function bindEvents() {
     const button = event.target.closest('[data-strategy-trades]');
     if (!button) return;
     $('#tradeSearch').value = button.dataset.strategyTrades === 'Bez strategie' ? '' : button.dataset.strategyTrades;
+    activateView('journal');
+    renderTradeTable();
+  });
+
+  $('#addStrategy').addEventListener('click', () => openStrategyDialog());
+  $('#strategySearch').addEventListener('input', renderStrategyRail);
+  $('#strategyCards').addEventListener('click', event => {
+    const card = event.target.closest('[data-strategy-preview]');
+    if (card) openStrategyPreview(Number(card.dataset.strategyPreview));
+  });
+  $('#closeStrategyPreview').addEventListener('click', () => $('#strategyPreview').close());
+  $('#strategyPreview').addEventListener('click', event => { if (event.target === $('#strategyPreview')) $('#strategyPreview').close(); });
+  $('#strategyPreviewThumbs').addEventListener('click', event => {
+    const thumb = event.target.closest('[data-preview-shot]');
+    if (thumb) showStrategyPreviewImage(thumb.dataset.previewShot);
+  });
+  $('#strategyPreviewFigure').addEventListener('click', () => {
+    const id = $('#strategyPreviewFigure').dataset.screenshot;
+    if (id) openLightbox(id, state.strategyPreview?.screenshots || []);
+  });
+  $('#strategyPreviewEdit').addEventListener('click', () => {
+    const id = state.strategyPreview?.id;
+    $('#strategyPreview').close();
+    if (id) openStrategyDialog(id);
+  });
+  $('#strategyPreviewTrades').addEventListener('click', () => {
+    const name = state.strategyPreview?.name || '';
+    $('#strategyPreview').close();
+    $('#tradeSearch').value = name;
     activateView('journal');
     renderTradeTable();
   });

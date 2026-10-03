@@ -24,13 +24,21 @@ Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a pozn�
 
 ## Kde jsme skončili
 
-Stav k 1. 10. 2026:
+Stav k 2. 10. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (Hindsight):
+- Poslední práce (Strategie, 2. 10. 2026):
+  - SVG obrázky strategií (`lib/svg.php`: whitelist prvků a atributů, bez entit, `file.php`
+    vydává SVG se sandbox CSP). SVG jde jen ke strategii, ne k náhledu, obchodu ani auditu;
+  - pravý sloupec „Moje strategie“ v záložce Strategie: „+ Přidat strategii“, karty s náhledem
+    (`cover_id` = první obrázek), rychlý náhled `#strategyPreview`;
+  - oprava: skryté `id` přežilo `form.reset()`, takže „Přidat obchod/strategii“ po otevření
+    jiného záznamu ukládalo přes něj. Nový náhled zase přebíral DiNapoli vzory. Pozor na to
+    u každého formuláře se skrytým polem.
+- Předtím (Hindsight):
   - import velkého exportu z ATAS bez pádu serveru (`f96ed9e`); uživatel potvrdil, že funguje;
   - klik na pás seancí přiblíží, další klik vrátí zobrazení (`6cb4b69`).
 - **Projekty jsou rozdělené do tří repozitářů** (1. 10. 2026). Odměny odsud zmizely i s původní
@@ -101,6 +109,7 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   přístupovým klíčem a po přihlášení i tokenem relace.
 - `lib/wall.php`: nástěnka. Sdílí se snímek, ne živý odkaz.
 - `lib/workspace.php`: prostředí na míru (metodika, prvky, vlastní pole, trhy, moduly).
+- `lib/svg.php`: čištění SVG obrázků strategií před uložením.
 - `lib/hindsight.php`, `hindsight.php`, `static/hindsight/`: Hindsight (viz jeho CLAUDE.md).
 - `static/app.js`: hlavní klient.
   - Vedle něj: `auth.js`, `members.js`, `settings.js`, `wall.js`, `dinapoli.js`,
@@ -123,7 +132,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 92 testů, asi minuta (1 skip bez pypdf)
+# Trading Desk: 99 testů, asi minuta (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory

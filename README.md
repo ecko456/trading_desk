@@ -225,7 +225,9 @@ Na přehledu nahoře je **připravenost na nejbližší session**: týdenní ná
 
 ## Strategie a setupy
 
-V dialogu **Přidat obchod** je pole *Strategie / setup* rozevírací seznam. Poslední položka **+ Přidat strategii / setup** otevře panel, kde zadáš název, timeframe, na kterém systém obchoduješ, charakter systému (trendový, reversal, nebo obojí), pravidla a ukázkové screenshoty. Nová strategie se rovnou předvyplní do obchodu. Tlačítkem **Upravit** vedle seznamu otevřeš vybranou strategii k doplnění.
+V dialogu **Přidat obchod** je pole *Strategie / setup* rozevírací seznam. Poslední položka **+ Přidat strategii / setup** otevře panel, kde zadáš název, timeframe, na kterém systém obchoduješ, charakter systému (trendový, reversal, nebo obojí), pravidla a obrázky strategie. Nová strategie se rovnou předvyplní do obchodu. Tlačítkem **Upravit** vedle seznamu otevřeš vybranou strategii k doplnění. Strategii jde přidat i přímo v záložce **Strategie** (viz níže).
+
+Obrázky strategie můžou být PNG, JPEG, WebP nebo **SVG** (schéma setupu). První obrázek je náhled strategie. SVG jde nahrát jen ke strategii, ne ke grafům náhledu nebo obchodu. Před uložením se vyčistí: zůstane jen kresba a text, skripty, vložené HTML, animace a odkazy na cizí servery se zahodí. Soubor s vlastními entitami nebo DTD se odmítne. Prostý řádek `<!DOCTYPE svg …>`, jaký přidává třeba Illustrator, nevadí.
 
 Přejmenování strategie přepíše název i u všech navázaných obchodů. Smazání strategie obchody zachová, jen ztratí odkaz.
 
@@ -251,7 +253,9 @@ Pole *Hodnocení obchodu* je stupnice 1 až 5, kde 1 znamená vše splněno podl
 
 ## Strategie
 
-Záložka **Strategie** srovnává setupy, které přiřazuješ obchodům. U každého vidíš počet obchodů, celkové R, průměrné R na obchod, profit factor, procento dodržení plánu, průměrné hodnocení exekuce a datum posledního obchodu. Řadí se podle celkového R, takže nahoře je to, co ti skutečně vydělává.
+Vpravo je sloupec **Moje strategie**: tlačítko **+ Přidat strategii** a karta každé strategie s náhledovým obrázkem, timeframem, popisem a výsledkem v R. Klik na kartu otevře rychlý náhled se všemi obrázky (klik na obrázek ho zvětší), pravidly a statistikou. Z náhledu se dá strategie upravit nebo otevřít její obchody v deníku. Při víc než šesti strategiích se nad kartami objeví hledání. Na tabletu a mobilu je sloupec nahoře a karty se posouvají do strany.
+
+Vlevo zůstávají statistiky. Záložka **Strategie** srovnává setupy, které přiřazuješ obchodům. U každého vidíš počet obchodů, celkové R, průměrné R na obchod, profit factor, procento dodržení plánu, průměrné hodnocení exekuce a datum posledního obchodu. Řadí se podle celkového R, takže nahoře je to, co ti skutečně vydělává.
 
 Zvlášť je vyčíslený řádek **Bez strategie** — obchody, které nemají přiřazený setup a nejdou tedy vyhodnotit. Tlačítkem *Obchody* se prokliknéš do deníku s předvyplněným filtrem.
 

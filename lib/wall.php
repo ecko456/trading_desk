@@ -120,7 +120,7 @@ function build_share_snapshot(string $kind, int $sourceId, array $options): arra
                 }
             }
         }
-        $screenshots = $withCharts ? fetch_all('SELECT * FROM screenshots WHERE strategy_id = ? ORDER BY created_at, id LIMIT ' . WALL_MAX_MEDIA, [$sourceId]) : [];
+        $screenshots = $withCharts ? fetch_all('SELECT * FROM screenshots WHERE strategy_id = ? ORDER BY created_at, rowid LIMIT ' . WALL_MAX_MEDIA, [$sourceId]) : [];
         return ['title' => 'Strategie ' . $strategy['name'], 'market' => null, 'snapshot' => $snapshot, 'screenshots' => $screenshots];
     }
 
@@ -129,7 +129,7 @@ function build_share_snapshot(string $kind, int $sourceId, array $options): arra
 
 function media_extension(string $mime): string
 {
-    return ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'][$mime] ?? 'bin';
+    return ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'][$mime] ?? 'bin';
 }
 
 function add_post_media(int $postId, string $contents, string $mime, string $caption, int $order): void

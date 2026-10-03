@@ -283,7 +283,8 @@ try {
     }
 
     if ($action === 'strategies' && $method === 'GET') {
-        $sql = 'SELECT s.*, (SELECT COUNT(*) FROM screenshots sc WHERE sc.strategy_id = s.id) AS screenshot_count, (SELECT COUNT(*) FROM trades t WHERE t.strategy_id = s.id) AS trade_count FROM strategies s ORDER BY s.name COLLATE NOCASE';
+        // cover_id = první obrázek strategie pro náhled ve sloupci Strategií (rowid drží pořadí nahrání i v rámci vteřiny).
+        $sql = 'SELECT s.*, (SELECT COUNT(*) FROM screenshots sc WHERE sc.strategy_id = s.id) AS screenshot_count, (SELECT sc.id FROM screenshots sc WHERE sc.strategy_id = s.id ORDER BY sc.created_at, sc.rowid LIMIT 1) AS cover_id, (SELECT COUNT(*) FROM trades t WHERE t.strategy_id = s.id) AS trade_count FROM strategies s ORDER BY s.name COLLATE NOCASE';
         json_response(['items' => fetch_all($sql)]);
     }
 
@@ -515,18 +516,32 @@ try {
         $temporary = (string)$upload['tmp_name'];
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = (string)$finfo->file($temporary);
-        $extensions = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
-        if (!isset($extensions[$mime])) {
-            json_response(['error' => 'Povolené jsou pouze PNG, JPEG a WebP obrázky.'], 422);
-        }
-        if (@getimagesize($temporary) === false) {
-            json_response(['error' => 'Soubor není platný obrázek.'], 422);
-        }
-
+        $extensions = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'];
         $planId = nullable_int($_POST['plan_id'] ?? null);
         $tradeId = nullable_int($_POST['trade_id'] ?? null);
         $strategyId = nullable_int($_POST['strategy_id'] ?? null);
         $auditId = nullable_int($_POST['audit_id'] ?? null);
+        if (upload_is_svg($mime, (string)($upload['name'] ?? ''))) {
+            $mime = 'image/svg+xml';
+            // SVG (schémata setupů) jen ke strategii; uloží se vyčištěná kopie bez skriptů a odkazů ven.
+            if ($strategyId === null || $planId !== null || $tradeId !== null || $auditId !== null) {
+                json_response(['error' => 'SVG jde nahrát jen jako obrázek strategie. Ke grafům použij PNG, JPEG nebo WebP.'], 422);
+            }
+            try {
+                $clean = sanitize_svg((string)file_get_contents($temporary));
+            } catch (InvalidArgumentException $error) {
+                json_response(['error' => $error->getMessage()], 422);
+            }
+            if (file_put_contents($temporary, $clean) === false) {
+                json_response(['error' => 'SVG obrázek se nepodařilo zpracovat.'], 500);
+            }
+            $size = strlen($clean);
+        } elseif (!isset($extensions[$mime])) {
+            json_response(['error' => 'Povolené jsou PNG, JPEG a WebP obrázky, u strategií i SVG.'], 422);
+        } elseif (@getimagesize($temporary) === false) {
+            json_response(['error' => 'Soubor není platný obrázek.'], 422);
+        }
+
         if ($planId === null && $tradeId === null && $strategyId === null && $auditId === null) {
             json_response(['error' => 'Screenshot musí patřit k náhledu, obchodu, strategii nebo auditu.'], 422);
         }

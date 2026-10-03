@@ -13,6 +13,11 @@ function file_not_found(string $message, int $status = 404): never
 
 function send_image(string $contents, string $mime, string $name, string $cache): never
 {
+    if ($mime === 'image/svg+xml') {
+        // SVG otevřené přímo v prohlížeči nesmí nic spustit ani načíst zvenku (je vyčištěné už při nahrání).
+        header("Content-Security-Policy: default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox");
+        header('X-Content-Type-Options: nosniff');
+    }
     header('Content-Type: ' . $mime);
     header('Content-Length: ' . strlen($contents));
     header('Content-Disposition: inline; filename="' . rawurlencode($name) . '"');

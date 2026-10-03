@@ -442,6 +442,8 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
 
         <!-- STRATEGIE -->
         <section class="view" id="view-strategies">
+          <div class="strategy-layout">
+          <div class="strategy-main">
           <div class="metric-strip four">
             <article><span>Nejlepší strategie</span><strong id="strategyBest">—</strong><small id="strategyBestDetail">zatím bez dat</small></article>
             <article><span>Nejhorší strategie</span><strong id="strategyWorst">—</strong><small id="strategyWorstDetail">zatím bez dat</small></article>
@@ -461,6 +463,16 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
             <div class="section-heading"><div><p class="eyebrow">Tvoje vlastní pole</p><h2>Co ti skutečně vydělává</h2></div><span>Průměrné R podle hodnot, které u obchodů zapisuješ</span></div>
             <div class="custom-stats" id="customFieldStats"></div>
           </section>
+          </div>
+          <aside class="surface strategy-rail" aria-labelledby="strategyRailTitle">
+            <div class="strategy-rail-head">
+              <div><p class="eyebrow">Playbook</p><h2 id="strategyRailTitle">Moje strategie</h2></div>
+              <button class="button button-primary" type="button" id="addStrategy">+ Přidat strategii</button>
+            </div>
+            <input class="strategy-search" type="search" id="strategySearch" placeholder="Hledat strategii…" aria-label="Hledat strategii" hidden>
+            <div class="strategy-cards" id="strategyCards"></div>
+          </aside>
+          </div>
         </section>
 
         <!-- KALENDÁŘ -->
@@ -846,10 +858,23 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <option value="M1 exekuce / M15 kontext"></option><option value="M5 exekuce / H1 kontext"></option><option value="M15 exekuce / H4 kontext"></option>
       </datalist>
       <label>Pravidla a poznámky<textarea name="notes" rows="4" placeholder="Podmínky vstupu, invalidace, řízení pozice…"></textarea></label>
-      <label class="trade-upload">Screenshoty strategie<input type="file" id="strategyScreenshots" accept="image/png,image/jpeg,image/webp" multiple><span id="strategyScreenshotNames">Vlož ukázkové grafy setupu.</span></label>
+      <label class="trade-upload">Obrázky strategie<input type="file" id="strategyScreenshots" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" multiple><span id="strategyScreenshotNames">Vlož schéma nebo ukázkové grafy setupu (PNG, JPEG, WebP, SVG). První obrázek je náhled.</span></label>
       <div class="screenshot-grid" id="strategyGallery"></div>
       <div class="modal-actions"><button class="button button-ghost danger" type="button" id="deleteStrategy" hidden>Smazat strategii</button><button class="button button-ghost" type="button" id="shareStrategy" hidden><?= icon('share') ?>Sdílet</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button><button class="button button-primary" type="submit" value="default">Uložit strategii</button></div>
     </form>
+  </dialog>
+
+  <dialog class="modal strategy-preview" id="strategyPreview" aria-labelledby="strategyPreviewTitle">
+    <div class="strategy-preview-inner">
+    <div class="modal-head"><div><p class="eyebrow" id="strategyPreviewMeta">Strategie</p><h2 id="strategyPreviewTitle">Strategie</h2></div><button class="icon-button" type="button" id="closeStrategyPreview" aria-label="Zavřít">×</button></div>
+    <div class="strategy-preview-body">
+      <figure class="strategy-preview-figure" id="strategyPreviewFigure"><img id="strategyPreviewImage" alt=""></figure>
+      <div class="strategy-preview-thumbs" id="strategyPreviewThumbs"></div>
+      <div class="strategy-preview-stats" id="strategyPreviewStats"></div>
+      <div class="strategy-preview-notes" id="strategyPreviewNotes"></div>
+    </div>
+    <div class="modal-actions"><button class="button button-ghost" type="button" id="strategyPreviewTrades">Obchody</button><span class="spacer"></span><button class="button button-primary" type="button" id="strategyPreviewEdit">Upravit strategii</button></div>
+    </div>
   </dialog>
 
   <dialog class="modal" id="dayDialog" aria-labelledby="dayDialogTitle">
