@@ -430,7 +430,15 @@ try {
 
     if ($action === 'psych_questions' && $method === 'GET') {
         $profile = psych_profile_payload();
-        json_response(['items' => psych_questions($profile['dimensions'] ?? null), 'has_profile' => $profile !== null]);
+        json_response(['items' => psych_questions($profile['dimensions'] ?? null, personality_focus_areas()), 'has_profile' => $profile !== null]);
+    }
+
+    if ($action === 'personality' && $method === 'GET') {
+        json_response(['personality' => personality_payload(), 'catalog' => personality_catalog()]);
+    }
+
+    if ($action === 'personality' && in_array($method, ['POST', 'PUT'], true)) {
+        json_response(['personality' => save_personality(request_json())]);
     }
 
     if ($action === 'psych_profile' && $method === 'GET') {
@@ -676,6 +684,7 @@ try {
             'account_audits' => fetch_all('SELECT * FROM account_audits ORDER BY audit_date, id'),
             'trades' => fetch_all('SELECT * FROM trades ORDER BY trade_date, id'),
             'trading_plans' => fetch_all('SELECT * FROM trading_plans ORDER BY version, id'),
+            'psych_personality' => fetch_all('SELECT * FROM psych_personality'),
             'screenshots' => fetch_all('SELECT id, plan_id, trade_id, strategy_id, audit_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots ORDER BY created_at, id'),
         ]);
     }

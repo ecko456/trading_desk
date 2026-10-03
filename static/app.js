@@ -158,7 +158,7 @@ function activateView(name) {
   if (name === 'tradeplan') refreshTradePlan();
   if (name === 'strategies') refreshStrategyStats();
   if (name === 'calendar') refreshCalendar();
-  if (name === 'psyche') { refreshProfile(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
+  if (name === 'psyche') { refreshProfile(); refreshPersonality(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
   if (name === 'wall') { refreshWall(); refreshMembers(); }
   if (name === 'admin') { refreshAdmin(); refreshCtraderAdmin(); }
   if (name === 'settings') renderSettings();
@@ -2343,6 +2343,10 @@ function showPsychQuestion() {
 
   const seconds = psychSeconds(question);
   $('#psychProgress').textContent = `Otázka ${psychRun.index + 1} z ${psychRun.questions.length}`;
+  // U otázek navíc je vidět proč: riziková oblast z profilu, nebo osobnost.
+  const source = question.source === 'profile' ? 'Tvoje riziková oblast z profilu' : question.source === 'personality' ? `Z tvé osobnosti: ${question.reason || ''}` : '';
+  $('#psychSource').textContent = source;
+  $('#psychSource').hidden = !source;
   $('#psychQuestionText').textContent = question.question;
   $('#psychOptions').innerHTML = question.options
     .map((option, value) => `<button class="psych-option" type="button" data-value="${value}"><span>${value + 1}</span>${escapeHtml(option)}</button>`)
@@ -2539,8 +2543,22 @@ function renderPsychResult(check) {
       <div><dt>Datum</dt><dd>${escapeHtml(check.check_date)}</dd></div>
       <div><dt>Stav</dt><dd>${escapeHtml((bandLabels[check.band] || '').split('—')[0].trim())}</dd></div>
     </dl>
-    ${warnings.length ? `<div class="reflection"><p class="eyebrow">NA CO SI DÁT DNES POZOR</p><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}`;
+    ${warnings.length ? `<div class="reflection"><p class="eyebrow">NA CO SI DÁT DNES POZOR</p><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
+    ${breathOffer(check.band)}`;
   $('#psychResultDialog').showModal();
+}
+
+// Po testu aplikace nabídne dýchání: u oranžové a červené doporučí delší výdech.
+const BREATH_OFFERS = {
+  green: { text: 'Chceš se ještě naladit? Dvě minuty dýchání srovnají tempo před otevřením grafu.', button: 'Dýchání 2 min', options: { minutes: 2 } },
+  amber: { text: 'Než otevřeš graf: tři minuty dýchání 4–8. Delší výdech srazí napětí dřív, než se dostane do obchodů.', button: 'Spustit dýchání', options: { pattern: 'calm', minutes: 3 } },
+  red: { text: 'Dnes platí tvoje pravidla pro červenou. Než cokoli uděláš, pět minut dýchání 4–8.', button: 'Spustit dýchání', options: { pattern: 'calm', minutes: 5 } },
+};
+
+function breathOffer(band) {
+  const offer = BREATH_OFFERS[band];
+  if (!offer || !window.openBreathing) return '';
+  return `<div class="breath-offer is-${escapeHtml(band)}"><i aria-hidden="true"></i><p>${escapeHtml(offer.text)}</p><button class="button ${band === 'green' ? 'button-ghost' : 'button-primary'}" type="button" data-start-breath="${escapeHtml(band)}">${escapeHtml(offer.button)}</button></div>`;
 }
 
 async function refreshPsychLatest() {
@@ -3619,6 +3637,13 @@ function bindEvents() {
     if (button) answerPsych(Number(button.dataset.value));
   });
   $('#psychDialog').addEventListener('close', clearPsychTimers);
+  $('#psychResultBody').addEventListener('click', event => {
+    const button = event.target.closest('[data-start-breath]');
+    if (!button) return;
+    const offer = BREATH_OFFERS[button.dataset.startBreath];
+    $('#psychResultDialog').close();
+    window.openBreathing({ ...offer.options, eyebrow: 'Po rychlém testu', reason: button.dataset.startBreath === 'green' ? '' : offer.text });
+  });
   $('#psychDialog').addEventListener('keydown', event => {
     if (!/^[1-4]$/.test(event.key)) return;
     const button = $(`#psychOptions [data-value="${Number(event.key) - 1}"]`);
@@ -3698,6 +3723,8 @@ async function init() {
   bindSettingsEvents();
   bindBrokerEvents();
   bindTradePlanEvents();
+  bindPersonalityEvents();
+  bindBreathing();
   applyHues(document);
   await loadWorkspace();
   resetPlan({ type: 'daily' });

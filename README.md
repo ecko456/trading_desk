@@ -21,6 +21,8 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - měsíční kalendář s výsledky dnů, red news a svátky,
 - **Hindsight**: rok 5m svíček ES na jedné souvislé ose se seancemi, tvými zónami, biasem, red news, potenciálními a realizovanými obchody; zóny, bias i potenciální obchody se zadávají přímo v grafu a jsou stejné jako v denním náhledu,
 - vstupní psychologický profil se silnými a rizikovými oblastmi, ověřený proti vlastním obchodům,
+- **osobnost a silné stránky**: osobnostní test Big Five (IPIP) a talenty z reportu Gallup CliftonStrengths s výkladem pro trading; rychlý test se podle nich zaměří na tvoje slabá místa,
+- **dýchání před seancí**: kruh, který se s nádechem zvětšuje a s výdechem zmenšuje, rytmy 4–8 a box 5–5–5–5 a pět zvukových kulis vybraných podle osobnosti,
 - rychlý test psychiky přizpůsobený profilu, s vlastními pravidly pro špatný den,
 - pravidlový rozbor dnů s porušenými pravidly,
 - potenciální obchody s entry, SL, TP1, TP2, finálním TP a R:R,
@@ -369,6 +371,18 @@ Výsledkem je rozpad na **silné a rizikové oblasti**. Dimenze, kde skóruješ 
 
 Pod profilem je **ověření proti tvým obchodům**: podíl porušení pravidel, která přišla po ztrátě; poměr průměrného zisku k průměrné ztrátě; podíl obchodních dnů bez náhledu; rozdíl v risku po ziskovém a po ztrátovém dni. Když si odporují s tím, co jsi o sobě napsal, aplikace to označí. Spustí se od deseti uzavřených obchodů.
 
+### Osobnost a silné stránky
+
+Vstupní profil se ptá, jak obchoduješ. Tahle část se ptá, jaký jsi. Obě se sčítají a rychlý test před seancí podle nich ví, na co se zaměřit. Vyplnit jde jedno, druhé nebo obojí.
+
+**Talenty z Gallupu.** Gallupův test CliftonStrengths v aplikaci být nemůže: je placený a otázky i texty jsou chráněné. Když ho ale máš hotový, zadáš tlačítkem **Talenty z Gallupu** pořadí svých talentů z reportu. Stačí prvních pět, až deset zpřesní výsledek a z reportu všech 34 talentů můžeš přidat i posledních pět. U každého talentu aplikace ukáže **vlastní výklad pro trading**: co ti v obchodování pomáhá a na co si dát pozor. Například Aktivátor jedná bez zaváhání, ale hrozí mu vstup dřív, než je setup kompletní. Soutěživost žene ke zlepšení, ale potřeba „vyhrát den“ vede k obchodům na vrácení ztráty. Texty nejsou převzaté z reportu. CliftonStrengths® a názvy talentů jsou ochranné známky Gallup, Inc. a Trading Desk s Gallupem nijak nesouvisí.
+
+**Osobnostní test.** Kdo Gallup nemá, vyplní tlačítkem **Osobnostní test** padesát výroků Big Five (IPIP Big-Five Factor Markers, Goldberg 1992). Pochází z International Personality Item Pool, který je ve veřejné doméně, a překlad je náš. Výsledkem je pět rysů: emoční stabilita, svědomitost, extraverze, otevřenost a přívětivost. Ukazuje se podíl z rozsahu odpovědí, ne percentil, protože české normy k překladu nejsou. Hranice pásem jsou hrubé a u přívětivosti a otevřenosti přísnější, protože tam většina lidí skóruje vysoko.
+
+**Na co se rychlý test zaměří.** Z talentů (podle pořadí) a z rysů (nízká emoční stabilita, nízká svědomitost, vysoká extraverze…) vzniknou nejvýš tři oblasti i se zdůvodněním. K osmi oblastem vstupního profilu přibylo pět, které vycházejí jen z osobnosti: *potřeba akce*, *lpění na názoru*, *předbíhání potvrzení*, *vliv cizích názorů* a *váhání se vstupem*. Každá má v rychlém testu vlastní otázku.
+
+**Co osobnost není.** Osobnost nepředpovídá, jestli budeš ziskový. Ukazuje, kde ti hrozí jaká chyba, a to je hypotéza. Proto má v rychlém testu menší váhu než vstupní profil a sama den neshodí. Jestli platí, ukáže až deník a rozbor chyb.
+
 ### Pravidla pro špatný den
 
 Tlačítkem **Pravidla pro špatný den** si pro každé pásmo předem nadefinuješ, co pro tebe znamená: maximální počet obchodů, risk jako procento obvyklé velikosti, jen A+ setupy, jen jeden účet, žádné obchody kolem red news, konec po prvním porušení pravidel, plus vlastní pravidlo textem. Pro červenou je ve výchozím stavu zákaz obchodování.
@@ -405,6 +419,8 @@ Počítá se podíl z maxima, ne pevný počet bodů, protože počet i váha ot
 2. Přidají se až **dvě cílené otázky** navíc přesně na tvoje slabiny.
 3. Zhoršená odpověď v rizikové oblasti **sama o sobě shodí den na oranžovou**, i když je celkové skóre nízké.
 
+K tomu se test přizpůsobuje **osobnosti** (viz výše): oblasti z osobnosti mají váhu 1,25 a dostanou až dvě vlastní otázky. Cílených otázek je dohromady nejvýš tři a vstupní profil má přednost. Zhoršená odpověď v oblasti z osobnosti se objeví ve varováních, ale sama den na oranžovou neshodí. U otázek navíc test ukáže, proč se ptá: „Tvoje riziková oblast z profilu“, nebo „Z tvé osobnosti: Aktivátor (2.), Extraverze vysoko“.
+
 Ten třetí bod je podstatný. Stejně velký problém se hodnotí jinak podle toho, kde padne: mírná nevyspalost u někoho, kdo nemá problém s fyzickým stavem, zůstane zelená; stejně mírné vracení se ke včerejší ztrátě u někoho, kdo má reakci na ztrátu jako rizikovou oblast, dá oranžovou.
 
 Dvě odpovědi fungují jako tvrdá pojistka a shodí výsledek na červenou bez ohledu na součet: *musím dnes dohnat ztrátu* a *mám chuť to vrátit*.
@@ -412,6 +428,34 @@ Dvě odpovědi fungují jako tvrdá pojistka a shodí výsledek na červenou bez
 K výsledku dostaneš konkrétní seznam **na co si dát pozor** — každá problematická odpověď má navázané riziko, které z ní v exekuci typicky plyne.
 
 **Tohle není psychologická diagnostika ani terapie.** Je to strukturovaný check-list faktorů, které ovlivňují exekuci, a aplikace to i v UI takto říká. Pokud dlouhodobě řešíš úzkost, nespavost nebo tlak přesahující trading, patří to k odborníkovi.
+
+### Dýchání před seancí
+
+Karta **Dýchání a zklidnění** v Psychice spustí dechové cvičení. Uprostřed je kruh: při nádechu se zvětšuje, při zadržení stojí a při výdechu se zmenšuje. V něm běží odpočet fáze, kolem kruhu se plní prstenec a pod ním je zbývající čas a počet dechů. Barva říká fázi: modrá nádech, zlatá zadržení, zelená výdech. Před začátkem jsou tři sekundy na přípravu, cvičení jde pozastavit a končí vždy celým dechem.
+
+Rytmy:
+
+- **Zklidnění 4–8**: nádech 4 s, výdech 8 s, pět dechů za minutu. Delší výdech zpomaluje tep a tělo zklidní nejrychleji. Studie ze Stanfordu (Balban a kol., 2023) srovnávala pět minut denně různých technik a dýchání s důrazem na dlouhý výdech zlepšovalo náladu nejvíc.
+- **Box 5–5–5–5**: výdech 5 s, zadržení 5 s, nádech 5 s, zadržení 5 s. Pravidelný čtverec srovná tempo a soustředění.
+- **Vlastní**: nádech, zadržení, výdech a zadržení podle sebe.
+
+Délka 1, 2, 3, 5 nebo 10 minut. Když se ti zatočí hlava, dýchej chvíli normálně.
+
+**Zvuk.** Pět kulis: *Oceán* (vlny, které přicházejí s nádechem a odcházejí s výdechem), *Hluboký tón* (teplý tón bez melodie, který se s nádechem otevírá), *Tibetské misky* (úder misky na začátku každého nádechu), *Déšť* a *Zvonkohra* (jemná pentatonická melodie). Hudba se nestahuje ani neukládá: vzniká přímo v prohlížeči (Web Audio) a dýchá s kruhem, takže nejsou potřeba žádné nahrávky ani licence. Hlasitosti jsou srovnané, aby přepnutí kulisy neznamenalo skok. Kliknutím na kulisu si ji poslechneš. Volitelně zazní jemný tón při každé změně fáze, takže jde dýchat i se zavřenýma očima.
+
+**Co aplikace doporučí.** Rytmus i kulisu vybere podle osobnosti a u doporučené volby napíše proč. Rytmus 4–8 doporučí, když vyšla nízká emoční stabilita nebo je mezi oblastmi reakce na ztrátu, citlivost na fyzický stav nebo tlak na výsledek. Jinak doporučí box. Kulisu vybere podle první oblasti:
+
+```text
+reakce na ztrátu, fyzický stav, tlak na výsledek          →  Oceán
+předbíhání potvrzení, lpění na názoru, série zisků        →  Hluboký tón
+váhání se vstupem, práce se ziskem a ztrátou              →  Déšť
+pozornost, držení systému, příprava                       →  Tibetské misky
+potřeba akce, vliv cizích názorů                          →  Zvonkohra
+```
+
+Co si sám změníš (rytmus, délku, kulisu, hlasitost), si aplikace pamatuje. Zbytek dál sleduje doporučení.
+
+**Po rychlém testu** aplikace dýchání nabídne sama: u zelené dvě minuty na naladění, u oranžové tři minuty 4–8, u červené pět minut 4–8. Tohle doporučení platí jen pro ten den a uložené nastavení nepřepíše.
 
 ### Kalibrace testu
 

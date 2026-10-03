@@ -30,7 +30,24 @@ Stav k 3. 10. 2026:
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (Obchodní plán a redesign PDF, 3. 10. 2026):
+- Poslední práce (osobnost a dýchání v Psychice, 3. 10. 2026):
+  - `lib/personality.php`: Big Five z IPIP (50 výroků, veřejná doména, náš překlad, bez norem)
+    a talenty CliftonStrengths (jen pořadí z reportu uživatele, 34 talentů s naším výkladem pro
+    trading; Gallupovy texty v repu nejsou a být nesmí). Tabulka `psych_personality` (id = 1).
+    Z obojího nejvýš 3 oblasti zaměření (8 dimenzí profilu + stimulation, conviction,
+    anticipation, social, hesitation) a doporučení rytmu a kulisy;
+  - rychlý test (`psych_questions`, `evaluate_psych`): oblasti z osobnosti mají váhu 1,25,
+    až 2 vlastní otázky, cílených otázek celkem max. 3, profil má přednost; osobnost sama
+    den na oranžovou neshodí. Otázky mají `source` a `reason`;
+  - dýchání: `static/breathing.js` (časování je čistá funkce, `tests/test_breathing.js`),
+    kruh, odpočet, pauza, nabídka po rychlém testu. Vzorce 4–8 a box 5–5–5–5 v pořadí
+    výdech, zadržení, nádech, zadržení (tak to uživatel chtěl);
+  - zvuk: `static/soundscapes.js`, pět kulis generovaných ve Web Audio (žádné soubory ani
+    licence), synchronizované s dechem, hlasitosti srovnané offline na zhruba −27 dB RMS;
+  - ukládá se jen to, co uživatel v nastavení dýchání sám změní, zbytek sleduje doporučení.
+  - Uživatel poslal svůj report Gallup. Je to osobní dokument: do repa nepatří on ani jeho
+    obsah (pořadí talentů), ani v testech a příkladech.
+- Předtím (Obchodní plán a redesign PDF, 3. 10. 2026):
   - nový modul **Obchodní plán** (`lib/tradeplan.php`, `static/tradeplan.js`, pohled `#view-tradeplan`):
     jeden plán s verzemi v tabulce `trading_plans` (data jako JSON, čištění whitelistem
     `tradeplan_normalize`). Deset kroků: cíle, trhy a čas (okna v pražském čase), účty a risk,
@@ -70,7 +87,8 @@ Stav k 3. 10. 2026:
 - Od uživatele se čeká:
   - vzorek exportu obchodů z ATAS (futures) pro import do deníku a Hindsightu;
   - registrace aplikace cTrader a první test s demo účtem;
-  - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF.
+  - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF;
+  - zpětná vazba na kulisy (poslech) a výklad talentů pro trading.
 
 ## Začátek nové session
 
@@ -156,6 +174,10 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - `lib/fonts/`: statické řezy Fraunces a Manrope z variabilních písem (fontTools instancer).
     Znaky mimo písmo (☐ ● ✓ →) v PDF nepoužívej, kreslí se jako prvky.
 - `lib/tradeplan.php` + `static/tradeplan.js`: Obchodní plán (číselníky `TP_*`, verze, návrh).
+- Psychika:
+  - vstupní profil, rychlý test a kalibrace jsou v `bootstrap.php` (`psych_*`);
+  - `lib/personality.php` + `static/personality.js`: osobnost (Big Five, talenty), oblasti zaměření;
+  - `static/breathing.js` (dechové cvičení) a `static/soundscapes.js` (kulisy, `TDSound`).
 - Ostatní PHP:
   - `backup.php`: ZIP záloha deníku;
   - `file.php`: obrázky a screenshoty;
@@ -173,7 +195,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 117 testů, asi minuta a půl (1 skip bez pypdf)
+# Trading Desk: 126 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory
@@ -202,5 +224,8 @@ php -l api.php            # a další změněné PHP soubory
   odemčenou kopii šifrovaného deníku a `test_encrypted_journal_is_sealed_on_disk` selže.
 - PDF s jinou verzí reportlabu: venv v `$S` a `TRADING_PYTHON=$S/venv/bin/python` pro testy.
   Text z PDF čte `pypdf` (potřebuje i `cffi`); nadpisy jsou v PDF velkými písmeny.
+- Zvuk se nedá poslechnout, ale dá se změřit: kulisu vyrenderuj v Chromiu přes
+  `OfflineAudioContext` (soundscapes.js funguje i offline) a změř RMS, špičky a skoky mezi
+  vzorky. Ukázky pro uživatele: offline render přehrát do `MediaRecorder` (webm/opus).
 - Hodiny kontejneru jsou reálné. Testy s daty „v budoucnosti“ můžou změnit autodetekci
   formátu data (Hindsight import).

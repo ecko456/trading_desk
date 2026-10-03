@@ -1426,6 +1426,153 @@ td .share-status { margin-right: 6px; vertical-align: middle; }
   .tp-toolbar .plan-toolbar-fields > label.tp-title-field { width: 100%; }
 }
 
+/* Osobnost a silné stránky (Psychika) */
+.persona { display: grid; gap: 16px; }
+.persona-empty { max-width: 760px; margin: 0; line-height: 1.6; }
+.persona-empty strong { color: var(--text); }
+.persona-focus { padding: 16px 18px; border: 1px solid var(--accent-line); border-radius: 14px; background: linear-gradient(135deg, var(--accent-soft), transparent 70%); }
+.persona-focus .eyebrow { margin: 0 0 10px; }
+.persona-focus .muted { margin: 10px 0 0; font-size: 13px; }
+.persona-focus-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: focus; }
+.persona-focus-list li { counter-increment: focus; display: grid; gap: 2px; min-width: 190px; flex: 1 1 190px; padding: 10px 12px 10px 40px; position: relative; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.persona-focus-list li::before { content: counter(focus); position: absolute; left: 12px; top: 11px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 750; }
+.persona-focus-list strong { font-size: 14px; }
+.persona-focus-list span { color: var(--text-3); font-size: 12.5px; }
+.persona-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: start; }
+.persona-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.persona-block .eyebrow { margin: 0 0 10px; }
+.persona-traits { display: grid; gap: 8px; }
+.persona-trait { padding: 12px 14px; border: 1px solid var(--line-soft); border-left: 4px solid var(--line-strong); border-radius: 0 12px 12px 0; background: var(--surface-2); }
+.persona-trait.is-risk { border-left-color: var(--amber); }
+.persona-trait > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.persona-trait strong { font-size: 14px; }
+.persona-trait em { color: var(--text-3); font-style: normal; font-size: 12.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
+.persona-trait.is-risk em { color: var(--amber); }
+.persona-trait .profile-bar i { background: var(--accent); }
+.persona-trait p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.persona-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.persona-theme { --domain: var(--text-3); padding: 12px 14px; border: 1px solid var(--line-soft); border-top: 3px solid var(--domain); border-radius: 12px; background: var(--surface-2); }
+.persona-theme header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.persona-theme header small { color: var(--text-3); font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
+.persona-theme p { margin: 6px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.persona-theme p b { color: var(--text); font-weight: 650; }
+.persona-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; }
+.persona-bottom > span { color: var(--text-3); font-size: 13px; margin-right: 4px; }
+.is-executing { --domain: var(--violet); }
+.is-influencing { --domain: var(--amber); }
+.is-relationship { --domain: var(--blue); }
+.is-thinking { --domain: var(--green); }
+.theme-chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 4px; border: 1px solid color-mix(in srgb, var(--domain) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--domain) 12%, transparent); color: var(--text); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.theme-chip:not(:has(b)) { padding-left: 10px; }
+.theme-chip b { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--domain); color: var(--bg); font-size: 11.5px; font-weight: 800; }
+
+.big5-progress { height: 4px; margin: -4px 0 12px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.big5-progress i { display: block; width: 0; height: 100%; background: var(--accent); transition: width .25s ease; }
+.psych-source { margin: -8px 0 12px; color: var(--accent); font-size: 12.5px; font-weight: 650; letter-spacing: .02em; }
+
+.strength-modes { margin-bottom: 4px; }
+.strength-selected { display: grid; gap: 6px; margin: 12px 0 16px; padding: 0; list-style: none; }
+.strength-selected li { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 6px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
+.strength-selected li.tp-empty { justify-content: center; padding: 12px; color: var(--text-3); font-size: 13px; }
+.strength-en { color: var(--text-3); font-size: 12.5px; }
+.strength-actions { margin-left: auto; display: flex; gap: 2px; }
+.strength-catalog { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.strength-domain { padding: 12px; border: 1px solid var(--line-soft); border-top: 3px solid var(--domain); border-radius: 12px; background: var(--surface-2); }
+.strength-domain > p { margin: 0 0 8px; color: var(--text-2); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.strength-domain > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.strength-option { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s ease, background .15s ease, color .15s ease; }
+.strength-option:hover:not(:disabled) { border-color: var(--domain); color: var(--text); }
+.strength-option.is-on { border-color: var(--domain); background: color-mix(in srgb, var(--domain) 14%, transparent); color: var(--text); }
+.strength-option b { display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 999px; background: var(--domain); color: var(--bg); font-size: 11px; font-weight: 800; }
+.strength-option:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Dýchání: karta v Psychice, nabídka po testu, cvičení */
+.breath-card-body { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 22px; }
+.breath-card-orb { width: 86px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); }
+.breath-card-orb i { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--blue) 50%, transparent), color-mix(in srgb, var(--blue) 10%, transparent) 70%); animation: breath-card 12s ease-in-out infinite; }
+@keyframes breath-card { 0%, 100% { transform: scale(.45); } 33% { transform: scale(.95); } }
+.breath-card-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.breath-card-facts div { padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-2); }
+.breath-card-facts dt { color: var(--text-3); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.breath-card-facts dd { margin: 4px 0 0; font-family: var(--font-display); font-size: 19px; }
+.breath-card-facts p { margin: 6px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+
+.breath-offer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.breath-offer.is-amber { border-color: color-mix(in srgb, var(--amber) 45%, transparent); background: var(--amber-soft); }
+.breath-offer.is-red { border-color: color-mix(in srgb, var(--red) 45%, transparent); background: var(--red-soft); }
+.breath-offer i { width: 38px; aspect-ratio: 1; border: 1px solid color-mix(in srgb, var(--blue) 40%, transparent); border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--blue) 60%, transparent) 0 32%, color-mix(in srgb, var(--blue) 14%, transparent) 70%); animation: breath-dot 12s ease-in-out infinite; }
+@keyframes breath-dot { 0%, 100% { transform: scale(.72); } 33% { transform: scale(1); } }
+.breath-offer p { margin: 0; font-size: 14px; line-height: 1.5; }
+
+@property --phase { syntax: '<color>'; inherits: true; initial-value: #857e73; }
+.breath-modal { width: min(760px, calc(100vw - 28px)); }
+.breath-shell { padding: 0 24px; }
+.breath-reason { margin: 0 0 14px; padding: 12px 14px; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; background: var(--accent-soft); color: var(--text); font-size: 14px; line-height: 1.55; }
+.breath-choice { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+.breath-choice legend { margin-bottom: 8px; padding: 0; color: var(--text-2); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.breath-patterns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.breath-option, .breath-sound { display: grid; align-content: start; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--text); text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.breath-option:hover, .breath-sound:hover { border-color: var(--line-strong); }
+.breath-option.is-on, .breath-sound.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.breath-option strong, .breath-sound strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14.5px; }
+.breath-option span, .breath-sound span { color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
+.breath-tag { padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-style: normal; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+.breath-custom { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.breath-sounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.breath-sound { grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
+.breath-sound strong, .breath-sound span { grid-column: 2; }
+.breath-sound-icon { grid-row: 1 / span 2; width: 30px; height: 30px; margin-top: 2px; border-radius: 9px; background: var(--surface-3); position: relative; overflow: hidden; }
+.breath-sound-icon::after { content: ""; position: absolute; inset: 0; }
+.breath-sound-icon.is-ocean::after { background: repeating-radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--blue) 60%, transparent) 0 2px, transparent 2px 6px); }
+.breath-sound-icon.is-drone::after { background: radial-gradient(circle, color-mix(in srgb, var(--violet) 70%, transparent) 0 30%, transparent 31%), radial-gradient(circle, color-mix(in srgb, var(--violet) 25%, transparent) 0 62%, transparent 63%); }
+.breath-sound-icon.is-bowls::after { background: radial-gradient(ellipse 70% 40% at 50% 62%, color-mix(in srgb, var(--accent) 75%, transparent) 0 55%, transparent 57%); }
+.breath-sound-icon.is-rain::after { background: repeating-linear-gradient(105deg, transparent 0 5px, color-mix(in srgb, var(--blue) 55%, transparent) 5px 6.5px); }
+.breath-sound-icon.is-chimes::after { background: radial-gradient(circle at 30% 35%, var(--green) 0 3px, transparent 4px), radial-gradient(circle at 65% 55%, var(--green) 0 2.5px, transparent 3.5px), radial-gradient(circle at 45% 75%, var(--green) 0 2px, transparent 3px); }
+.breath-sound-icon.is-off::after { background: linear-gradient(135deg, transparent 46%, var(--text-3) 46% 54%, transparent 54%); }
+.breath-audio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 12px; }
+.breath-volume { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; color: var(--text-2); font-size: 13.5px; }
+.breath-volume input { flex: 1; accent-color: var(--accent); }
+.breath-check { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13.5px; }
+.breath-check input { width: 17px; height: 17px; min-height: 0; flex: none; padding: 0; cursor: pointer; }
+.breath-volume input { min-height: 0; padding: 0; border: 0; background: none; }
+.breath-note { margin: 4px 0 0; color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
+.breath-total { color: var(--text-2); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+
+.breath-stage { --phase: var(--text-3); display: grid; justify-items: center; gap: 14px; padding: 8px 0 24px; transition: --phase 1.2s ease; }
+.breath-stage[data-phase="inhale"] { --phase: var(--blue); }
+.breath-stage[data-phase="hold"] { --phase: var(--accent); }
+.breath-stage[data-phase="exhale"] { --phase: var(--green); }
+.breath-orb { position: relative; width: min(340px, 74vw); aspect-ratio: 1; display: grid; place-items: center; }
+.breath-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.breath-ring-track { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.breath-ring-progress { fill: none; stroke: var(--phase); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 603.19; stroke-dashoffset: 603.19; }
+.breath-circle { position: absolute; inset: 6%; border-radius: 50%; transform: scale(.38); will-change: transform;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--phase) 58%, transparent), color-mix(in srgb, var(--phase) 22%, transparent) 58%, color-mix(in srgb, var(--phase) 8%, transparent));
+  box-shadow: 0 0 80px -18px color-mix(in srgb, var(--phase) 70%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--phase) 50%, transparent); }
+.breath-center { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; pointer-events: none; }
+.breath-center strong { font-family: var(--font-display); font-size: 26px; font-weight: 520; letter-spacing: -.01em; }
+.breath-center span { min-height: 1.1em; font-size: 54px; font-weight: 300; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.breath-meta { margin: 0; color: var(--text-2); font-size: 14px; font-variant-numeric: tabular-nums; }
+.breath-controls { display: flex; gap: 8px; }
+.breath-stage.is-paused .breath-orb { opacity: .55; }
+.breath-done { display: grid; justify-items: center; gap: 6px; padding: 18px 0 0; text-align: center; }
+.breath-done h3 { margin: 6px 0 0; font-family: var(--font-display); font-size: 28px; font-weight: 520; }
+.breath-done p { max-width: 440px; margin: 0; color: var(--text-2); line-height: 1.6; }
+.breath-done .modal-actions { align-self: stretch; }
+.breath-done-mark { width: 72px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--green) 55%, transparent), color-mix(in srgb, var(--green) 10%, transparent) 70%); box-shadow: 0 0 50px -12px var(--green); }
+.breath-modal.is-running .modal-head { border-bottom-color: transparent; }
+@media (max-width: 720px) {
+  .persona-grid, .strength-catalog, .breath-card-facts { grid-template-columns: minmax(0, 1fr); }
+  .breath-card-body { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .breath-patterns, .breath-sounds { grid-template-columns: minmax(0, 1fr); }
+  .breath-custom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .breath-offer { grid-template-columns: auto minmax(0, 1fr); }
+  .breath-offer .button { grid-column: 1 / -1; }
+}
+@media (min-width: 721px) and (max-width: 980px) {
+  .breath-sounds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* Napojení na cTrader (Účty a audit, Správa) */
 .broker-panel { padding: 18px 20px; margin-bottom: 16px; }
 .broker-panel .section-heading { margin-bottom: 8px; }

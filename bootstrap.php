@@ -16,6 +16,7 @@ require_once __DIR__ . '/lib/svg.php';
 require_once __DIR__ . '/lib/ctrader.php';
 require_once __DIR__ . '/lib/broker.php';
 require_once __DIR__ . '/lib/tradeplan.php';
+require_once __DIR__ . '/lib/personality.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -417,6 +418,7 @@ SQL);
     ensure_workspace_schema($pdo);
     ensure_broker_schema($pdo);
     ensure_tradeplan_schema($pdo);
+    ensure_personality_schema($pdo);
 }
 
 const PLAN_EXTRA_COLUMNS = [
@@ -2258,7 +2260,13 @@ function save_psych_profile(array $data): array
     return psych_profile_payload() ?? [];
 }
 
-function psych_questions(?array $profileDimensions = null): array
+/**
+ * Otázky rychlého testu. Oblasti, které vyšly ve vstupním profilu jako rizikové, mají
+ * váhu 1,5 a až dvě cílené otázky navíc. Oblasti z osobnosti (Big Five, talenty) mají
+ * váhu 1,25 a dostanou až dvě vlastní otázky; cílených otázek je dohromady nejvýš tři.
+ * `$personalityFocus` je [oblast => důvody] z personality_focus_areas().
+ */
+function psych_questions(?array $profileDimensions = null, ?array $personalityFocus = null): array
 {
     $base = [
         ['key' => 'sleep', 'dimension' => 'physical', 'question' => 'Jak jsi dnes spal?', 'options' => ['Vyspaný, kolem sedmi hodin a víc', 'O něco méně, ale cítím se dobře', 'Málo, cítím to', 'Skoro jsem nespal'], 'warning' => 'Po nedostatku spánku se zhoršuje trpělivost. Typicky zmeškáš vstup a pak ho doháníš za horší cenu.'],
@@ -2277,6 +2285,12 @@ function psych_questions(?array $profileDimensions = null): array
         'overconfidence' => ['key' => 'streak_today', 'dimension' => 'overconfidence', 'question' => 'Jak sis vedl v posledních dnech?', 'options' => ['Běžně', 'Mírně v plusu', 'Dobrá série', 'Nejlepší série za dlouhou dobu'], 'warning' => 'Po dobré sérii roste ochota riskovat. Tvůj profil ukazuje, že tady vzniká tvoje největší ztráta.'],
         'revenge' => ['key' => 'yesterday_loss', 'dimension' => 'revenge', 'question' => 'Vracíš se dnes v hlavě k nějakému konkrétnímu obchodu?', 'options' => ['Ne', 'Občas mi problikne', 'Ano, myslím na něj', 'Ano a chci to napravit'], 'warning' => 'Nedokončená ztráta se u tebe podle profilu nese dál. Dnešní trh s ní ale nemá nic společného.'],
         'need' => ['key' => 'target_today', 'dimension' => 'need', 'question' => 'Máš v hlavě částku, kterou chceš dnes udělat?', 'options' => ['Ne', 'Spíš orientačně', 'Ano, konkrétní číslo', 'Ano a potřebuju ho'], 'warning' => 'Konkrétní cílová částka na den je podle tvého profilu tvoje riziková oblast. Cíl patří na proces, ne na výsledek.'],
+        // Oblasti, které vycházejí jen z osobnosti.
+        'stimulation' => ['key' => 'action_today', 'dimension' => 'stimulation', 'question' => 'Jak moc máš dnes chuť být v trhu?', 'options' => ['Na setup klidně počkám celý den', 'Normálně', 'Chci obchodovat, čekání mě nebaví', 'Potřebuju akci'], 'warning' => 'Potřeba akce dělá z pomalé seance obchody mimo plán. Energii dej dnes do přípravy a zápisu, ne do vstupů navíc.'],
+        'conviction' => ['key' => 'bias_exit', 'dimension' => 'conviction', 'question' => 'Víš, co dnes zruší tvůj bias?', 'options' => ['Ano, mám to napsané', 'Rámcově ano', 'Nad tím jsem nepřemýšlel', 'Jsem si jistý, že bias platí'], 'warning' => 'Pevný názor ti pomáhá v přípravě, v exekuci ale brání vzít invalidaci. Napiš si před seancí, co bias ruší, a když to nastane, ber to jako fakt.'],
+        'anticipation' => ['key' => 'early_entry', 'dimension' => 'anticipation', 'question' => 'Lákají tě dnes vstupy dřív, než se setup potvrdí?', 'options' => ['Ne, čekám na potvrzení', 'Občas', 'Ano, vidím, kam to půjde', 'V hlavě už jsem v obchodě'], 'warning' => 'Scénář vidíš dřív, než ho trh potvrdí. Předvídání patří do přípravy, vstup až po potvrzení v zóně.'],
+        'social' => ['key' => 'others_view', 'dimension' => 'social', 'question' => 'Máš dnes v hlavě cizí názor na trh (chat, skupina, kamarád)?', 'options' => ['Ne, mám jen svůj náhled', 'Viděl jsem ho, ale nehraje roli', 'Ano, trochu mě ovlivňuje', 'Ano, chci obchodovat podle něj'], 'warning' => 'Cizí názor přebírá rozhodnutí, za kterým nestojí tvůj plán. Na dobu obchodního okna zavři chaty a skupiny.'],
+        'hesitation' => ['key' => 'trigger_today', 'dimension' => 'hesitation', 'question' => 'Jak se dnes cítíš ze vstupů, když se setup potvrdí?', 'options' => ['Vstoupím bez váhání', 'Trochu váhám', 'Spíš počkám na další potvrzení', 'Bojím se zmáčknout tlačítko'], 'warning' => 'Váhání u kompletního setupu končí zmeškaným vstupem a honěním ceny. Když jsou splněné podmínky z plánu, vstup je povinný, ne volitelný.'],
     ];
 
     $weak = [];
@@ -2286,9 +2300,21 @@ function psych_questions(?array $profileDimensions = null): array
         }
     }
 
+    $personal = array_diff(array_keys((array)$personalityFocus), $weak);
+    $reasonFor = static fn(string $key): string => implode(', ', (array)($personalityFocus[$key] ?? []));
+
     $questions = [];
     foreach ($base as $question) {
-        $question['weight'] = in_array($question['dimension'], $weak, true) ? 1.5 : 1.0;
+        $question['weight'] = 1.0;
+        $question['source'] = null;
+        if (in_array($question['dimension'], $weak, true)) {
+            $question['weight'] = 1.5;
+            $question['source'] = 'profile';
+        } elseif (in_array($question['dimension'], $personal, true)) {
+            $question['weight'] = 1.25;
+            $question['source'] = 'personality';
+            $question['reason'] = $reasonFor($question['dimension']);
+        }
         $questions[] = $question;
     }
 
@@ -2299,8 +2325,24 @@ function psych_questions(?array $profileDimensions = null): array
         }
         $question = $targeted[$key];
         $question['weight'] = 1.5;
+        $question['source'] = 'profile';
         $questions[] = $question;
         $added++;
+    }
+
+    $personalAdded = 0;
+    $present = array_column($questions, 'key');
+    foreach ($personal as $key) {
+        if ($added >= 3 || $personalAdded >= 2 || !isset($targeted[$key]) || in_array($targeted[$key]['key'], $present, true)) {
+            continue;
+        }
+        $question = $targeted[$key];
+        $question['weight'] = 1.25;
+        $question['source'] = 'personality';
+        $question['reason'] = $reasonFor($key);
+        $questions[] = $question;
+        $added++;
+        $personalAdded++;
     }
 
     return $questions;
@@ -2483,13 +2525,14 @@ function save_psych_thresholds(array $thresholds): array
     return $clean;
 }
 
-function evaluate_psych(array $answers, ?array $profileDimensions = null, ?array $rules = null, ?array $thresholds = null): array
+function evaluate_psych(array $answers, ?array $profileDimensions = null, ?array $rules = null, ?array $thresholds = null, ?array $personalityFocus = null): array
 {
-    $questions = psych_questions($profileDimensions);
+    $questions = psych_questions($profileDimensions, $personalityFocus);
     $score = 0.0;
     $max = 0.0;
     $warnings = [];
     $priorityWarnings = [];
+    $personalWarnings = [];
     $normalized = [];
     $skipped = [];
     $weakSpotHit = false;
@@ -2512,21 +2555,24 @@ function evaluate_psych(array $answers, ?array $profileDimensions = null, ?array
         $score += $value * $weight;
 
         if ($value >= 2) {
-            // Varování z tvých slabých oblastí jdou nahoru.
-            if ($weight > 1.0) {
+            // Varování z tvých slabých oblastí jdou nahoru, pak ta z osobnosti.
+            if ($weight >= 1.5) {
                 $priorityWarnings[] = $question['warning'];
+            } elseif ($weight > 1.0) {
+                $personalWarnings[] = $question['warning'];
             } else {
                 $warnings[] = $question['warning'];
             }
         }
         // Stačí zhoršená odpověď ve slabé oblasti. Tam, kde to má člověk podle
         // profilu doložené jako své selhání, nemá smysl čekat na krajní hodnotu.
-        if ($value >= 2 && $weight > 1.0) {
+        // Osobnost je jen hypotéza, proto sama den neshodí.
+        if ($value >= 2 && $weight >= 1.5) {
             $weakSpotHit = true;
         }
     }
 
-    $warnings = array_merge($priorityWarnings, $warnings);
+    $warnings = array_merge($priorityWarnings, $personalWarnings, $warnings);
     if (count($skipped) >= 2) {
         $warnings[] = sprintf('Nestihl jsi odpovědět na %d z %d otázek. Nerozhodnost u jednoduchých otázek na vlastní stav bývá sama o sobě signálem roztěkanosti.', count($skipped), count($questions));
     }
@@ -2576,7 +2622,7 @@ function save_psych_check(array $data): array
     }
     $answers = (array)value($data, 'answers', []);
     $profile = psych_profile_payload();
-    $result = evaluate_psych($answers, $profile['dimensions'] ?? null, $profile['rules'] ?? null, $profile['thresholds'] ?? null);
+    $result = evaluate_psych($answers, $profile['dimensions'] ?? null, $profile['rules'] ?? null, $profile['thresholds'] ?? null, personality_focus_areas());
 
     $pdo = db();
     $statement = $pdo->prepare('INSERT INTO psych_checks (check_date, score, max_score, band, answers, verdict, warnings, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');

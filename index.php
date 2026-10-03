@@ -677,9 +677,20 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           </section>
 
           <section class="surface psyche-block">
+            <div class="section-heading"><div><p class="eyebrow">Jednorázově</p><h2>Osobnost a silné stránky</h2></div><div class="view-actions"><button class="button button-ghost" type="button" id="editStrengths">Talenty z Gallupu</button><button class="button button-primary" type="button" id="startBigFive">Osobnostní test</button></div></div>
+            <div id="personalitySummary" class="empty-state compact">Načítám…</div>
+            <p class="disclaimer">Osobnostní test je padesát výroků Big Five z International Personality Item Pool (IPIP), který je ve veřejné doméně; překlad je náš a české normy k němu nejsou. Gallupův test CliftonStrengths v aplikaci není, je placený a chráněný. Zadáváš jen pořadí svých talentů z reportu a výklad pro trading je náš. CliftonStrengths® a názvy talentů jsou ochranné známky Gallup, Inc. Trading Desk s Gallupem nijak nesouvisí. Osobnost nepředpovídá, jestli budeš ziskový. Ukazuje, kde ti hrozí jaká chyba, a ověřuje to až tvůj deník.</p>
+          </section>
+
+          <section class="surface psyche-block">
             <div class="section-heading"><div><p class="eyebrow">Před session</p><h2>Rychlý test psychiky</h2></div><button class="button button-primary" type="button" id="startPsychCheck">Spustit test</button></div>
             <div id="psychLatest" class="empty-state compact">Test zatím nebyl vyplněný. Zabere minutu a řekne ti, jestli dnes obchodovat.</div>
             <p class="disclaimer">Tohle není psychologická diagnostika ani terapie. Je to strukturovaný check-list tvého aktuálního stavu, postavený na faktorech, které měřitelně ovlivňují exekuci. Pokud dlouhodobě řešíš úzkost, nespavost nebo tlak, který přesahuje trading, patří to k odborníkovi, ne do deníku.</p>
+          </section>
+
+          <section class="surface psyche-block breath-card">
+            <div class="section-heading"><div><p class="eyebrow">Před seancí</p><h2>Dýchání a zklidnění</h2></div><button class="button button-primary" type="button" id="startBreathing">Začít dýchání</button></div>
+            <div id="breathCardBody" class="breath-card-body"></div>
           </section>
 
           <section class="surface psyche-block">
@@ -1100,6 +1111,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
       <div class="modal-head"><div><p class="eyebrow">Minuta před otevřením grafu</p><h2 id="psychDialogTitle">Rychlý test psychiky</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
       <p class="psych-progress" id="psychProgress">Otázka 1</p>
       <div class="psych-step" id="psychStep">
+        <p class="psych-source" id="psychSource" hidden></p>
         <h3 id="psychQuestionText"></h3>
         <div class="psych-options" id="psychOptions"></div>
         <span class="psych-seconds" id="psychSeconds"></span>
@@ -1132,6 +1144,72 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
     </form>
   </dialog>
 
+  <dialog class="modal modal-narrow" id="bigFiveDialog" aria-labelledby="bigFiveTitle">
+    <form method="dialog" id="bigFiveForm">
+      <div class="modal-head"><div><p class="eyebrow">Osobnostní test · Big Five</p><h2 id="bigFiveTitle">Jaký jsi</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <p class="psych-progress" id="bigFiveProgress">Výrok 1</p>
+      <div class="big5-progress"><i id="bigFiveBar"></i></div>
+      <div class="psych-step">
+        <h3 id="bigFiveText"></h3>
+        <div class="psych-options" id="bigFiveOptions"></div>
+      </div>
+      <p class="psych-hint">Popiš se tak, jak to u tebe obecně je teď, ne jak bys chtěl být. Nad výroky dlouho nepřemýšlej. Volit můžeš i klávesami 1 až 5 a vrátit se zpět.</p>
+      <div class="modal-actions"><button class="button button-ghost" type="button" id="bigFiveBack">Zpět</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal" id="strengthsDialog" aria-labelledby="strengthsTitle">
+    <form method="dialog" id="strengthsForm">
+      <div class="modal-head"><div><p class="eyebrow">CliftonStrengths</p><h2 id="strengthsTitle">Tvoje talenty z Gallupu</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <div class="strength-modes chip-row"><button type="button" class="chip is-on" data-strength-mode="top">Nejsilnější</button><button type="button" class="chip" data-strength-mode="bottom">Nejslabší (report 34)</button></div>
+      <p class="section-hint" id="strengthsHint"></p>
+      <ol class="strength-selected" id="strengthsSelected"></ol>
+      <div class="strength-catalog" id="strengthsCatalog"></div>
+      <p class="disclaimer">Pořadí najdeš v reportu CliftonStrengths, který ti poslal Gallup. Názvy talentů jsou ochranné známky Gallup, Inc.; výklad pro trading je náš.</p>
+      <div class="modal-actions"><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zrušit</button><button class="button button-primary" value="default" type="submit">Uložit talenty</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal breath-modal" id="breathDialog" aria-labelledby="breathTitle">
+    <div class="breath-shell">
+      <div class="modal-head"><div><p class="eyebrow" id="breathEyebrow">Před seancí</p><h2 id="breathTitle">Dýchání</h2></div><button class="icon-button" type="button" data-breath-close aria-label="Zavřít">×</button></div>
+      <section class="breath-setup" id="breathSetup">
+        <p class="breath-reason" id="breathReason" hidden></p>
+        <fieldset class="breath-choice"><legend>Rytmus</legend>
+          <div class="breath-patterns" id="breathPatterns"></div>
+          <div class="breath-custom" id="breathCustom" hidden>
+            <label>Nádech (s)<input type="number" min="2" max="10" id="breathCustom_inhale"></label>
+            <label>Zadržení (s)<input type="number" min="0" max="10" id="breathCustom_hold_in"></label>
+            <label>Výdech (s)<input type="number" min="2" max="12" id="breathCustom_exhale"></label>
+            <label>Zadržení (s)<input type="number" min="0" max="10" id="breathCustom_hold_out"></label>
+          </div>
+        </fieldset>
+        <fieldset class="breath-choice"><legend>Délka</legend><div class="chip-row" id="breathMinutes"></div></fieldset>
+        <fieldset class="breath-choice"><legend>Zvuk</legend>
+          <div class="breath-sounds" id="breathSounds"></div>
+          <div class="breath-audio-row">
+            <label class="breath-volume">Hlasitost<input type="range" min="0" max="100" step="1" id="breathVolume"></label>
+            <label class="breath-check"><input type="checkbox" id="breathCues"><span>Jemný tón při změně fáze</span></label>
+          </div>
+        </fieldset>
+        <p class="breath-note">Hudba vzniká přímo v prohlížeči a s kruhem dýchá. Když se ti zatočí hlava, dýchej chvíli normálně.</p>
+        <div class="modal-actions"><span class="breath-total" id="breathTotal"></span><span class="spacer"></span><button class="button button-primary" type="button" id="breathStart">Začít</button></div>
+      </section>
+      <section class="breath-stage" id="breathStage" hidden>
+        <div class="breath-orb">
+          <svg class="breath-ring" viewBox="0 0 200 200" aria-hidden="true"><circle class="breath-ring-track" cx="100" cy="100" r="96"></circle><circle class="breath-ring-progress" id="breathRing" cx="100" cy="100" r="96"></circle></svg>
+          <div class="breath-circle" id="breathCircle"></div>
+          <div class="breath-center" aria-live="polite"><strong id="breathPhase">Připrav se</strong><span id="breathCount"></span></div>
+        </div>
+        <p class="breath-meta" id="breathMeta"></p>
+        <div class="breath-controls"><button class="button button-ghost" type="button" id="breathPause">Pauza</button><button class="button button-ghost" type="button" id="breathStop">Ukončit</button></div>
+      </section>
+      <section class="breath-done" id="breathDone" hidden>
+        <div class="breath-done-mark" aria-hidden="true"></div>
+        <h3>Hotovo</h3>
+        <p id="breathDoneText"></p>
+        <div class="modal-actions"><button class="button button-ghost" type="button" id="breathAgain">Ještě jednou</button><button class="button button-primary" type="button" data-breath-close>Zavřít</button></div>
+      </section>
+    </div>
+  </dialog>
   <dialog class="modal" id="psychResultDialog" aria-labelledby="psychResultTitle">
     <form method="dialog">
       <div class="modal-head"><div><p class="eyebrow" id="psychResultBadge">Výsledek</p><h2 id="psychResultTitle">Vyhodnocení</h2></div><button class="icon-button" value="cancel" type="submit" aria-label="Zavřít">×</button></div>
@@ -1312,6 +1390,9 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/members.js') ?>" defer></script>
   <script src="<?= asset_url('static/broker.js') ?>" defer></script>
   <script src="<?= asset_url('static/tradeplan.js') ?>" defer></script>
+  <script src="<?= asset_url('static/soundscapes.js') ?>" defer></script>
+  <script src="<?= asset_url('static/breathing.js') ?>" defer></script>
+  <script src="<?= asset_url('static/personality.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>
