@@ -283,7 +283,7 @@ class StaticAppTests(unittest.TestCase):
         self.assertIn("def bias_board", pdf)
         # PDF začíná biasem, pak popisem trhu a teprve potom zónami.
         start = pdf.index("def build_pdf")
-        order = [pdf.index(marker, start) for marker in ("bias_board(plan", "CO SE NA TRHU ODEHRÁVÁ", '"Obchodní zóny"')]
+        order = [pdf.index(marker, start) for marker in ("bias_board(plan", "Co se na trhu odehrává", '"Obchodní zóny"')]
         self.assertEqual(order, sorted(order))
 
     def test_zone_conditions_are_defined_per_direction(self):

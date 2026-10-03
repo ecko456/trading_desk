@@ -1,109 +1,39 @@
 #!/usr/bin/env python3
-"""Create a printable trading-plan PDF from a server-generated JSON payload.
+"""PDF denního nebo týdenního náhledu trhu z JSON připraveného serverem (pdf.php).
 
-Pořadí stránky je dané tím, co trader potřebuje vidět jako první:
-bias z price action a z profilu, krátký popis trhu a potom zóny s tím,
-co se na nich obchoduje a za jakých podmínek. Kontext a detaily jdou až za tím.
-Prázdné položky se do PDF nevypisují.
+Pořadí stránky je dané tím, co trader potřebuje vidět jako první: bias z price action
+a z profilu, krátký popis trhu, mapa ceny a potom zóny s tím, co se na nich obchoduje
+a za jakých podmínek. Kontext a detaily jdou až za tím. Prázdné položky se nevypisují.
+Vzhled (písma, barvy, karty, záhlaví) je společný v pdf_kit.py.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen.canvas import Canvas
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    HRFlowable,
+    BaseDocTemplate,
+    Flowable,
+    Frame,
     Image,
-    KeepTogether,
+    NextPageTemplate,
     PageBreak,
+    PageTemplate,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
-from reportlab.lib.utils import ImageReader
 
+from pdf_kit import *  # noqa: F401,F403 – paleta, písma a komponenty
 
 PAGE_WIDTH, PAGE_HEIGHT = landscape(A4)
-
-INK = colors.HexColor("#141B26")
-INK_SOFT = colors.HexColor("#4A5566")
-MUTED = colors.HexColor("#6F7B8D")
-LINE = colors.HexColor("#DCE2EA")
-PAPER = colors.HexColor("#F4F6F9")
-WHITE = colors.white
-BLUE = colors.HexColor("#2F63E6")
-BLUE_SOFT = colors.HexColor("#E8EFFD")
-GREEN = colors.HexColor("#138A55")
-GREEN_SOFT = colors.HexColor("#E6F5ED")
-RED = colors.HexColor("#C8354A")
-RED_SOFT = colors.HexColor("#FBEAEC")
-AMBER = colors.HexColor("#A5660F")
-AMBER_SOFT = colors.HexColor("#FDF3E1")
-VIOLET = colors.HexColor("#6D4FCF")
-VIOLET_SOFT = colors.HexColor("#F0ECFC")
-
-
-def register_fonts() -> tuple[str, str]:
-    candidates = [
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
-        ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
-    ]
-    for regular, bold in candidates:
-        if os.path.isfile(regular) and os.path.isfile(bold):
-            pdfmetrics.registerFont(TTFont("TradingSans", regular))
-            pdfmetrics.registerFont(TTFont("TradingSans-Bold", bold))
-            return "TradingSans", "TradingSans-Bold"
-    return "Helvetica", "Helvetica-Bold"
-
-
-FONT, FONT_BOLD = register_fonts()
-
-
-def clean(value: object, fallback: str = "-") -> str:
-    if value is None:
-        return fallback
-    text = str(value).strip()
-    return text if text else fallback
-
-
-def filled(value: object) -> bool:
-    return clean(value, "") != ""
-
-
-def ptext(value: object, fallback: str = "-") -> str:
-    return escape(clean(value, fallback)).replace("\n", "<br/>")
-
-
-def preview(value: object, limit: int = 260) -> str:
-    text = clean(value, "")
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
-
-
-def fmt_number(value: object) -> str:
-    if value is None or value == "":
-        return "-"
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return clean(value)
-    if number.is_integer():
-        return f"{number:,.0f}".replace(",", " ")
-    return f"{number:,.4f}".rstrip("0").rstrip(".").replace(",", " ").replace(".", ",")
 
 
 def label(mapping: dict[str, str], value: object, fallback: str = "") -> str:
@@ -141,17 +71,6 @@ def trade_type(value: object) -> str:
 
 def is_weekly(plan: dict) -> bool:
     return str(plan.get("plan_type") or "daily") == "weekly"
-
-
-def bias_palette(value: object) -> tuple:
-    key = str(value or "")
-    if key == "long":
-        return GREEN_SOFT, GREEN
-    if key == "short":
-        return RED_SOFT, RED
-    if key in {"balance", "neutral"}:
-        return AMBER_SOFT, AMBER
-    return PAPER, MUTED
 
 
 def alignment_text(plan: dict) -> str:
@@ -223,119 +142,205 @@ def working_conclusion(plan: dict, refs: list[dict]) -> str:
     return " ".join(parts)
 
 
-def make_styles() -> dict[str, ParagraphStyle]:
-    base = getSampleStyleSheet()
-    body = base["BodyText"]
-    return {
-        "title": ParagraphStyle("title", parent=base["Title"], fontName=FONT_BOLD, fontSize=20, leading=23, textColor=INK, alignment=TA_LEFT, spaceAfter=0),
-        "meta": ParagraphStyle("meta", parent=body, fontName=FONT, fontSize=9, leading=12, textColor=INK_SOFT),
-        "meta_right": ParagraphStyle("meta_right", parent=body, fontName=FONT, fontSize=9, leading=12.5, textColor=INK_SOFT, alignment=TA_RIGHT),
-        "kicker": ParagraphStyle("kicker", parent=body, fontName=FONT_BOLD, fontSize=7, leading=9, textColor=BLUE),
-        "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName=FONT_BOLD, fontSize=13, leading=16, textColor=INK, spaceBefore=0, spaceAfter=0),
-        "body": ParagraphStyle("body", parent=body, fontName=FONT, fontSize=9.4, leading=13.4, textColor=INK),
-        "body_small": ParagraphStyle("body_small", parent=body, fontName=FONT, fontSize=8, leading=10.8, textColor=INK_SOFT),
-        "label": ParagraphStyle("label", parent=body, fontName=FONT_BOLD, fontSize=6.6, leading=8.4, textColor=MUTED, spaceAfter=1.5),
-        "label_center": ParagraphStyle("label_center", parent=body, fontName=FONT_BOLD, fontSize=7, leading=9, textColor=MUTED, alignment=TA_CENTER),
-        "row_label": ParagraphStyle("row_label", parent=body, fontName=FONT_BOLD, fontSize=8.2, leading=10, textColor=INK),
-        "bias_value": ParagraphStyle("bias_value", parent=body, fontName=FONT_BOLD, fontSize=15, leading=18, alignment=TA_CENTER),
-        "bias_note": ParagraphStyle("bias_note", parent=body, fontName=FONT, fontSize=7, leading=9, textColor=INK_SOFT, alignment=TA_CENTER),
-        "final_value": ParagraphStyle("final_value", parent=body, fontName=FONT_BOLD, fontSize=22, leading=26, alignment=TA_CENTER),
-        "context_value": ParagraphStyle("context_value", parent=body, fontName=FONT_BOLD, fontSize=8.6, leading=10.8, textColor=INK),
-        "card_title": ParagraphStyle("card_title", parent=body, fontName=FONT_BOLD, fontSize=10.5, leading=13, textColor=INK),
-        "card_sub": ParagraphStyle("card_sub", parent=body, fontName=FONT, fontSize=8, leading=10, textColor=INK_SOFT),
-        "price_right": ParagraphStyle("price_right", parent=body, fontName=FONT_BOLD, fontSize=10.5, leading=13, textColor=INK, alignment=TA_RIGHT),
-        "badge": ParagraphStyle("badge", parent=body, fontName=FONT_BOLD, fontSize=8.4, leading=10, alignment=TA_CENTER),
-        "cond_label": ParagraphStyle("cond_label", parent=body, fontName=FONT_BOLD, fontSize=7, leading=9, textColor=MUTED),
-        "cond_text": ParagraphStyle("cond_text", parent=body, fontName=FONT, fontSize=8.8, leading=11.8, textColor=INK),
-    }
+# ---------------------------------------------------------------- vzhled
+
+MARGIN = 14 * mm
+BAND = 37 * mm
+USABLE = PAGE_WIDTH - 2 * MARGIN
+FOOTER_SPACE = 15 * mm
+FIRST_TOP = BAND + 7 * mm
+LATER_TOP = 18 * mm
 
 
-def section_title(title: str, kicker: str, styles: dict[str, ParagraphStyle]) -> list:
-    return [
-        Spacer(1, 4 * mm),
-        Paragraph(escape(kicker.upper()), styles["kicker"]),
-        Paragraph(escape(title), styles["h2"]),
-        Spacer(1, 1.5 * mm),
-        HRFlowable(width="100%", thickness=0.7, color=LINE),
-        Spacer(1, 2.5 * mm),
-    ]
-
-
-def boxed(content: list, width: float, background, border, padding: float = 7) -> Table:
-    box = Table([[content]], colWidths=[width])
-    box.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), background),
-        ("BOX", (0, 0), (-1, -1), .7, border),
-        ("LEFTPADDING", (0, 0), (-1, -1), padding),
-        ("RIGHTPADDING", (0, 0), (-1, -1), padding),
-        ("TOPPADDING", (0, 0), (-1, -1), padding - 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), padding - 1),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    return box
-
-
-def bias_cell(value: object, note: object, styles: dict[str, ParagraphStyle], width: float) -> Table:
-    background, accent = bias_palette(value)
-    word = BIAS_WORD.get(str(value or ""), "—")
-    content = [Paragraph(escape(word), ParagraphStyle("bias_dynamic", parent=styles["bias_value"], textColor=accent))]
+def bias_tile(value: object, note: object, width: float) -> Table:
+    accent, soft, word = direction_colors(value)
+    content = [Paragraph(escape(word), ParagraphStyle("bias_word", parent=STYLES["value_big"], textColor=accent if value else MUTED, alignment=TA_CENTER))]
     if filled(note):
-        content.append(Paragraph(escape(preview(note, 70)), styles["bias_note"]))
-    return boxed(content, width, background, accent if value else LINE, padding=6)
+        content.append(Paragraph(escape(preview(note, 70)), STYLES["center"]))
+    return frame(content, width, background=soft if value else PAPER, border=None, padding=7, radius=6, valign="MIDDLE")
 
 
-def bias_board(plan: dict, styles: dict[str, ParagraphStyle], usable_width: float) -> Table:
-    """Hlavní přehled nahoře: bias z price action a z MP/VP pro Weekly a Daily."""
+def bias_board(plan: dict) -> Table:
+    """Nahoře: bias z price action a z profilu pro dva timeframy, vpravo pracovní bias."""
     weekly = is_weekly(plan)
     columns = [("MONTHLY", "monthly"), ("WEEKLY", "weekly")] if weekly else [("WEEKLY", "weekly"), ("DAILY", "daily")]
-    rows = [("PRICE ACTION", "pa"), ("MP / VP", "mp")]
-    label_width = 30 * mm
-    final_width = 58 * mm
+    final_width = 74 * mm
     gap = 4 * mm
-    cell_width = (usable_width - label_width - final_width - gap) / 2 - 3
+    label_width = 27 * mm
+    cell = (USABLE - final_width - gap - label_width) / 2
 
-    grid_rows = [[Paragraph("", styles["label"])] + [Paragraph(title, styles["label_center"]) for title, _ in columns]]
-    for row_title, prefix in rows:
-        cells = [Paragraph(row_title, styles["row_label"])]
-        for _, frame in columns:
-            key = f"{prefix}_{frame}"
-            if key not in plan and prefix == "mp" and frame == "monthly":
-                cells.append(Paragraph("—", styles["bias_note"]))
-                continue
-            cells.append(bias_cell(plan.get(key), plan.get(f"{key}_note"), styles, cell_width))
-        grid_rows.append(cells)
-    grid = Table(grid_rows, colWidths=[label_width, cell_width + 3, cell_width + 3])
-    grid.setStyle(TableStyle([
+    rows = [[""] + [Tracked(title, MUTED, 6.4, 1.2) for title, _ in columns]]
+    for row_title, prefix in (("PRICE ACTION", "pa"), ("MP / VP", "mp")):
+        cells = [Paragraph(row_title, STYLES["small_strong"])]
+        for _, timeframe in columns:
+            key = f"{prefix}_{timeframe}"
+            cells.append(bias_tile(plan.get(key), plan.get(f"{key}_note"), cell - 4))
+        rows.append(cells)
+    matrix = Table(rows, colWidths=[label_width, cell, cell])
+    matrix.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
 
     bias = str(plan.get("bias") or "neutral")
-    background, accent = bias_palette(bias)
-    final_content = [
-        Paragraph("PRACOVNÍ BIAS", styles["label_center"]),
-        Paragraph(escape(BIAS_WORD.get(bias, "BALANCE")), ParagraphStyle("final_dynamic", parent=styles["final_value"], textColor=accent)),
+    night = {"long": NIGHT_GREEN, "short": NIGHT_RED}.get(bias, NIGHT_AMBER)
+    final = [
+        Tracked("Pracovní bias", GOLD_LIGHT, 6.6, 1.4),
+        Spacer(1, 1.2 * mm),
+        Paragraph(escape(BIAS_WORD.get(bias, "BALANCE")), ParagraphStyle("final_word", fontName=SERIF, fontSize=28, leading=31, textColor=night)),
     ]
-    alignment = alignment_text(plan)
-    if alignment:
-        final_content.append(Paragraph(escape(alignment), styles["bias_note"]))
+    notes = [alignment_text(plan)]
     if filled(plan.get("pa_monthly")) and not weekly:
-        final_content.append(Paragraph(escape(f"Monthly PA: {BIAS_WORD.get(str(plan.get('pa_monthly')), '—')}"), styles["bias_note"]))
-    final_box = boxed(final_content, final_width, background, accent, padding=9)
+        notes.append(f"Monthly PA: {BIAS_WORD.get(str(plan.get('pa_monthly')), '—')}")
+    notes = [note for note in notes if note]
+    if notes:
+        final.append(Paragraph(escape(" · ".join(notes)), ParagraphStyle("final_note", fontName=SANS, fontSize=7.6, leading=10, textColor=IVORY_MUTED)))
+    final_box = frame(final, final_width, background=NIGHT, border=None, padding=11, radius=7, valign="MIDDLE")
 
-    board = Table([[grid, final_box]], colWidths=[usable_width - final_width - gap, final_width + gap])
+    board = Table([[matrix, final_box]], colWidths=[USABLE - final_width, final_width])
     board.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (0, 0), gap),
-        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     return board
+
+
+class PriceMap(Flowable):
+    """Mapa ceny: value minulého týdne, POC, zóny a reference na jedné vodorovné ose."""
+
+    def __init__(self, zones: list[dict], context: dict, refs: list[dict], width: float):
+        super().__init__()
+        self.zones = [zone for zone in zones if self._number(zone.get("price_low")) is not None or self._number(zone.get("price_high")) is not None]
+        self.context = context
+        self.refs = [ref for ref in refs if self._number(ref.get("price_low")) is not None and ref.get("status") != "filled"]
+        self.width = width
+        self.lanes: list[int] = []
+        prices: list[float] = []
+        for zone in self.zones:
+            prices += [value for value in (self._number(zone.get("price_low")), self._number(zone.get("price_high"))) if value is not None]
+        for key in ("vah", "val", "poc"):
+            if self._number(context.get(key)) is not None:
+                prices.append(self._number(context.get(key)))
+        for ref in self.refs:
+            prices += [value for value in (self._number(ref.get("price_low")), self._number(ref.get("price_high"))) if value is not None]
+        self.low, self.high = (min(prices), max(prices)) if prices else (0.0, 1.0)
+        pad = max((self.high - self.low) * .08, 1.0)
+        self.low, self.high = self.low - pad, self.high + pad
+        # Překrývající se zóny jdou do dalších pruhů nad sebou.
+        ends: list[float] = []
+        for zone in self.zones:
+            start, end = self._span(zone)
+            for lane, last in enumerate(ends):
+                if start > last + (self.high - self.low) * .015:
+                    ends[lane] = end
+                    self.lanes.append(lane)
+                    break
+            else:
+                ends.append(end)
+                self.lanes.append(len(ends) - 1)
+        self.lane_count = max(1, len(ends))
+
+    @staticmethod
+    def _number(value: object) -> float | None:
+        try:
+            return None if value in (None, "") else float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _span(self, zone: dict) -> tuple[float, float]:
+        low, high = self._number(zone.get("price_low")), self._number(zone.get("price_high"))
+        low = low if low is not None else high
+        high = high if high is not None else low
+        return min(low, high), max(low, high)
+
+    def x(self, price: float) -> float:
+        return 6 + (price - self.low) / (self.high - self.low) * (self.width - 12)
+
+    def wrap(self, available_width: float, available_height: float):
+        self.height = 24 + self.lane_count * 13 + 16
+        return self.width, self.height
+
+    def draw(self) -> None:
+        canvas = self.canv
+        axis = 15
+        top = self.height
+        canvas.setFillColor(PAPER)
+        canvas.roundRect(0, 0, self.width, top, 6, stroke=0, fill=1)
+        vah, val, poc = (self._number(self.context.get(key)) for key in ("vah", "val", "poc"))
+        if vah is not None and val is not None:
+            left, right = self.x(min(vah, val)), self.x(max(vah, val))
+            canvas.setFillColor(GOLD_SOFT)
+            canvas.rect(left, axis, right - left, top - axis - 4, stroke=0, fill=1)
+            canvas.setStrokeColor(GOLD_LINE)
+            canvas.setLineWidth(.6)
+            canvas.line(left, axis, left, top - 4)
+            canvas.line(right, axis, right, top - 4)
+            canvas.setFont(BOLD, 5.8)
+            canvas.setFillColor(GOLD_DEEP)
+            canvas.drawString(left + 2, top - 10, "VAL")
+            canvas.drawRightString(right - 2, top - 10, "VAH")
+        if poc is not None:
+            canvas.setStrokeColor(GOLD)
+            canvas.setLineWidth(.9)
+            canvas.setDash(2, 2)
+            canvas.line(self.x(poc), axis, self.x(poc), top - 4)
+            canvas.setDash()
+            canvas.setFont(BOLD, 5.8)
+            canvas.setFillColor(GOLD_DEEP)
+            canvas.drawCentredString(self.x(poc), top - 10, "POC")
+        for index, zone in enumerate(self.zones):
+            start, end = self._span(zone)
+            accent, soft, _ = direction_colors(zone.get("direction"))
+            left, right = self.x(start), max(self.x(end), self.x(start) + 7)
+            y = axis + 4 + self.lanes[index] * 13
+            canvas.setFillColor(soft)
+            canvas.setStrokeColor(accent)
+            canvas.setLineWidth(.8)
+            canvas.roundRect(left, y, right - left, 10, 2.4, stroke=1, fill=1)
+            canvas.setFont(BOLD, 6.4)
+            canvas.setFillColor(accent)
+            canvas.drawCentredString((left + right) / 2, y + 3.2, str(index + 1))
+        for ref in self.refs:
+            price = self._number(ref.get("price_low"))
+            x = self.x(price)
+            canvas.setFillColor(VIOLET)
+            path = canvas.beginPath()
+            path.moveTo(x - 3, axis - 1)
+            path.lineTo(x + 3, axis - 1)
+            path.lineTo(x, axis + 4)
+            path.close()
+            canvas.drawPath(path, stroke=0, fill=1)
+        canvas.setStrokeColor(LINE)
+        canvas.setLineWidth(.7)
+        canvas.line(6, axis, self.width - 6, axis)
+        canvas.setFont(SANS, 6.4)
+        canvas.setFillColor(MUTED)
+        for price in nice_ticks(self.low, self.high):
+            canvas.setStrokeColor(LINE)
+            canvas.line(self.x(price), axis, self.x(price), axis - 2)
+            canvas.drawCentredString(self.x(price), 5.5, fmt_number(price))
+
+
+def nice_ticks(low: float, high: float, count: int = 6) -> list[float]:
+    """Kulaté hodnoty na ose (1, 2, 2,5 nebo 5 × 10^n)."""
+    import math
+    span = max(high - low, 1e-9)
+    raw = span / count
+    power = 10 ** math.floor(math.log10(raw))
+    step = next(power * factor for factor in (1, 2, 2.5, 5, 10) if power * factor >= raw)
+    start = math.ceil(low / step) * step
+    ticks = []
+    value = start
+    while value <= high + 1e-9:
+        ticks.append(round(value, 6))
+        value += step
+    return ticks
 
 
 def zone_sides(direction: str) -> list[tuple[str, str]]:
@@ -348,122 +353,116 @@ def zone_sides(direction: str) -> list[tuple[str, str]]:
     return []
 
 
-def condition_text(value: object, styles: dict[str, ParagraphStyle]) -> Paragraph:
+def condition(value: object) -> Paragraph:
     if filled(value):
-        return Paragraph(ptext(value), styles["cond_text"])
-    return Paragraph("Chybí definice", ParagraphStyle("cond_missing", parent=styles["cond_text"], textColor=AMBER))
+        return Paragraph(ptext(value), STYLES["cond"])
+    return Paragraph("Chybí definice", STYLES["missing"])
 
 
-def zone_card(zone: dict, index: int, styles: dict[str, ParagraphStyle], usable_width: float) -> KeepTogether:
+def zone_card(zone: dict, index: int, width: float) -> Table:
+    """Karta zóny jako tabulka o několika řádcích: dlouhá karta se smí rozdělit mezi strany."""
     direction = str(zone.get("direction") or "")
-    tint = GREEN_SOFT if direction == "long" else RED_SOFT if direction == "short" else BLUE_SOFT if direction == "both" else PAPER
-    accent = GREEN if direction == "long" else RED if direction == "short" else BLUE if direction == "both" else MUTED
-    title = clean(zone.get("name"), f"Zóna {index}")
-    range_text = f"{fmt_number(zone.get('price_low'))} – {fmt_number(zone.get('price_high'))}"
+    accent, soft, word = direction_colors(direction)
+    word = DIRECTION_WORD.get(direction, "SMĚR NEVYBRÁN")
+    inner = width - 3.2
     context = zone.get("va_context") or {}
-    subtitle_parts = []
+    subtitle = []
     if context.get("text"):
-        subtitle_parts.append(f"<b>{escape(context['text'])}</b>")
+        subtitle.append(f"<b>{escape(context['text'])}</b>")
     if filled(zone.get("priority")):
-        subtitle_parts.append(f"Priorita {escape(clean(zone.get('priority')))}")
+        subtitle.append(f"Priorita {escape(clean(zone.get('priority')))}")
     if filled(zone.get("status")) and zone.get("status") != "planned":
-        subtitle_parts.append(escape(ZONE_STATUS.get(str(zone.get("status")), str(zone.get("status")))))
+        subtitle.append(escape(ZONE_STATUS.get(str(zone.get("status")), str(zone.get("status")))))
     if filled(zone.get("source")):
-        subtitle_parts.append(escape(preview(zone.get("source"), 90)))
+        subtitle.append(escape(preview(zone.get("source"), 90)))
 
-    badge = boxed([Paragraph(escape(DIRECTION_WORD.get(direction, "SMĚR NEVYBRÁN")), ParagraphStyle("zone_badge", parent=styles["badge"], textColor=WHITE if direction else INK_SOFT))], 30 * mm, accent if direction else PAPER, accent, padding=4)
-    header = Table([[
-        [Paragraph(f"{index}. {escape(title)}", styles["card_title"]), Paragraph(" · ".join(subtitle_parts) or "&nbsp;", styles["card_sub"])],
-        Paragraph(escape(range_text), styles["price_right"]),
-        badge,
-    ]], colWidths=[usable_width - 78 * mm, 42 * mm, 36 * mm])
-    header.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), tint),
-        ("LINEBEFORE", (0, 0), (0, -1), 3.5, accent),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    number = Paragraph(f"{index:02d}", ParagraphStyle("zone_number", fontName=SERIF, fontSize=17, leading=19, textColor=accent))
+    title = [Paragraph(escape(clean(zone.get("name"), f"Zóna {index}")), STYLES["card_title"])]
+    if subtitle:
+        title.append(Paragraph(" · ".join(subtitle), STYLES["tiny"]))
+    price = Paragraph(escape(f"{fmt_number(zone.get('price_low'))} – {fmt_number(zone.get('price_high'))}"), STYLES["price"])
+    head = Table([[number, title, [price, Spacer(1, 1.2 * mm), pill(word, WHITE if direction else INK_2, accent if direction else PAPER_2, 27 * mm)]]],
+                 colWidths=[11 * mm, inner - 11 * mm - 46 * mm - 16, 46 * mm])
+    head.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    parts: list = [header]
-
-    sides = zone_sides(direction)
-    if sides:
-        rows = []
-        styles_list = [
-            ("BOX", (0, 0), (-1, -1), .55, LINE),
-            ("INNERGRID", (0, 0), (-1, -1), .4, LINE),
+    rows: list[list] = [["", head]]
+    commands = [
+        ("BACKGROUND", (0, 0), (0, -1), accent if direction else LINE),
+        ("BACKGROUND", (1, 0), (1, 0), soft if direction else PAPER),
+    ]
+    half = (inner - 16) / 2
+    for side, side_word in zone_sides(direction):
+        side_color = GREEN if side == "long" else RED
+        pair = Table([[
+            [Paragraph(f"{side_word} · CO SE MUSÍ SPLNIT PRO VSTUP", tinted("cond_label", side_color)), Spacer(1, 1), condition(zone.get(f"{side}_entry"))],
+            [Paragraph(f"{side_word} · KDY OBCHOD NEBERU", STYLES["cond_label"]), Spacer(1, 1), condition(zone.get(f"{side}_skip"))],
+        ]], colWidths=[half, half])
+        pair.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]
-        for row_index, (side, word) in enumerate(sides):
-            side_color = GREEN if side == "long" else RED
-            rows.append([
-                [Paragraph(f"{word} · CO SE MUSÍ SPLNIT PRO VSTUP", ParagraphStyle(f"cl_{side}", parent=styles["cond_label"], textColor=side_color)), condition_text(zone.get(f"{side}_entry"), styles)],
-                [Paragraph(f"{word} · KDY OBCHOD NEBERU", styles["cond_label"]), condition_text(zone.get(f"{side}_skip"), styles)],
-            ])
-            styles_list.append(("LINEBEFORE", (0, row_index), (0, row_index), 2.5, side_color))
-        body = Table(rows, colWidths=[usable_width / 2, usable_width / 2])
-        body.setStyle(TableStyle(styles_list))
-        parts.append(body)
-
+            ("LINEAFTER", (0, 0), (0, -1), .5, LINE_SOFT),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING", (1, 0), (1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        rows.append(["", pair])
+        commands.append(("LINEABOVE", (1, len(rows) - 1), (1, len(rows) - 1), .5, LINE_SOFT))
     extras = []
     if filled(zone.get("trigger")):
-        extras.append(f"<b>Trigger:</b> {escape(preview(zone.get('trigger'), 160))}")
+        extras.append(f"<b>Trigger</b> {escape(preview(zone.get('trigger'), 160))}")
     if filled(zone.get("invalidation")):
-        extras.append(f"<b>Invalidace:</b> {escape(preview(zone.get('invalidation'), 120))}")
+        extras.append(f"<b>Invalidace</b> {escape(preview(zone.get('invalidation'), 120))}")
     for key, name in (("stop_loss", "SL"), ("tp1", "TP1"), ("tp2", "TP2"), ("rr", "Min. RR")):
         if filled(zone.get(key)):
             extras.append(f"<b>{name}</b> {escape(fmt_number(zone.get(key)))}")
     if extras:
-        parts.append(boxed([Paragraph("  ·  ".join(extras), styles["body_small"])], usable_width, WHITE, LINE, padding=6))
-    parts.append(Spacer(1, 3 * mm))
-    return KeepTogether(parts)
-
-
-def context_grid(items: list[tuple[str, str]], styles: dict[str, ParagraphStyle], usable_width: float, per_row: int = 5) -> Table | None:
-    items = [(name, value) for name, value in items if value]
-    if not items:
-        return None
-    cells = [[Paragraph(escape(name.upper()), styles["label"]), Paragraph(escape(value), styles["context_value"])] for name, value in items]
-    rows = [cells[i:i + per_row] for i in range(0, len(cells), per_row)]
-    rows = [row + [""] * (per_row - len(row)) for row in rows]
-    table = Table(rows, colWidths=[usable_width / per_row] * per_row, hAlign="LEFT")
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), PAPER),
+        rows.append(["", Paragraph("&nbsp;&nbsp;·&nbsp;&nbsp;".join(extras), STYLES["small"])])
+        commands += [("LINEABOVE", (1, len(rows) - 1), (1, len(rows) - 1), .5, LINE_SOFT), ("BACKGROUND", (1, len(rows) - 1), (1, len(rows) - 1), PAPER)]
+    table = Table(rows, colWidths=[3.2, inner])
+    table.setStyle(TableStyle(commands + [
         ("BOX", (0, 0), (-1, -1), .6, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), .45, LINE),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, -1), 0),
+        ("LEFTPADDING", (1, 0), (1, -1), 9),
+        ("RIGHTPADDING", (1, 0), (1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7.5),
+        ("ROUNDEDCORNERS", [6] * 4),
     ]))
     return table
 
 
-def simple_table(header: list[str], rows: list[list], widths: list[float], styles: dict[str, ParagraphStyle], tints: list | None = None) -> Table:
-    data = [[Paragraph(escape(title.upper()), styles["label"]) for title in header]] + rows
-    table = Table(data, colWidths=widths, repeatRows=1)
-    style = [
-        ("BACKGROUND", (0, 0), (-1, 0), PAPER),
-        ("BOX", (0, 0), (-1, -1), .6, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), .4, LINE),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]
-    for row_index, tint in enumerate(tints or [], 1):
-        if tint is not None:
-            style.append(("LINEBEFORE", (0, row_index), (0, row_index), 3, tint))
-    table.setStyle(TableStyle(style))
-    return table
+def zone_flowables(zones: list[dict]) -> list:
+    """Zóny po dvou vedle sebe; příliš dlouhá karta jde přes celou šířku a smí se rozdělit."""
+    gap = 4 * mm
+    column = (USABLE - gap) / 2
+    limit = (PAGE_HEIGHT - LATER_TOP - FOOTER_SPACE) * .82
+    items: list = []
+    pending: list = []
+    for index, zone in enumerate(zones, 1):
+        card = zone_card(zone, index, column)
+        _, height = card.wrap(column, PAGE_HEIGHT)
+        if height > limit:
+            if pending:
+                items.append(grid(pending, USABLE, 2, gap))
+                pending = []
+            items.extend([zone_card(zone, index, USABLE), Spacer(1, gap)])
+            continue
+        pending.append(card)
+        if len(pending) == 2:
+            items.append(grid(pending, USABLE, 2, gap))
+            pending = []
+    if pending:
+        items.append(grid(pending, USABLE, 2, gap))
+    return items
 
 
 def image_flowable(path: str, max_width: float, max_height: float) -> Image | None:
@@ -473,48 +472,16 @@ def image_flowable(path: str, max_width: float, max_height: float) -> Image | No
             return None
         scale = min(max_width / width, max_height / height)
         image = Image(path, width=width * scale, height=height * scale)
-        image.hAlign = "LEFT"
+        image.hAlign = "CENTER"
         return image
     except Exception:
         return None
 
 
-def page_decor(canvas: Canvas, page_number: int, plan: dict) -> None:
-    canvas.saveState()
-    canvas.setFillColor(INK)
-    canvas.rect(0, PAGE_HEIGHT - 7 * mm, PAGE_WIDTH, 7 * mm, stroke=0, fill=1)
-    canvas.setFillColor(BLUE)
-    canvas.rect(0, PAGE_HEIGHT - 7 * mm, 38 * mm, 7 * mm, stroke=0, fill=1)
-    canvas.setFont(FONT_BOLD, 6.6)
-    canvas.setFillColor(WHITE)
-    canvas.drawString(12 * mm, PAGE_HEIGHT - 4.6 * mm, "TRADING DESK")
-    canvas.setFont(FONT, 6.6)
-    canvas.setFillColor(colors.HexColor("#C9D3E3"))
-    kind = "Týdenní náhled" if is_weekly(plan) else "Denní náhled"
-    canvas.drawRightString(PAGE_WIDTH - 12 * mm, PAGE_HEIGHT - 4.6 * mm, f"{kind}  |  {clean(plan.get('market'))}  |  {clean(plan.get('plan_date'))}")
-    canvas.setStrokeColor(LINE)
-    canvas.line(12 * mm, 9 * mm, PAGE_WIDTH - 12 * mm, 9 * mm)
-    canvas.setFont(FONT, 6.6)
-    canvas.setFillColor(MUTED)
-    canvas.drawString(12 * mm, 5.8 * mm, "Pracovní obchodní plán, nikoli predikce trhu")
-    canvas.drawRightString(PAGE_WIDTH - 12 * mm, 5.8 * mm, f"Strana {page_number}")
-    canvas.restoreState()
-
-
-class DecoratedCanvas(Canvas):
-    def __init__(self, *args, plan: dict, **kwargs):
-        self._trading_plan = plan
-        super().__init__(*args, **kwargs)
-
-    def showPage(self) -> None:
-        page_decor(self, self._pageNumber, self._trading_plan)
-        super().showPage()
-
-
 def date_label(plan: dict) -> str:
-    date = clean(plan.get("plan_date"), "")
+    date = clean(plan.get("plan_date"))
     if not date:
-        return "-"
+        return "–"
     try:
         from datetime import date as date_cls, timedelta
         year, month, day = (int(part) for part in date.split("-"))
@@ -523,7 +490,7 @@ def date_label(plan: dict) -> str:
         return date
     if is_weekly(plan):
         end = start + timedelta(days=4)
-        return f"Týden {start.isocalendar()[1]} · {start.day}. {start.month}. – {end.day}. {end.month}. {end.year}"
+        return f"týden {start.isocalendar()[1]} · {start.day}. {start.month}. – {end.day}. {end.month}. {end.year}"
     names = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
     return f"{names[start.weekday()]} {start.day}. {start.month}. {start.year}"
 
@@ -538,59 +505,60 @@ def build_pdf(payload: dict, output_path: str) -> None:
     trades = payload.get("trades") or plan.get("trades") or []
     weekly_context = plan.get("weekly_context") or {}
     weekly = is_weekly(plan)
-    styles = make_styles()
-    margin_x = 14 * mm
-    usable_width = PAGE_WIDTH - 2 * margin_x
+    kind = "Týdenní náhled trhu" if weekly else "Denní náhled trhu"
+    market = clean(plan.get("market"), "–")
 
-    doc = SimpleDocTemplate(
+    def decorate(canvas, page: int, total: int) -> None:
+        if page == 1:
+            cover_band(canvas, PAGE_WIDTH, PAGE_HEIGHT, BAND, kind, f"{market} · {date_label(plan)}",
+                       ("Pracovní plán na týden" if weekly else "Pracovní plán na seanci") + f" · {trade_type(plan.get('session'))}",
+                       [("Stav", label(STATUS, plan.get("status"), clean(plan.get("status")))), ("Zóny", str(len(zones))), ("Red news", preview(plan.get("important_news"), 26))],
+                       MARGIN)
+        else:
+            running_header(canvas, PAGE_WIDTH, PAGE_HEIGHT, MARGIN, f"{kind} · {market}", date_label(plan))
+        running_footer(canvas, PAGE_WIDTH, MARGIN, "Pracovní obchodní plán, nikoli predikce trhu.", page, total)
+
+    doc = BaseDocTemplate(
         output_path,
-        pagesize=landscape(A4),
-        leftMargin=margin_x,
-        rightMargin=margin_x,
-        topMargin=13 * mm,
-        bottomMargin=13 * mm,
-        title=f"{'Týdenní' if weekly else 'Denní'} náhled {clean(plan.get('market'))} {clean(plan.get('plan_date'))}",
+        pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
+        leftMargin=MARGIN, rightMargin=MARGIN, topMargin=LATER_TOP, bottomMargin=FOOTER_SPACE,
+        title=f"{kind} {market} {clean(plan.get('plan_date'))}",
         author="Trading Desk",
         subject="Obchodní náhled",
     )
+    frame_kwargs = {"leftPadding": 0, "rightPadding": 0, "topPadding": 0, "bottomPadding": 0}
+    doc.addPageTemplates([
+        PageTemplate("first", [Frame(MARGIN, FOOTER_SPACE, USABLE, PAGE_HEIGHT - FIRST_TOP - FOOTER_SPACE, id="first", **frame_kwargs)]),
+        PageTemplate("later", [Frame(MARGIN, FOOTER_SPACE, USABLE, PAGE_HEIGHT - LATER_TOP - FOOTER_SPACE, id="later", **frame_kwargs)]),
+    ])
 
-    story: list = []
-    heading = "TÝDENNÍ TRADING NÁHLED" if weekly else "DENNÍ TRADING NÁHLED"
-    title_row = Table([[
-        [Paragraph(heading, styles["title"]), Paragraph(escape(f"{clean(plan.get('market'))} · {date_label(plan)}"), styles["meta"])],
-        Paragraph(f"{escape(trade_type(plan.get('session')))}<br/>{escape(label(STATUS, plan.get('status'), clean(plan.get('status'))))}", styles["meta_right"]),
-    ]], colWidths=[usable_width * .75, usable_width * .25])
-    title_row.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.extend([title_row, Spacer(1, 4 * mm), bias_board(plan, styles, usable_width), Spacer(1, 4 * mm)])
+    story: list = [NextPageTemplate("later"), bias_board(plan), Spacer(1, 4.5 * mm)]
 
-    # Krátký popis trhu: vlastní slova tradera, pod nimi automatický pracovní závěr.
-    description = clean(plan.get("bias_description"), "")
+    # Popis trhu vlastními slovy tradera a pod ním automatický pracovní závěr.
+    description = clean(plan.get("bias_description"))
     conclusion = working_conclusion(plan, refs)
     if description or conclusion:
-        content = [Paragraph("CO SE NA TRHU ODEHRÁVÁ", styles["label"])]
+        content: list = [Tracked("Co se na trhu odehrává", GOLD, 6.6, 1.2)]
         if description:
-            content.append(Paragraph(ptext(description), styles["body"]))
+            content += [Spacer(1, 1 * mm), Paragraph(ptext(description), STYLES["lead"])]
         if conclusion:
-            content.extend([Spacer(1, 1.5 * mm), Paragraph(f"<b>Pracovní závěr:</b> {escape(conclusion)}", styles["body_small"])])
-        story.append(boxed(content, usable_width, WHITE, LINE, padding=9))
+            content += [Spacer(1, 2 * mm), Paragraph(f'<font name="{SEMI}" color="#86601D">Pracovní závěr</font>&nbsp;&nbsp;{escape(conclusion)}', STYLES["small"])]
+        story.append(frame(content, USABLE, background=WHITE, border=LINE, padding=11, radius=6, accent=GOLD))
 
-    if weekly_context.get("vah") is not None and weekly_context.get("val") is not None:
-        source = "value minulého týdne" if weekly else "value minulého týdne z týdenního náhledu"
-        poc = f"  ·  POC {fmt_number(weekly_context.get('poc'))}" if weekly_context.get("poc") is not None else ""
-        story.extend([Spacer(1, 2 * mm), Paragraph(f"<b>Zóny jsou porovnané s {source}:</b> VAH {fmt_number(weekly_context.get('vah'))}{poc}  ·  VAL {fmt_number(weekly_context.get('val'))}", styles["body_small"])])
-
-    story.extend(section_title("Obchodní zóny", f"{len(zones)} zón · co a za jakých podmínek obchoduji", styles))
     if zones:
-        for index, zone in enumerate(zones, 1):
-            story.append(zone_card(zone, index, styles, usable_width))
+        story.extend(section("Obchodní zóny", f"{plural(len(zones), 'zóna', 'zóny', 'zón')} · co a za jakých podmínek obchoduji"))
+        if weekly_context.get("vah") is not None and weekly_context.get("val") is not None:
+            source = "value minulého týdne" if weekly else "value minulého týdne z týdenního náhledu"
+            poc = f" · POC {fmt_number(weekly_context.get('poc'))}" if weekly_context.get("poc") is not None else ""
+            story.append(Paragraph(f'<font name="{SEMI}">Zóny jsou porovnané s {source}:</font> VAH {fmt_number(weekly_context.get("vah"))}{poc} · VAL {fmt_number(weekly_context.get("val"))}', STYLES["small"]))
+            story.append(Spacer(1, 2 * mm))
+        story.extend([PriceMap(zones, weekly_context, refs, USABLE), Spacer(1, 1.6 * mm),
+                      Paragraph("Mapa ceny: zlatě value minulého týdne, čárkovaně POC, čísla jsou zóny níže, fialové značky reference na dojetí.", STYLES["tiny"]),
+                      Spacer(1, 3.5 * mm)])
+        story.extend(zone_flowables(zones))
     else:
-        story.append(Paragraph("Pro tento náhled nejsou uložené žádné obchodní zóny.", styles["body"]))
+        story.extend(section("Obchodní zóny", "co a za jakých podmínek obchoduji"))
+        story.append(Paragraph("Pro tento náhled nejsou uložené žádné obchodní zóny.", STYLES["body"]))
 
     # Kontext z Market Profile.
     context_items = [
@@ -609,30 +577,30 @@ def build_pdf(payload: dict, output_path: str) -> None:
         ("Initial Balance", label(IB, plan.get("initial_balance"))),
     ]
     prices = [(name, fmt_number(plan.get(key))) for name, key in (("High", "ref_high"), ("VAH", "ref_vah"), ("POC", "ref_poc"), ("VAL", "ref_val"), ("Low", "ref_low"), ("Close", "ref_close")) if plan.get(key) is not None]
-    context_table = context_grid(context_items, styles, usable_width)
-    price_table = context_grid(prices, styles, usable_width, per_row=6)
+    context_table = facts(context_items, USABLE, 5, WHITE)
+    price_table = facts(prices, USABLE, 6, GOLD_SOFT)
     if context_table or price_table:
-        story.extend(section_title("Market Profile", "profil minulého týdne" if weekly else "profil předchozího dne", styles))
+        story.extend(section("Market Profile", "profil minulého týdne" if weekly else "profil předchozího dne"))
         if price_table:
-            story.extend([Paragraph("HODNOTY MINULÉHO TÝDNE" if weekly else "HODNOTY PŘEDCHOZÍHO DNE", styles["label"]), price_table, Spacer(1, 2.5 * mm)])
+            story.extend([price_table, Spacer(1, 3 * mm)])
         if context_table:
             story.append(context_table)
 
     if refs:
-        story.extend(section_title("Reference na dojetí", f"{len(refs)} nedokončených aukcí", styles))
-        rows, tints = [], []
+        story.extend(section("Reference na dojetí", plural(len([ref for ref in refs if ref.get("status") != "filled"]), "nedokončená aukce", "nedokončené aukce", "nedokončených aukcí")))
+        rows, accents = [], []
         for ref in refs:
             low, high = ref.get("price_low"), ref.get("price_high")
             price = fmt_number(low) if high in (None, "") or high == low else f"{fmt_number(low)} – {fmt_number(high)}"
             done = ref.get("status") == "filled"
             rows.append([
-                Paragraph(escape(REF_KIND.get(str(ref.get("kind") or ""), "Reference")), styles["body_small"]),
-                Paragraph(escape(price), styles["body_small"]),
-                Paragraph("Dojeto" if done else "Na dojetí", styles["body_small"]),
-                Paragraph(ptext(ref.get("note"), ""), styles["body_small"]),
+                Paragraph(escape(REF_KIND.get(str(ref.get("kind") or ""), "Reference")), STYLES["small_strong"]),
+                Paragraph(escape(price), STYLES["small"]),
+                Paragraph("Dojeto" if done else "Na dojetí", STYLES["small"]),
+                Paragraph(ptext(ref.get("note")), STYLES["small"]),
             ])
-            tints.append(LINE if done else VIOLET)
-        story.append(simple_table(["Typ", "Cena", "Stav", "Poznámka"], rows, [usable_width * .2, usable_width * .2, usable_width * .14, usable_width * .46], styles, tints))
+            accents.append(LINE if done else VIOLET)
+        story.append(data_table(["Typ", "Cena", "Stav", "Poznámka"], rows, [USABLE * .2, USABLE * .18, USABLE * .14, USABLE * .48], accents))
 
     # DiNapoli: trend podle DMA, levely a kde se kryjí (konfluence F5 + F5, shoda expanze + retracement).
     dinapoli = plan.get("dinapoli") or {}
@@ -641,155 +609,135 @@ def build_pdf(payload: dict, output_path: str) -> None:
     dma = {"above": "Nad", "below": "Pod"}
     thrust = {"up": "Nahoru", "down": "Dolů"}
     dn_types = {"confluence": "Konfluence", "agreement": "Shoda"}
-    trend_table = context_grid([
+    trend_table = facts([
         ("3x3 DMA", label(dma, plan.get("dn_dma_3x3"))),
         ("7x5 DMA", label(dma, plan.get("dn_dma_7x5"))),
         ("25x5 DMA", label(dma, plan.get("dn_dma_25x5"))),
         ("Thrust", label(thrust, plan.get("dn_thrust"))),
-        ("Vzory", clean(plan.get("dn_patterns"), "")),
-    ], styles, usable_width)
+        ("Vzory", clean(plan.get("dn_patterns"))),
+    ], USABLE, 5, WHITE)
     if dn_levels or trend_table or filled(plan.get("dn_notes")):
         confluences = sum(1 for cluster in dn_clusters if cluster.get("type") == "confluence")
         agreements = len(dn_clusters) - confluences
-        def plural(count, one, few, many):
-            return f"{count} {one if count == 1 else few if 2 <= count <= 4 else many}"
-        story.extend(section_title("DiNapoli", " · ".join([plural(len(dn_levels), "level", "levely", "levelů"), plural(confluences, "konfluence", "konfluence", "konfluencí"), plural(agreements, "shoda", "shody", "shod")]), styles))
+        story.extend(section("DiNapoli", " · ".join([plural(len(dn_levels), "level", "levely", "levelů"), plural(confluences, "konfluence", "konfluence", "konfluencí"), plural(agreements, "shoda", "shody", "shod")])))
         if trend_table:
-            story.extend([trend_table, Spacer(1, 2.5 * mm)])
+            story.extend([trend_table, Spacer(1, 3 * mm)])
         if dn_levels:
-            matched = {}
+            matched: dict = {}
             for cluster in dn_clusters:
                 for member in cluster.get("members") or []:
                     matched.setdefault(member.get("index"), set()).add(dn_types.get(cluster.get("type"), ""))
-            rows, tints = [], []
+            rows, accents = [], []
             for level in sorted(dn_levels, key=lambda item: -float(item.get("price") or 0)):
                 revisited = level.get("status") == "revisited"
                 rows.append([
-                    Paragraph(escape(clean(level.get("timeframe"), "-")), styles["body_small"]),
-                    Paragraph(f"<b>{escape(clean(level.get('kind')))}</b>", styles["body_small"]),
-                    Paragraph("Revisited" if revisited else "Naked", styles["body_small"]),
-                    Paragraph(escape(fmt_number(level.get("price"))), styles["body_small"]),
-                    Paragraph(escape(" + ".join(sorted(matched.get(level.get("index"), set())))), styles["body_small"]),
-                    Paragraph(ptext(level.get("note"), ""), styles["body_small"]),
+                    Paragraph(escape(clean(level.get("timeframe"), "–")), STYLES["small_strong"]),
+                    Paragraph(f"<b>{escape(clean(level.get('kind')))}</b>", STYLES["small"]),
+                    Paragraph("Revisited" if revisited else "Naked", STYLES["small"]),
+                    Paragraph(escape(fmt_number(level.get("price"))), STYLES["small"]),
+                    Paragraph(escape(" + ".join(sorted(matched.get(level.get("index"), set())))), STYLES["small"]),
+                    Paragraph(ptext(level.get("note")), STYLES["small"]),
                 ])
-                tints.append(GREEN if level.get("group") == "retracement" else AMBER)
-            story.append(simple_table(["TF", "Level", "Stav", "Cena", "Kryje se", "Poznámka"], rows,
-                                      [usable_width * .1, usable_width * .1, usable_width * .13, usable_width * .15, usable_width * .17, usable_width * .35], styles, tints))
+                accents.append(GREEN if level.get("group") == "retracement" else AMBER)
+            story.append(data_table(["TF", "Level", "Stav", "Cena", "Kryje se", "Poznámka"], rows,
+                                    [USABLE * .1, USABLE * .1, USABLE * .13, USABLE * .15, USABLE * .17, USABLE * .35], accents))
         if dn_clusters:
-            rows, tints = [], []
+            rows, accents = [], []
             for cluster in dn_clusters:
                 low, high = cluster.get("low"), cluster.get("high")
                 members = " · ".join(
                     f"{member.get('kind')} {fmt_number(member.get('price'))}" + (" (revisited)" if member.get("status") == "revisited" else "")
                     for member in cluster.get("members") or [])
-                rows.append([Paragraph(escape(dn_types.get(cluster.get("type"), "")), styles["body_small"]),
-                             Paragraph(escape(clean(cluster.get("timeframe"), "-")), styles["body_small"]),
-                             Paragraph(escape(fmt_number(low) if low == high else f"{fmt_number(low)} – {fmt_number(high)}"), styles["body_small"]),
-                             Paragraph(escape(members), styles["body_small"]),
-                             Paragraph(escape(f"{fmt_number(cluster.get('tolerance'))} b"), styles["body_small"])])
-                tints.append(AMBER if cluster.get("type") == "agreement" else GREEN)
-            story.extend([Spacer(1, 2.5 * mm), simple_table(["Druh", "TF", "Pásmo", "Složení", "Tolerance"], rows,
-                                                            [usable_width * .16, usable_width * .1, usable_width * .2, usable_width * .4, usable_width * .14], styles, tints)])
+                rows.append([Paragraph(escape(dn_types.get(cluster.get("type"), "")), STYLES["small_strong"]),
+                             Paragraph(escape(clean(cluster.get("timeframe"), "–")), STYLES["small"]),
+                             Paragraph(escape(fmt_number(low) if low == high else f"{fmt_number(low)} – {fmt_number(high)}"), STYLES["small"]),
+                             Paragraph(escape(members), STYLES["small"]),
+                             Paragraph(escape(f"{fmt_number(cluster.get('tolerance'))} b"), STYLES["small"])])
+                accents.append(AMBER if cluster.get("type") == "agreement" else GREEN)
+            story.extend([Spacer(1, 3 * mm), data_table(["Druh", "TF", "Pásmo", "Složení", "Tolerance"], rows,
+                                                        [USABLE * .16, USABLE * .1, USABLE * .2, USABLE * .4, USABLE * .14], accents)])
         if filled(plan.get("dn_notes")):
-            story.extend([Spacer(1, 2 * mm), Paragraph(ptext(plan.get("dn_notes")), styles["body_small"])])
+            story.extend([Spacer(1, 2 * mm), Paragraph(ptext(plan.get("dn_notes")), STYLES["small"])])
 
     if levels:
-        story.extend(section_title("Klíčové levely", f"{len(levels)} horizontálních úrovní", styles))
-        rows, tints = [], []
+        story.extend(section("Klíčové levely", plural(len(levels), "horizontální úroveň", "horizontální úrovně", "horizontálních úrovní")))
+        rows, accents = [], []
         for index, level in enumerate(levels, 1):
-            kind = str(level.get("kind") or "")
+            kind_key = str(level.get("kind") or "")
             rows.append([
-                Paragraph(escape(clean(level.get("name"), f"Level {index}")), styles["body_small"]),
-                Paragraph(escape(fmt_number(level.get("price"))), styles["body_small"]),
-                Paragraph(escape(LEVEL_KIND.get(kind, "-")), styles["body_small"]),
-                Paragraph(ptext(level.get("source"), ""), styles["body_small"]),
-                Paragraph(ptext(preview(level.get("note"), 140), ""), styles["body_small"]),
+                Paragraph(escape(clean(level.get("name"), f"Level {index}")), STYLES["small_strong"]),
+                Paragraph(escape(fmt_number(level.get("price"))), STYLES["small"]),
+                Paragraph(escape(LEVEL_KIND.get(kind_key, "–")), STYLES["small"]),
+                Paragraph(ptext(level.get("source")), STYLES["small"]),
+                Paragraph(ptext(preview(level.get("note"), 140)), STYLES["small"]),
             ])
-            tints.append(GREEN if kind == "support" else RED if kind == "resistance" else AMBER if kind == "pivot" else None)
-        story.append(simple_table(["Level", "Cena", "Charakter", "Zdroj / shoda", "Poznámka"], rows, [usable_width * .24, usable_width * .12, usable_width * .13, usable_width * .21, usable_width * .30], styles, tints))
+            accents.append(GREEN if kind_key == "support" else RED if kind_key == "resistance" else AMBER if kind_key == "pivot" else LINE)
+        story.append(data_table(["Level", "Cena", "Charakter", "Zdroj / shoda", "Poznámka"], rows, [USABLE * .24, USABLE * .12, USABLE * .13, USABLE * .21, USABLE * .30], accents))
 
     if ideas:
-        story.extend(section_title("Potenciální obchody a targety", f"{len(ideas)} scénářů", styles))
-        rows, tints = [], []
+        story.extend(section("Potenciální obchody a targety", plural(len(ideas), "scénář", "scénáře", "scénářů")))
+        rows, accents = [], []
         for index, idea in enumerate(ideas, 1):
             direction = str(idea.get("direction") or "")
             rows.append([
-                Paragraph(f"<b>{escape(clean(idea.get('name'), f'Scénář {index}'))}</b><br/>{escape(clean(idea.get('trigger'), ''))}", styles["body_small"]),
-                Paragraph(escape(clean(idea.get("zone_name"))), styles["body_small"]),
-                Paragraph("Long" if direction == "long" else "Short", styles["body_small"]),
-                Paragraph(escape(f"{fmt_number(idea.get('entry_price'))} / {fmt_number(idea.get('stop_loss'))}"), styles["body_small"]),
-                Paragraph(escape(f"{fmt_number(idea.get('tp1'))} / {fmt_number(idea.get('tp2'))} / {fmt_number(idea.get('final_tp'))}"), styles["body_small"]),
-                Paragraph(escape(label(IDEA_STATUS, idea.get("status"), "-")), styles["body_small"]),
+                Paragraph(f"<b>{escape(clean(idea.get('name'), f'Scénář {index}'))}</b><br/>{escape(clean(idea.get('trigger')))}", STYLES["small"]),
+                Paragraph(escape(clean(idea.get("zone_name"), "–")), STYLES["small"]),
+                Paragraph("Long" if direction == "long" else "Short", STYLES["small"]),
+                Paragraph(escape(f"{fmt_number(idea.get('entry_price'))} / {fmt_number(idea.get('stop_loss'))}"), STYLES["small"]),
+                Paragraph(escape(f"{fmt_number(idea.get('tp1'))} / {fmt_number(idea.get('tp2'))} / {fmt_number(idea.get('final_tp'))}"), STYLES["small"]),
+                Paragraph(escape(label(IDEA_STATUS, idea.get("status"), "–")), STYLES["small"]),
             ])
-            tints.append(GREEN if direction == "long" else RED)
-        story.append(simple_table(["Scénář", "Zóna", "Směr", "Entry / SL", "TP1 / TP2 / finální", "Stav"], rows, [usable_width * .33, usable_width * .17, usable_width * .08, usable_width * .14, usable_width * .18, usable_width * .10], styles, tints))
+            accents.append(GREEN if direction == "long" else RED)
+        story.append(data_table(["Scénář", "Zóna", "Směr", "Entry / SL", "TP1 / TP2 / finální", "Stav"], rows, [USABLE * .33, USABLE * .17, USABLE * .08, USABLE * .14, USABLE * .18, USABLE * .10], accents))
 
-    notes = [
-        ("Co bias potvrzuje", plan.get("bias_confirm"), BLUE_SOFT, BLUE),
-        ("Co bias ruší", plan.get("bias_invalidation"), RED_SOFT, RED),
-        ("Red news", plan.get("important_news"), AMBER_SOFT, AMBER),
-        ("No-trade podmínky", plan.get("no_trade_conditions"), RED_SOFT, RED),
-        ("Další poznámky", plan.get("general_notes"), PAPER, LINE),
-    ]
-    visible_notes = [item for item in notes if filled(item[1])]
     custom_rows = plan.get("custom_readable") or []
     if custom_rows:
-        story.extend(section_title("Vlastní pole", f"{len(custom_rows)} vyplněných", styles))
-        rows = [[Paragraph(f"<b>{escape(str(row.get('label')))}</b>", styles["body_small"]), Paragraph(ptext(row.get("value")), styles["body_small"])] for row in custom_rows]
-        story.append(simple_table(["Pole", "Hodnota"], rows, [usable_width * .32, usable_width * .68], styles))
+        story.extend(section("Vlastní pole", plural(len(custom_rows), "vyplněné", "vyplněná", "vyplněných")))
+        rows = [[Paragraph(escape(str(row.get("label"))), STYLES["small_strong"]), Paragraph(ptext(row.get("value")), STYLES["small"])] for row in custom_rows]
+        story.append(data_table(["Pole", "Hodnota"], rows, [USABLE * .32, USABLE * .68]))
 
-    if visible_notes:
-        story.extend(section_title("Potvrzení, rizika a poznámky", "exekuční rámec", styles))
-        cells = [boxed([Paragraph(escape(title.upper()), styles["label"]), Paragraph(ptext(value), styles["body_small"])], usable_width / 2 - 4, background, border) for title, value, background, border in visible_notes]
-        rows = [cells[i:i + 2] + ([""] if len(cells[i:i + 2]) == 1 else []) for i in range(0, len(cells), 2)]
-        notes_table = Table(rows, colWidths=[usable_width / 2] * 2)
-        notes_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 2),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ]))
-        story.append(notes_table)
+    notes = [
+        ("Co bias potvrzuje", plan.get("bias_confirm"), GREEN),
+        ("Co bias ruší", plan.get("bias_invalidation"), RED),
+        ("Red news", plan.get("important_news"), AMBER),
+        ("No-trade podmínky", plan.get("no_trade_conditions"), RED),
+        ("Další poznámky", plan.get("general_notes"), GOLD),
+    ]
+    visible = [item for item in notes if filled(item[1])]
+    if visible:
+        story.extend(section("Potvrzení, rizika a poznámky", "exekuční rámec"))
+        column = (USABLE - 4 * mm) / 2
+        cards = [frame([Tracked(title, accent, 6.4, 1.1), Spacer(1, .8 * mm), Paragraph(ptext(value), STYLES["small"])], column, WHITE, LINE, 9, 6, accent) for title, value, accent in visible]
+        story.append(grid(cards, USABLE, 2))
 
     if trades:
-        story.extend(section_title("Realizované obchody navázané na náhled", f"{len(trades)} záznamů", styles))
-        rows = [[
-            Paragraph(escape(clean(trade.get("trade_date"))), styles["body_small"]),
-            Paragraph(escape(clean(trade.get("strategy"))), styles["body_small"]),
-            Paragraph("Long" if trade.get("direction") == "long" else "Short", styles["body_small"]),
-            Paragraph(escape(f"{fmt_number(trade.get('entry_price'))} / {fmt_number(trade.get('exit_price'))}"), styles["body_small"]),
-            Paragraph(escape(f"{fmt_number(trade.get('result_r'))} R"), styles["body_small"]),
-            Paragraph(ptext(trade.get("notes"), ""), styles["body_small"]),
-        ] for trade in trades]
-        story.append(simple_table(["Datum", "Setup", "Směr", "Entry / Exit", "Výsledek", "Poznámka"], rows, [usable_width * .1, usable_width * .2, usable_width * .08, usable_width * .15, usable_width * .1, usable_width * .37], styles))
+        story.extend(section("Realizované obchody navázané na náhled", plural(len(trades), "záznam", "záznamy", "záznamů")))
+        rows, accents = [], []
+        for trade in trades:
+            rows.append([
+                Paragraph(escape(clean(trade.get("trade_date"), "–")), STYLES["small_strong"]),
+                Paragraph(escape(clean(trade.get("strategy"), "–")), STYLES["small"]),
+                Paragraph("Long" if trade.get("direction") == "long" else "Short", STYLES["small"]),
+                Paragraph(escape(f"{fmt_number(trade.get('entry_price'))} / {fmt_number(trade.get('exit_price'))}"), STYLES["small"]),
+                Paragraph(escape(f"{fmt_number(trade.get('result_r'), 2)} R" if trade.get("result_r") is not None else "–"), STYLES["small"]),
+                Paragraph(ptext(trade.get("notes")), STYLES["small"]),
+            ])
+            accents.append(GREEN if trade.get("direction") == "long" else RED)
+        story.append(data_table(["Datum", "Setup", "Směr", "Entry / Exit", "Výsledek", "Poznámka"], rows, [USABLE * .1, USABLE * .2, USABLE * .08, USABLE * .15, USABLE * .1, USABLE * .37], accents))
 
-    valid_images = []
+    images = []
     for screenshot in screenshots:
-        image = image_flowable(str(screenshot.get("path", "")), usable_width / 2 - 16, 78 * mm)
+        image = image_flowable(str(screenshot.get("path", "")), USABLE / 2 - 24, 82 * mm)
         if image is None:
             continue
         caption = clean(screenshot.get("caption"), screenshot.get("original_name") or "Graf")
-        valid_images.append([image, Spacer(1, 1.5 * mm), Paragraph(escape(caption), styles["meta"])])
-    for group_index in range(0, len(valid_images), 2):
+        images.append(frame([image, Spacer(1, 2 * mm), Paragraph(escape(caption), STYLES["small"])], (USABLE - 4 * mm) / 2, WHITE, LINE, 8, 6))
+    for start in range(0, len(images), 2):
         story.append(PageBreak())
-        story.extend(section_title("Grafy", f"{len(valid_images)} screenshotů", styles))
-        group = valid_images[group_index:group_index + 2]
-        if len(group) == 1:
-            group.append("")
-        gallery = Table([group], colWidths=[usable_width / 2] * 2)
-        gallery.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), .5, LINE),
-            ("INNERGRID", (0, 0), (-1, -1), .4, LINE),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 7),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ]))
-        story.append(gallery)
+        story.extend(section("Grafy", plural(len(images), "screenshot", "screenshoty", "screenshotů")))
+        story.append(grid(images[start:start + 2], USABLE, 2))
 
-    doc.build(story, canvasmaker=lambda *args, **kwargs: DecoratedCanvas(*args, plan=plan, **kwargs))
+    doc.build(story, canvasmaker=lambda *args, **kwargs: DocumentCanvas(*args, decorate=decorate, **kwargs))
 
 
 def main() -> None:

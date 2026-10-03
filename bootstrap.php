@@ -15,6 +15,7 @@ require_once __DIR__ . '/lib/hindsight.php';
 require_once __DIR__ . '/lib/svg.php';
 require_once __DIR__ . '/lib/ctrader.php';
 require_once __DIR__ . '/lib/broker.php';
+require_once __DIR__ . '/lib/tradeplan.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -415,6 +416,7 @@ SQL);
     }
     ensure_workspace_schema($pdo);
     ensure_broker_schema($pdo);
+    ensure_tradeplan_schema($pdo);
 }
 
 const PLAN_EXTRA_COLUMNS = [

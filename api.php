@@ -511,6 +511,28 @@ try {
         json_response(save_audit(request_json()), 201);
     }
 
+    /* ---------- obchodní plán */
+
+    if ($action === 'trading_plan' && $method === 'GET') {
+        json_response(tradeplan_state());
+    }
+
+    if ($action === 'trading_plan' && $method === 'POST') {
+        json_response(tradeplan_save(request_json()));
+    }
+
+    if ($action === 'trading_plan' && $method === 'DELETE') {
+        json_response(tradeplan_delete((int)($_GET['id'] ?? 0)));
+    }
+
+    if ($action === 'trading_plan_version' && $method === 'POST') {
+        json_response(tradeplan_new_version((int)(request_json()['id'] ?? 0)), 201);
+    }
+
+    if ($action === 'trading_plan_template' && $method === 'GET') {
+        json_response(['data' => tradeplan_template()]);
+    }
+
     /* ---------- napojení na cTrader */
 
     if ($action === 'broker_state' && $method === 'GET') {
@@ -653,6 +675,7 @@ try {
             'psych_profile' => fetch_all('SELECT * FROM psych_profile'),
             'account_audits' => fetch_all('SELECT * FROM account_audits ORDER BY audit_date, id'),
             'trades' => fetch_all('SELECT * FROM trades ORDER BY trade_date, id'),
+            'trading_plans' => fetch_all('SELECT * FROM trading_plans ORDER BY version, id'),
             'screenshots' => fetch_all('SELECT id, plan_id, trade_id, strategy_id, audit_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots ORDER BY created_at, id'),
         ]);
     }

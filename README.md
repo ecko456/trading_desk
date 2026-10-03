@@ -32,7 +32,8 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - obchodní deník s automatickým výpočtem P&L a R pro ES, NQ, GC, CL, 6E a vlastní trhy,
 - přehled s připraveností na nejbližší session (týdenní a denní náhled, test psychiky, red news, Money audit), průměrem R na obchod, profit factorem, dodržením plánu a equity v R,
 - historie denních i týdenních náhledů,
-- PDF, které nahoře ukáže bias, pod ním krátký popis trhu a potom zóny s podmínkami,
+- **obchodní plán**: účty a risk, obchodní okna, bias, stavba zón, strategie s podmínkami, rutina, psychika a review v jednom dokumentu s verzemi; vzorový návrh pro Market a Volume Profile a export do PDF,
+- PDF náhledu ve vzhledu aplikace: nahoře bias, pod ním krátký popis trhu, mapa ceny a očíslované zóny s podmínkami,
 - export zón, levelů, hodnot profilu a otevřených referencí do TradingView jako Pine Script v6,
 - tmavý i světlý vzhled s většími a čitelnějšími popisky,
 - kompletní ZIP záloha SQLite databáze a screenshotů plus JSON export.
@@ -483,6 +484,29 @@ Přístupové klíče k cTraderu leží v deníku člena, u šifrovaného deník
 očekávaný zůstatek = vstupní stav + čisté výsledky obchodů + vklady − výběry + realizovaný výsledek otevřených pozic
 ```
 
+## Obchodní plán
+
+Záložka **Obchodní plán** je jeden dokument s pravidly, podle kterých obchoduješ. Píše se před seancí (ideálně o víkendu) a během obchodování se jen dodržuje. Plán je rozdělený do deseti kroků, které jdou v navigaci nahoře a v PDF ve stejném pořadí:
+
+1. **Cíle a styl**: proč obchoduješ, styl (Intraday, Hybrid Intraday, Swing), čas na trading, procesní cíle (co ovlivníš) a výsledkové cíle (kam míříš).
+2. **Trhy a čas**: obchodované trhy a obchodní okna v pražském čase se dny a režimem *obchoduji*, *jen sleduji* nebo *neobchoduji*. Pravidlo pro red news a dny bez obchodování.
+3. **Účty a risk**: denní a týdenní stop v R, max. obchodů denně a ztrát v řadě, výpočet velikosti pozice, kdy risk snížit a kdy zvýšit. Účty z deníku připojíš do plánu a u každého nastavíš roli (prop challenge, prop funded, vlastní kapitál, demo), risk na obchod, denní limit ztráty, drawdown prop firmy, profit target a vlastní pravidla.
+4. **Jak stavím bias**: timeframy, postup shora dolů, kdy je bias long, short a balance a kdy ho ruším.
+5. **Jak stavím zóny**: z čeho zóny stavíš (VAH/VAL, POC, naked POC, single prints, poor high/low, excess, IB, DiNapoli…), jak je kreslíš, priorita A, B a C, max. šířka, platnost a kdy zóna padá.
+6. **Strategie**: strategie z knihovny připojíš do plánu a u každé napíšeš, kdy ji obchoduješ, za jakých podmínek, vstup, stop loss, cíle, řízení pozice a hlavně **kdy ji neobchoduješ**. K tomu typ dne, vztah k biasu, minimální prioritu zóny, minimální RR, max. pokusů denně a na kterých účtech plánu se smí obchodovat.
+7. **Den tradera**: rutina před seancí, během ní a po ní.
+8. **Psychika a disciplína**: co dělat ve špatný den, spouštěče a reakce na ně, kdy končíš den.
+9. **Review**: denní, týdenní a měsíční vyhodnocení, co sleduješ a kdy smíš plán změnit.
+10. **Závazek**: prohlášení, podpis a datum.
+
+Tlačítko **Vložit návrh** doplní do prázdných polí můj vzorový plán pro intraday obchodování s Market a Volume Profile (okna kolem otevření New Yorku, risk podle denního risku účtů, pravidla podle charakteru strategií). Co už máš vyplněné, nepřepíše. Návrh je výchozí bod, ne hotový plán: projdi ho a přepiš podle sebe.
+
+**Verze.** Plán má stav *Rozpracovaný* nebo *Platný* a datum platnosti. Změna pravidel je nová verze: tlačítko **Nová verze** v kartě *Verze plánu* uloží současný plán do historie (jen pro čtení) a otevře jeho kopii k úpravám. Každou verzi jde z historie stáhnout v PDF, archivní i smazat.
+
+**PDF.** Tlačítko **PDF** plán uloží a stáhne jako `obchodni-plan-v1.pdf`: titulní pás, plán v kostce (risk, stopy, trhy, okno, počet strategií), obsah, deset kapitol s mapou dne, kartami účtů a strategií (s obrázkem strategie) a podpis na konci.
+
+Plán je uložený v deníku člena, u šifrovaného deníku tedy zašifrovaný. Modul jde v Nastavení skrýt jako ostatní moduly.
+
 ## Export náhledu do PDF
 
 PDF je poskládané tak, aby nejdůležitější věci byly nahoře:
@@ -494,9 +518,11 @@ PDF je poskládané tak, aby nejdůležitější věci byly nahoře:
 
 Prázdné položky se do PDF nevypisují.
 
+Vzhled odpovídá aplikaci: tmavý titulní pás s trhem, datem, stavem a red news, písma Fraunces a Manrope, zlaté akcenty a barvy směru (long zeleně, short červeně, balance oranžově). Zóny jsou očíslované stejně jako na mapě ceny a každá má vlastní kartu. Na dalších stranách je nahoře trh a datum, dole číslo strany.
+
 V otevřeném náhledu klikni na **PDF**. Aplikace nejprve uloží aktuální změny a následně stáhne hotový PDF soubor. Export je také dostupný tlačítkem **PDF** u každého záznamu v historii náhledů.
 
-PDF se vytváří přímo na Ubuntu serveru pomocí lokálních balíčků `python3-reportlab`, `python3-pil` a fontu DejaVu Sans. Nepoužívá cloudovou službu ani dialog Tisk. Při aktualizaci starší instalace spusť znovu `sudo bash deploy/install.sh`, aby se PDF balíčky doplnily.
+PDF se vytváří přímo na Ubuntu serveru pomocí lokálních balíčků `python3-reportlab` a `python3-pil`. Písma Fraunces a Manrope jsou přiložená v `lib/fonts` (licence SIL Open Font License); kdyby chyběla, použije se DejaVu Sans. Nepoužívá cloudovou službu ani dialog Tisk. Při aktualizaci starší instalace spusť znovu `sudo bash deploy/install.sh`, aby se PDF balíčky doplnily.
 
 ## Klíčové levely
 

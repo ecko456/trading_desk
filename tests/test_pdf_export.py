@@ -108,12 +108,38 @@ class PdfExportTests(unittest.TestCase):
         output, temporary = self.build("weekly")
         with temporary:
             text = "\n".join(page.extract_text() or "" for page in PdfReader(str(output)).pages)
-            self.assertIn("TÝDENNÍ TRADING NÁHLED", text)
+            self.assertIn("TÝDENNÍ NÁHLED TRHU", text)
+            self.assertIn("ES · týden 40", text)
+            self.assertIn("Mapa ceny", text)
             self.assertLess(text.index("PRICE ACTION"), text.index("CO SE NA TRHU ODEHRÁVÁ"))
             self.assertLess(text.index("CO SE NA TRHU ODEHRÁVÁ"), text.index("Obchodní zóny"))
             self.assertIn("Ve VAL předchozího týdne", text)
             self.assertIn("KDY OBCHOD NEBERU", text)
             self.assertIn("Chybí definice", text)
+
+    def test_pdf_uses_app_fonts(self):
+        output, temporary = self.build("daily")
+        with temporary:
+            raw = output.read_bytes()
+            self.assertIn(b"Manrope", raw)
+            self.assertIn(b"Fraunces", raw)
+
+    @unittest.skipUnless(PdfReader, "pypdf není nainstalované")
+    def test_user_markup_is_printed_as_text(self):
+        temporary = tempfile.TemporaryDirectory()
+        with temporary:
+            directory = Path(temporary.name)
+            chart = directory / "chart.png"
+            Image.new("RGB", (400, 300), "#101820").save(chart)
+            data = payload(chart, "daily")
+            data["zones"][0]["name"] = "<b>Zóna</b> & <font size='90'>X</font>"
+            data["zones"][0]["long_entry"] = "<para>vstup</para> <img src='/etc/passwd'/>"
+            data["plan"]["bias_description"] = "</para><font color='red'>popis</font>"
+            output = directory / "plan.pdf"
+            build_pdf(data, str(output))
+            text = " ".join(" ".join(page.extract_text() or "" for page in PdfReader(str(output)).pages).split())
+            self.assertIn("<b>Zóna</b> & <font size='90'>X</font>", text)
+            self.assertIn("<img src='/etc/passwd'/>", text)
 
     def test_conclusion_mentions_alignment_and_open_references(self):
         plan = {"pa_weekly": "long", "mp_weekly": "long", "profile_shape": "b"}

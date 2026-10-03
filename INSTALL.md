@@ -209,7 +209,7 @@ Databáze je jeden soubor. Adresář s daty není z webu dostupný a obrázky se
 
 ## PDF export (volitelné)
 
-Export denního náhledu do PDF potřebuje Python s knihovnami `reportlab` a `pillow`.
+Export náhledu a obchodního plánu do PDF potřebuje Python s knihovnami `reportlab` (verze 3.6 a novější) a `pillow`. Písma Fraunces a Manrope jsou součástí aplikace ve složce `lib/fonts`, nic dalšího se neinstaluje.
 
 Na **Windows (WSL) a Linuxu** je instalátor nainstaluje sám, není co řešit.
 

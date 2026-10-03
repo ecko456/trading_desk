@@ -58,6 +58,7 @@ const TRADE_ELEMENTS = [
 /** Moduly aplikace, které jde skrýt. Přehled, náhled, deník, nastavení a záloha zůstávají. */
 const MODULES = [
     'wall' => ['Nástěnka', 'Sdílení s komunitou, komentáře a reakce.'],
+    'tradeplan' => ['Obchodní plán', 'Pravidla tradera: účty a risk, strategie, bias, zóny, rutina a review. Export do PDF.'],
     'archive' => ['Historie náhledů', 'Seznam všech denních a týdenních náhledů.'],
     'calendar' => ['Kalendář', 'Měsíc v kostce, red news a svátky.'],
     'hindsight' => ['Hindsight', 'Rok 5m grafů ES s tvými zónami, biasem a news na jedné ose.'],

@@ -7,6 +7,7 @@ function icon(string $name): string
     $paths = [
         'dashboard' => '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
         'plan' => '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
+        'tradeplan' => '<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9.5 3h5v3h-5z"/><path d="m8.5 11.5 1.5 1.5 2.5-2.5M14 12h2M8.5 16.5h7.5"/>',
         'archive' => '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.3"/><path d="M3.5 3.5v4.8h4.8"/><path d="M12 7.5V12l3 2"/>',
         'calendar' => '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
         'journal' => '<path d="M5 4h10.5A3.5 3.5 0 0 1 19 7.5V20H8.5A3.5 3.5 0 0 1 5 16.5z"/><path d="M9 9h6M9 13h6"/>',
@@ -92,7 +93,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <link rel="preload" href="static/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="<?= asset_url('static/styles.css') ?>">
 </head>
-<body data-method="<?= htmlspecialchars($ws['method']) ?>" data-user-id="<?= (int)$viewer['id'] ?>" data-user-hue="<?= (int)$viewer['avatar_hue'] ?>" data-user-role="<?= htmlspecialchars((string)$viewer['role']) ?>" data-user-encrypted="<?= $viewer['encrypted'] ? '1' : '0' ?>" data-must-change="<?= $viewer['must_change_secret'] ? '1' : '0' ?>">
+<body data-method="<?= htmlspecialchars($ws['method']) ?>" data-user-id="<?= (int)$viewer['id'] ?>" data-user-hue="<?= (int)$viewer['avatar_hue'] ?>" data-user-role="<?= htmlspecialchars((string)$viewer['role']) ?>" data-user-name="<?= htmlspecialchars((string)$viewer['display_name']) ?>" data-user-encrypted="<?= $viewer['encrypted'] ? '1' : '0' ?>" data-must-change="<?= $viewer['must_change_secret'] ? '1' : '0' ?>">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -104,6 +105,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <button class="nav-item" type="button" data-view="wall"<?= module_attr('wall') ?>><?= icon('wall') ?><span>Nástěnka</span><em class="nav-flag is-gold" id="navWallFlag" hidden></em></button>
         <p class="nav-group">Příprava</p>
         <button class="nav-item is-active" type="button" data-view="dashboard"><?= icon('dashboard') ?><span>Přehled</span></button>
+        <button class="nav-item" type="button" data-view="tradeplan"<?= module_attr('tradeplan') ?>><?= icon('tradeplan') ?><span>Obchodní plán</span></button>
         <button class="nav-item" type="button" data-view="plan"><?= icon('plan') ?><span>Náhled trhu</span></button>
         <button class="nav-item" type="button" data-view="archive"<?= module_attr('archive') ?>><?= icon('archive') ?><span>Historie náhledů</span></button>
         <button class="nav-item" type="button" data-view="calendar"<?= module_attr('calendar') ?>><?= icon('calendar') ?><span>Kalendář</span></button>
@@ -422,6 +424,186 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                   <label>Red news<textarea name="important_news" rows="2" placeholder="Čas a událost…"></textarea></label>
                   <label>No-trade podmínky<textarea name="no_trade_conditions" rows="3" placeholder="Kdy nevstupuji…"></textarea></label>
                   <label>Poznámky<textarea name="general_notes" rows="3" placeholder="Další kontext a reference…"></textarea></label>
+                </section>
+              </aside>
+            </div>
+          </form>
+        </section>
+
+        <!-- OBCHODNÍ PLÁN -->
+        <section class="view" id="view-tradeplan">
+          <form id="tpForm" autocomplete="off" novalidate>
+            <div class="plan-toolbar tp-toolbar">
+              <div class="plan-toolbar-fields">
+                <label class="tp-title-field">Název plánu<input name="title" id="tpTitle" maxlength="120" placeholder="Obchodní plán"></label>
+                <label>Platný od<input type="date" name="valid_from" id="tpValidFrom"></label>
+                <label>Stav<select name="status" id="tpStatus"><option value="draft">Rozpracovaný</option><option value="active">Platný</option></select></label>
+                <span class="badge badge-gold tp-version" id="tpVersion">Nový plán</span>
+              </div>
+              <div class="toolbar-actions">
+                <div class="plan-progress" id="tpProgress" title="Kolik částí plánu je vyplněných"><span><i id="tpProgressBar"></i></span><em id="tpProgressText">0 %</em></div>
+                <button class="button button-ghost" type="button" id="tpTemplate">Vložit návrh</button>
+                <button class="button button-ghost" type="button" id="tpPdf"><?= icon('download') ?>PDF</button>
+                <button class="button button-primary" type="submit" id="tpSave">Uložit plán</button>
+              </div>
+            </div>
+
+            <nav class="plan-steps" id="tpSteps" aria-label="Části obchodního plánu">
+              <button type="button" data-tp-step="goals"><i></i>Cíle</button>
+              <button type="button" data-tp-step="time"><i></i>Trhy a čas</button>
+              <button type="button" data-tp-step="risk"><i></i>Účty a risk</button>
+              <button type="button" data-tp-step="bias"><i></i>Bias</button>
+              <button type="button" data-tp-step="zones"><i></i>Zóny</button>
+              <button type="button" data-tp-step="strategies"><i></i>Strategie</button>
+              <button type="button" data-tp-step="routine"><i></i>Den tradera</button>
+              <button type="button" data-tp-step="psychology"><i></i>Psychika</button>
+              <button type="button" data-tp-step="review"><i></i>Review</button>
+              <button type="button" data-tp-step="commitment"><i></i>Závazek</button>
+            </nav>
+
+            <div class="tp-layout">
+              <div class="tp-main">
+                <section class="plan-section" id="tp-goals" data-tp-section="goals">
+                  <div class="section-heading"><div><p class="eyebrow">1 · Cíle a styl</p><h2>Proč a jak obchoduji</h2></div></div>
+                  <p class="section-hint tp-lead">Plán začíná tím, proč obchoduješ a jaký styl ti sedí. Procesní cíle máš plně v rukou (náhled, stop loss, zápis). Výsledkové cíle jsou směr, ne slib.</p>
+                  <div class="field-grid two">
+                    <label>Styl obchodování<select data-tp="style"><option value="intraday">Intraday</option><option value="hybrid">Hybrid Intraday</option><option value="swing">Swing</option></select></label>
+                    <label>Čas na trading<input data-tp="time_budget" maxlength="3000" placeholder="Příprava 45 min, obchodování 2 h po otevření, 15 min zápis"></label>
+                    <label class="span-2">Poslání: proč a jak obchoduji<textarea data-tp="mission" rows="2" placeholder="Trading vedu jako podnikání: výsledek je důsledek dodrženého procesu…"></textarea></label>
+                    <label><span>Procesní cíle <small>jeden na řádek</small></span><textarea data-tp="goals_process" rows="5" placeholder="Před každou seancí mám hotový denní náhled…"></textarea></label>
+                    <label><span>Výsledkové cíle <small>jeden na řádek</small></span><textarea data-tp="goals_outcome" rows="5" placeholder="Kladná expectancy v R za každý měsíc…"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-time" data-tp-section="time">
+                  <div class="section-heading"><div><p class="eyebrow">2 · Trhy a čas</p><h2>Co a kdy obchoduji</h2></div></div>
+                  <p class="section-hint tp-lead">Méně je víc: jeden až dva trhy a pevná okna, kdy obchoduješ, kdy jen sleduješ a kdy vůbec ne. Časy piš v pražském čase.</p>
+                  <p class="subhead">Trhy</p>
+                  <div class="chip-row" id="tpMarkets"></div>
+                  <label class="tp-gap">Poznámka k trhům<input data-tp="markets_note" maxlength="3000" placeholder="Další trh přidám až po 50 obchodech s kladnou expectancy…"></label>
+                  <p class="subhead tp-gap">Časová okna <small>obchoduji · jen sleduji · neobchoduji</small></p>
+                  <div class="tp-windows" id="tpWindows"></div>
+                  <button class="button button-ghost tp-add" type="button" id="tpAddWindow"><?= icon('plus') ?>Přidat okno</button>
+                  <div class="field-grid two tp-gap">
+                    <label>Red news<textarea data-tp="news_rule" rows="3" placeholder="5 minut před a 15 minut po zveřejnění nevstupuji…"></textarea></label>
+                    <label>Dny bez obchodování<textarea data-tp="no_trade_days" rows="3" placeholder="Den FOMC do zveřejnění, NFP do 15:00, svátky v USA…"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-risk" data-tp-section="risk">
+                  <div class="section-heading"><div><p class="eyebrow">3 · Účty a risk</p><h2>Kolik smím ztratit</h2></div><button class="button button-ghost" type="button" data-tp-new-account><?= icon('plus') ?>Nový účet</button></div>
+                  <p class="section-hint tp-lead">Risk se rozhoduje před vstupem, ne v obchodu. Nastav limity pro celý plán v R a pro každý účet v penězích. U prop účtu mají přednost pravidla firmy.</p>
+                  <div class="field-grid four">
+                    <label>Denní stop (R)<input data-tp="risk.daily_stop_r" type="number" step="0.5" min="0" placeholder="2"></label>
+                    <label>Týdenní stop (R)<input data-tp="risk.weekly_stop_r" type="number" step="0.5" min="0" placeholder="5"></label>
+                    <label>Max. obchodů denně<input data-tp="risk.max_trades_day" type="number" step="1" min="0" placeholder="3"></label>
+                    <label>Max. ztrát v řadě<input data-tp="risk.max_losses_row" type="number" step="1" min="0" placeholder="2"></label>
+                  </div>
+                  <p class="subhead tp-gap">Účty v plánu</p>
+                  <div class="tp-items" id="tpAccounts"></div>
+                  <div class="field-grid two tp-gap">
+                    <label class="span-2">Velikost pozice<textarea data-tp="risk.sizing" rows="2" placeholder="Počet kontraktů = risk na obchod / (|vstup − stop loss| × hodnota bodu)…"></textarea></label>
+                    <label>Když se nedaří: snížení risku<textarea data-tp="risk.scale_down" rows="3" placeholder="Po ztrátě 5 R za týden snížím risk na polovinu…"></textarea></label>
+                    <label>Když se daří: zvýšení risku<textarea data-tp="risk.scale_up" rows="3" placeholder="Risk zvýším nejdřív po 40 obchodech s kladnou expectancy…"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-bias" data-tp-section="bias">
+                  <div class="section-heading"><div><p class="eyebrow">4 · Bias</p><h2>Jak stavím bias</h2></div></div>
+                  <p class="section-hint tp-lead">Postup shora dolů, vždy ve stejném pořadí: price action vyšších timeframů, pak profil. Popiš, kdy je bias long, short a balance, a co ho ruší. Denní náhled pak jen tento postup vyplňuje.</p>
+                  <p class="subhead">Timeframy</p>
+                  <div class="chip-row" id="tpTimeframes"></div>
+                  <div class="field-grid three tp-gap">
+                    <label class="span-3"><span>Postup shora dolů <small>krok na řádek</small></span><textarea data-tp="bias.process" rows="4" placeholder="Monthly a Weekly price action: HH/HL nebo LH/LL…"></textarea></label>
+                    <label class="tp-long">Long, když<textarea data-tp="bias.long_when" rows="4"></textarea></label>
+                    <label class="tp-short">Short, když<textarea data-tp="bias.short_when" rows="4"></textarea></label>
+                    <label class="tp-balance">Balance, když<textarea data-tp="bias.balance_when" rows="4"></textarea></label>
+                    <label class="span-3">Kdy bias ruším<textarea data-tp="bias.invalidation" rows="2" placeholder="Akceptace na opačné straně klíčové zóny…"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-zones" data-tp-section="zones">
+                  <div class="section-heading"><div><p class="eyebrow">5 · Zóny</p><h2>Jak stavím zóny</h2></div></div>
+                  <p class="section-hint tp-lead">Zóna je oblast, ne čára, a vzniká tam, kde se potká víc referencí. Priorita určuje, kterou zónu obchoduješ: A vždy, B s potvrzením, C jen sleduješ.</p>
+                  <p class="subhead">Z čeho zóny stavím</p>
+                  <div class="chip-row" id="tpZoneSources"></div>
+                  <div class="field-grid three tp-gap">
+                    <label class="span-3"><span>Jak zónu kreslím <small>pravidlo na řádek</small></span><textarea data-tp="zones.rules" rows="3" placeholder="Zónu stavím jen tam, kde se potkají aspoň dvě reference…"></textarea></label>
+                    <label class="tp-priority-a">Priorita A<textarea data-tp="zones.priority_a" rows="3"></textarea></label>
+                    <label class="tp-priority-b">Priorita B<textarea data-tp="zones.priority_b" rows="3"></textarea></label>
+                    <label class="tp-priority-c">Priorita C<textarea data-tp="zones.priority_c" rows="3"></textarea></label>
+                    <label>Max. šířka zóny (body)<input data-tp="zones.max_width" type="number" step="0.25" min="0" placeholder="8"></label>
+                    <label class="span-2">Platnost zóny<input data-tp="zones.validity" maxlength="3000" placeholder="Denní zóna platí do zasažení a reakce…"></label>
+                    <label class="span-3">Kdy zóna padá<textarea data-tp="zones.invalidation" rows="2"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-strategies" data-tp-section="strategies">
+                  <div class="section-heading"><div><p class="eyebrow">6 · Strategie</p><h2>Co obchoduji a za jakých podmínek</h2></div><button class="button button-ghost" type="button" data-tp-new-strategy><?= icon('plus') ?>Nová strategie</button></div>
+                  <p class="section-hint tp-lead">Do plánu patří jen strategie s jasným kdy, kde a proč. U každé napiš kontext trhu, vztah k biasu, na jakých zónách, vstup, stop, cíle a hlavně kdy ji neobchoduješ.</p>
+                  <div class="tp-items" id="tpStrategies"></div>
+                </section>
+
+                <section class="plan-section" id="tp-routine" data-tp-section="routine">
+                  <div class="section-heading"><div><p class="eyebrow">7 · Den tradera</p><h2>Rutina před, během a po seanci</h2></div></div>
+                  <p class="section-hint tp-lead">Krátké body, které se dají odškrtat. V PDF z nich je zaškrtávací seznam na stůl.</p>
+                  <div class="field-grid three">
+                    <label><span>Před seancí <small>bod na řádek</small></span><textarea data-tp="routine.before" rows="6"></textarea></label>
+                    <label>Během seance<textarea data-tp="routine.during" rows="6"></textarea></label>
+                    <label>Po seanci<textarea data-tp="routine.after" rows="6"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-psychology" data-tp-section="psychology">
+                  <div class="section-heading"><div><p class="eyebrow">8 · Psychika</p><h2>Jak reaguji, když to nejde</h2></div></div>
+                  <p class="section-hint tp-lead">Rozhodni předem, co uděláš, až přijde emoce. Spouštěče piš jako „spouštěč → co udělám“, v PDF z nich bude tabulka.</p>
+                  <div class="field-grid two">
+                    <label>Špatný den<textarea data-tp="psychology.bad_day" rows="4"></textarea></label>
+                    <label>Kdy končím den<textarea data-tp="psychology.stop_rules" rows="4"></textarea></label>
+                    <label class="span-2"><span>Spouštěče <small>spouštěč → co udělám, jeden na řádek</small></span><textarea data-tp="psychology.triggers" rows="4" placeholder="FOMO po ujetém pohybu → počkám na další zónu"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-review" data-tp-section="review">
+                  <div class="section-heading"><div><p class="eyebrow">9 · Review</p><h2>Jak plán vyhodnocuji a měním</h2></div></div>
+                  <p class="section-hint tp-lead">Plán se nemění uprostřed týdne ani po jedné ztrátě. Měň ho podle dat z deníku a každou změnu ulož jako novou verzi.</p>
+                  <div class="field-grid three">
+                    <label>Denně<textarea data-tp="review.daily" rows="3"></textarea></label>
+                    <label>Týdně<textarea data-tp="review.weekly" rows="3"></textarea></label>
+                    <label>Měsíčně<textarea data-tp="review.monthly" rows="3"></textarea></label>
+                    <label><span>Co sleduji <small>metrika na řádek</small></span><textarea data-tp="review.metrics" rows="4"></textarea></label>
+                    <label class="span-2">Kdy smím plán změnit<textarea data-tp="review.change_rules" rows="4"></textarea></label>
+                    <label>Příští review plánu<input type="date" data-tp="review.next_on"></label>
+                  </div>
+                </section>
+
+                <section class="plan-section" id="tp-commitment" data-tp-section="commitment">
+                  <div class="section-heading"><div><p class="eyebrow">10 · Závazek</p><h2>Podpis plánu</h2></div></div>
+                  <p class="section-hint tp-lead">Jedna věta, ke které se zavazuješ. V PDF je pod ní místo na podpis.</p>
+                  <div class="field-grid three">
+                    <label class="span-3">Závazek<textarea data-tp="commitment.statement" rows="2"></textarea></label>
+                    <label class="span-2">Jméno<input data-tp="commitment.signature" maxlength="80"></label>
+                    <label>Datum<input type="date" data-tp="commitment.signed_on"></label>
+                  </div>
+                </section>
+              </div>
+
+              <aside class="tp-aside">
+                <section class="surface tp-guide">
+                  <p class="eyebrow">Jak na obchodní plán</p>
+                  <h2>Pravidla, ne přání</h2>
+                  <ol>
+                    <li><strong>Konkrétně.</strong> „Max. 3 obchody denně“, ne „neobchoduji moc“.</li>
+                    <li><strong>Před seancí.</strong> Plán se píše o víkendu, během obchodování se jen dodržuje.</li>
+                    <li><strong>Kdy ne.</strong> U každé strategie je důležitější, kdy ji neobchoduješ.</li>
+                    <li><strong>Měřitelně.</strong> Risk v R a v penězích, okna v čase, zóny s prioritou.</li>
+                    <li><strong>Verze.</strong> Změna plánu = nová verze, stará zůstane v historii i v PDF.</li>
+                  </ol>
+                  <p class="section-hint">Tlačítko <b>Vložit návrh</b> doplní do prázdných polí vzorový plán pro Market a Volume Profile. Vyplněné nepřepíše.</p>
+                </section>
+                <section class="surface tp-history">
+                  <div class="tp-history-head"><div><p class="eyebrow">Historie</p><h2>Verze plánu</h2></div><button class="button button-ghost" type="button" id="tpNewVersion" hidden>Nová verze</button></div>
+                  <div id="tpVersions"></div>
                 </section>
               </aside>
             </div>
@@ -1129,6 +1311,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/settings.js') ?>" defer></script>
   <script src="<?= asset_url('static/members.js') ?>" defer></script>
   <script src="<?= asset_url('static/broker.js') ?>" defer></script>
+  <script src="<?= asset_url('static/tradeplan.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>

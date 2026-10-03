@@ -29,6 +29,7 @@ const state = {
 const viewLabels = {
   dashboard: ['Přehled', 'Trading journal'],
   plan: ['Náhled trhu', 'Denní náhled'],
+  tradeplan: ['Obchodní plán', 'Pravidla tradera'],
   journal: ['Deník obchodů', 'Realizovaná exekuce'],
   archive: ['Historie náhledů', 'Plán proti realitě'],
   strategies: ['Strategie', 'Co skutečně funguje'],
@@ -154,6 +155,7 @@ function activateView(name) {
   if (name === 'journal') refreshTrades();
   if (name === 'archive') refreshPlans();
   if (name === 'accounts') refreshAccounts();
+  if (name === 'tradeplan') refreshTradePlan();
   if (name === 'strategies') refreshStrategyStats();
   if (name === 'calendar') refreshCalendar();
   if (name === 'psyche') { refreshProfile(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
@@ -2608,6 +2610,7 @@ async function refreshStrategies() {
     state.strategies = result.items || [];
     renderStrategyOptions();
     renderStrategyRail();
+    tradePlanSourcesChanged();
   } catch (error) { toast(error.message, 'error'); }
 }
 
@@ -2883,6 +2886,7 @@ async function refreshAccounts() {
     renderReadiness();
     await refreshAudits();
     refreshBroker({ autoSync: true });
+    tradePlanSourcesChanged();
   } catch (error) { toast(error.message, 'error'); }
 }
 
@@ -3238,12 +3242,14 @@ function bindPlanEvents() {
   const form = $('#planForm');
   enableRadioToggle(form);
   enableRadioToggle($('#tradeForm'));
-  // Lišta náhledu se může zalomit do dvou řádků; kroky pod ní se podle toho posunou.
+  // Lišta náhledu (i obchodního plánu) se může zalomit do dvou řádků; kroky pod ní se
+  // podle toho posunou. Měří se ta lišta, která je právě vidět.
   if ('ResizeObserver' in window) {
-    const toolbar = $('.plan-toolbar');
-    new ResizeObserver(() => {
-      if (toolbar.offsetHeight) document.documentElement.style.setProperty('--toolbar-h', `${toolbar.offsetHeight}px`);
-    }).observe(toolbar);
+    const observer = new ResizeObserver(() => {
+      const visible = $$('.plan-toolbar').find(toolbar => toolbar.offsetHeight > 0);
+      if (visible) document.documentElement.style.setProperty('--toolbar-h', `${visible.offsetHeight}px`);
+    });
+    $$('.plan-toolbar').forEach(toolbar => observer.observe(toolbar));
   }
   form.addEventListener('submit', async event => { event.preventDefault(); try { await savePlan(); } catch (error) { toast(error.message, 'error'); } });
   form.addEventListener('input', event => {
@@ -3691,6 +3697,7 @@ async function init() {
   bindDnEvents();
   bindSettingsEvents();
   bindBrokerEvents();
+  bindTradePlanEvents();
   applyHues(document);
   await loadWorkspace();
   resetPlan({ type: 'daily' });

@@ -30,7 +30,20 @@ Stav k 3. 10. 2026:
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (napojení na cTrader, 3. 10. 2026):
+- Poslední práce (Obchodní plán a redesign PDF, 3. 10. 2026):
+  - nový modul **Obchodní plán** (`lib/tradeplan.php`, `static/tradeplan.js`, pohled `#view-tradeplan`):
+    jeden plán s verzemi v tabulce `trading_plans` (data jako JSON, čištění whitelistem
+    `tradeplan_normalize`). Deset kroků: cíle, trhy a čas (okna v pražském čase), účty a risk,
+    bias, zóny, strategie, den tradera, psychika, review, závazek. „Vložit návrh“ doplní jen
+    prázdná pole (`tradeplan_template`, účty a strategie bere z deníku). Archivní verze jsou
+    jen pro čtení, smazat jde jen archiv;
+  - PDF plánu: `export_trading_plan.py` (A4 na výšku), `pdf.php?trading_plan=ID`;
+  - PDF náhledu přepsané do vzhledu aplikace (`export_plan.py`, A4 na šířku): titulní pás,
+    mapa ceny s očíslovanými zónami, karty zón. Sdílené prvky obou PDF jsou v `pdf_kit.py`,
+    písma Fraunces a Manrope (OFL) v `lib/fonts`, záloha DejaVu;
+  - ověřeno s reportlab 3.6.12, 4.1.0 a 5.0.1 (Ubuntu 22.04 má 3.6.8, ta umí ROUNDEDCORNERS
+    i linearGradient), aktualizace starého deníku bez ztráty dat a PDF pod www-data na Apachi.
+- Předtím (napojení na cTrader, 3. 10. 2026):
   - cTrader Open API jen pro čtení (scope `accounts`). Správce vloží Client ID, Secret a adresu
     pro návrat ve Správě, každý člen si napojí svoje účty v Účtech a auditu (`ctrader.php`, OAuth).
   - Synchronizace stáhne zůstatek, pozice, deals, příkazy (kvůli SL) a pohyby na účtu a zapíše
@@ -56,7 +69,8 @@ Stav k 3. 10. 2026:
   aplikací `hodnoceni-operatoru.html`, jejich historie je v nových repozitářích.
 - Od uživatele se čeká:
   - vzorek exportu obchodů z ATAS (futures) pro import do deníku a Hindsightu;
-  - registrace aplikace cTrader a první test s demo účtem.
+  - registrace aplikace cTrader a první test s demo účtem;
+  - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF.
 
 ## Začátek nové session
 
@@ -135,7 +149,13 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
 - `static/app.js`: hlavní klient.
   - Vedle něj: `auth.js`, `members.js`, `settings.js`, `wall.js`, `dinapoli.js`,
     `tradingview-export.js`, `theme.js`, `styles.css`.
-- `pdf.php` + `export_plan.py`: PDF náhledu přes Python reportlab (`/usr/bin/python3`).
+- PDF přes Python reportlab (`/usr/bin/python3`, jinak `TRADING_PYTHON`):
+  - `pdf.php`: `?id=` náhled, `?trading_plan=` obchodní plán; obrázky dešifruje do dočasných souborů;
+  - `export_plan.py` (náhled), `export_trading_plan.py` (plán), `pdf_kit.py` (písma, paleta,
+    karty, tabulky, titulní pás, záhlaví a zápatí s „Strana X / Y“);
+  - `lib/fonts/`: statické řezy Fraunces a Manrope z variabilních písem (fontTools instancer).
+    Znaky mimo písmo (☐ ● ✓ →) v PDF nepoužívej, kreslí se jako prvky.
+- `lib/tradeplan.php` + `static/tradeplan.js`: Obchodní plán (číselníky `TP_*`, verze, návrh).
 - Ostatní PHP:
   - `backup.php`: ZIP záloha deníku;
   - `file.php`: obrázky a screenshoty;
@@ -153,7 +173,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 107 testů, asi minuta (1 skip bez pypdf)
+# Trading Desk: 117 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory
@@ -180,5 +200,7 @@ php -l api.php            # a další změněné PHP soubory
   adresa pro návrat `http://127.0.0.1:<port>/ctrader.php`.
 - Testy, které ukončují server, musí dočíst odpověď. Jinak zabitý požadavek nechá v `/dev/shm`
   odemčenou kopii šifrovaného deníku a `test_encrypted_journal_is_sealed_on_disk` selže.
+- PDF s jinou verzí reportlabu: venv v `$S` a `TRADING_PYTHON=$S/venv/bin/python` pro testy.
+  Text z PDF čte `pypdf` (potřebuje i `cffi`); nadpisy jsou v PDF velkými písmeny.
 - Hodiny kontejneru jsou reálné. Testy s daty „v budoucnosti“ můžou změnit autodetekci
   formátu data (Hindsight import).
