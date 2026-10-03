@@ -83,7 +83,7 @@ Výchozí produkční umístění:
 /var/lib/trading-journal/users/<id>/trading.sqlite3.sealed deník člena se šifrováním
 /var/lib/trading-journal/users/<id>/uploads/               screenshoty člena
 /var/lib/trading-journal/wall/                             obrázky sdílené na nástěnce
-/var/lib/trading-journal/market.sqlite3                    svíčky ES pro Hindsight (společné, nahrává správce)
+/var/lib/trading-journal/market.sqlite3                    svíčky ES pro Hindsight (společné, nahrává správce dat grafu)
 ```
 
 Apache do adresáře zapisuje jako `www-data`. Data nejsou veřejně dostupná; obrázky se čtou přes `file.php`, a to jen z deníku přihlášeného člena nebo z nástěnky.
@@ -307,7 +307,18 @@ Zóny a bias jsou **stejná data jako denní náhled ES** (případně MES): co 
 
 ### Svíčky: import z ATAS
 
-Svíčky jsou tržní data, ne osobní deník, proto jsou společné pro všechny tradery v `market.sqlite3` a nahrává je jen správce (tlačítko **Data** v Hindsightu). Časy se ukládají v UTC.
+Svíčky jsou tržní data, ne osobní deník, proto jsou společné pro všechny tradery v `market.sqlite3`. Časy se ukládají v UTC.
+
+**Nahrává je jen jeden člověk: správce dat grafu.** Tlačítko **Data** (import, ukázková data a mazání kontraktu) vidí jen on a server to hlídá i u API. Ostatní správci, i když mají jinak plná práva, svíčky nenahrají ani nesmažou. Správcem dat grafu se po aktualizaci stane první správce instalace (ten, kdo ji zakládal). Kdo to je, ukazuje Správa v kartě *Přístup do aplikace*. Změnit ho jde jen příkazem na serveru, ne z aplikace:
+
+```bash
+# kdo to teď je
+sudo -u www-data TRADING_DATA_DIR=/var/lib/trading-journal php /var/www/trading-journal/bin/hindsight-keeper.php
+# předat jinému správci (přihlašovací jméno)
+sudo -u www-data TRADING_DATA_DIR=/var/lib/trading-journal php /var/www/trading-journal/bin/hindsight-keeper.php login
+```
+
+Když správce dat grafu přestane být správcem (někdo ho odebere nebo zablokuje), oprávnění na nikoho nepřejde: svíčky nenahrává nikdo, dokud se příkazem nenastaví znovu. Zpětné doplňování zón (tlačítko **Zpětně**) se svíček netýká a dál ho má každý správce.
 
 1. V ATAS vyexportuj 5m (nebo 1m) svíčky **konkrétního kontraktu**, třeba ESZ6. Export CSV z ATAS má datum ve tvaru rok-den-měsíc a pražský čas, to import pozná sám.
 2. V dialogu **Data** vyber kontrakt. Nic není předvybrané: kontrakt se volí při každém importu.

@@ -127,6 +127,8 @@
 
   const state = {
     admin: document.body.dataset.admin === '1',
+    // Svíčky nahrává jen správce dat grafu (jeden člověk), ne každý správce.
+    keeper: document.body.dataset.keeper === '1',
     range: null,
     firstDate: null,
     lastDate: null,
@@ -1233,11 +1235,12 @@
   function showEmpty() {
     const empty = $('#hsEmpty');
     empty.hidden = false;
-    empty.innerHTML = state.admin
+    const keeperName = state.range?.keeper?.active ? state.range.keeper.name : '';
+    empty.innerHTML = state.keeper
       ? `<h2>Zatím tu nejsou žádné svíčky</h2>
          <p>Nahraj export 5m svíček ES z ATAS. Při importu vybereš kontrakt a uloží se jen jeho období, takže data sedí přesně na ceny kontraktu.</p>
          <div class="hs-pop-actions"><button type="button" class="hs-btn" data-empty="demo">Vyzkoušet na ukázkových datech</button><button type="button" class="hs-btn hs-primary" data-empty="import">Nahrát export z ATAS</button></div>`
-      : `<h2>Zatím tu nejsou žádné svíčky</h2><p>Svíčky ES nahrává správce Trading Desku. Až je nahraje, uvidíš tu svoje zóny, bias a news na jedné ose.</p>`;
+      : `<h2>Zatím tu nejsou žádné svíčky</h2><p>Svíčky ES nahrává ${keeperName ? escapeHtml(keeperName) : 'správce dat grafu'}. Až je nahraje, uvidíš tu svoje zóny, bias a news na jedné ose.</p>`;
   }
 
   /* ------------------------------------------------------------------ pohyb v čase */
@@ -2952,7 +2955,7 @@
 
   $('#hsHelp').addEventListener('click', () => $('#hsHelpDialog').showModal());
 
-  /* ------------------------------------------------------------------ data (správce) */
+  /* ------------------------------------------------------------------ data (správce dat grafu) */
 
   const dataDialog = $('#hsDataDialog');
 

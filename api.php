@@ -159,8 +159,8 @@ try {
     /* ---------- správa */
 
     if ($action === 'admin_users' && $method === 'GET') {
-        require_admin();
-        json_response(['items' => admin_users(), 'registration_open' => registration_open()]);
+        $admin = require_admin();
+        json_response(['items' => admin_users(), 'registration_open' => registration_open(), 'market_keeper' => market_data_keeper_card($admin)]);
     }
 
     if ($action === 'admin_user' && $method === 'POST') {
@@ -325,7 +325,7 @@ try {
     /* ---------- Hindsight: svíčky ES a náhledy v jednom grafu */
 
     if ($action === 'hindsight_range' && $method === 'GET') {
-        json_response(hs_range() + ['prefs' => hs_prefs(), 'admin' => is_admin($user)]);
+        json_response(hs_range() + ['prefs' => hs_prefs(), 'admin' => is_admin($user), 'keeper' => market_data_keeper_card($user)]);
     }
 
     if ($action === 'hindsight_bars' && $method === 'GET') {
@@ -372,9 +372,10 @@ try {
         json_response(['prefs' => hs_save_prefs(request_json())]);
     }
 
-    // Svíčky jsou společné pro všechny, nahrává a maže je jen správce.
+    // Svíčky jsou společné pro všechny, nahrává a maže je jen správce dat grafu
+    // (jeden člověk, ne každý správce; viz market_data_keeper_id).
     if ($action === 'hindsight_import' && $method === 'POST') {
-        require_admin();
+        require_market_data_keeper();
         $file = $_FILES['file'] ?? null;
         $uploadError = is_array($file) ? (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
         if ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
@@ -394,12 +395,12 @@ try {
     }
 
     if ($action === 'hindsight_demo' && $method === 'POST') {
-        require_admin();
+        require_market_data_keeper();
         json_response(hs_generate_demo(), 201);
     }
 
     if ($action === 'hindsight_contract' && $method === 'DELETE') {
-        require_admin();
+        require_market_data_keeper();
         json_response(['removed' => hs_delete_contract((string)($_GET['contract'] ?? ''))]);
     }
 

@@ -15,6 +15,10 @@ uživatele je v `README.md`, sekce Hindsight.
 - `lib/hindsight.php`: server.
   - `market.sqlite3` (sdílená pro všechny, tabulky `bars`, `contracts`).
   - Import CSV z ATAS, kontrakty a roll.
+  - Import, ukázková data a mazání kontraktu smí jen **správce dat grafu** (jeden člověk,
+    `require_market_data_keeper` v `lib/accounts.php`, nastavení `market_data_keeper`
+    v `app.sqlite3`). Výchozí je první správce, změna jen přes `bin/hindsight-keeper.php`.
+    Když přestane být správcem, nenahrává nikdo (oprávnění samo nepřechází).
   - Anotace z deníku uživatele (zóny a bias jsou tytéž jako v denním náhledu).
   - Zámek při otevření NY a verze, prefs (`HS_LAYERS`).
 - `hindsight.php`: stránka (toolbar, dialogy, nápověda).

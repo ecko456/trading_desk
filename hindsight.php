@@ -15,6 +15,8 @@ if (is_hidden('modules', 'hindsight')) {
 security_headers();
 header('Cache-Control: no-store');
 $isAdmin = is_admin($viewer);
+// Svíčky jsou společné: nahrává a maže je jen správce dat grafu, ne každý správce.
+$canImport = is_market_data_keeper($viewer);
 ?>
 <!doctype html>
 <html lang="cs">
@@ -28,7 +30,7 @@ $isAdmin = is_admin($viewer);
   <link rel="preload" href="static/hindsight/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="<?= asset_url('static/hindsight/hindsight.css') ?>">
 </head>
-<body class="hs" data-admin="<?= $isAdmin ? '1' : '0' ?>">
+<body class="hs" data-admin="<?= $isAdmin ? '1' : '0' ?>" data-keeper="<?= $canImport ? '1' : '0' ?>">
   <header class="hs-bar">
     <a class="hs-back" href="./" title="Zpět do Trading Desku" aria-label="Zpět do Trading Desku">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
@@ -69,7 +71,9 @@ $isAdmin = is_admin($viewer);
       <button type="button" class="hs-btn hs-icon" id="hsHelp" title="Ovládání" aria-label="Ovládání"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.3M12 16.6v.2"/></svg></button>
 <?php if ($isAdmin): ?>
       <button type="button" class="hs-btn hs-toggle hs-backfill" id="hsBackfill" aria-pressed="false" title="Zpětné doplňování (jen správce): úpravy minulých dnů se berou, jako by byly před otevřením NY, a neoznačí se jako dodatečné. Pro prezentaci.">Zpětně</button>
-      <button type="button" class="hs-btn" id="hsDataButton" title="Svíčky: import z ATAS, kontrakty">Data</button>
+<?php endif; ?>
+<?php if ($canImport): ?>
+      <button type="button" class="hs-btn" id="hsDataButton" title="Svíčky: import z ATAS, kontrakty (jen ty jako správce dat grafu)">Data</button>
 <?php endif; ?>
     </div>
   </header>
@@ -148,7 +152,7 @@ $isAdmin = is_admin($viewer);
     </form>
   </dialog>
 
-<?php if ($isAdmin): ?>
+<?php if ($canImport): ?>
   <dialog class="hs-dialog hs-data" id="hsDataDialog">
     <form id="hsImportForm" method="dialog">
       <h2>Svíčky ES</h2>

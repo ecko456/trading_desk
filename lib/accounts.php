@@ -541,6 +541,78 @@ function require_admin(): array
     return $user;
 }
 
+/*
+ * Správce dat grafu: svíčky v Hindsightu jsou společné pro všechny, proto je nahrává
+ * a maže jen jeden člověk, ne každý správce. Poprvé se jím stane první správce
+ * instalace (nejnižší id) a uloží se. Změnit ho jde jen příkazem na serveru
+ * (bin/hindsight-keeper.php). Když přestane být aktivním správcem, nenahrává nikdo,
+ * dokud se na serveru nenastaví jiný; oprávnění tak samo nepřejde na dalšího správce.
+ */
+const MARKET_KEEPER_SETTING = 'market_data_keeper';
+
+function market_data_keeper_id(): int
+{
+    $id = (int)setting(MARKET_KEEPER_SETTING, '0');
+    if ($id > 0) {
+        return $id;
+    }
+    $first = app_fetch_one("SELECT id FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id LIMIT 1");
+    if ($first === null) {
+        return 0;
+    }
+    save_setting(MARKET_KEEPER_SETTING, (string)$first['id']);
+    return (int)$first['id'];
+}
+
+function market_data_keeper(): ?array
+{
+    $id = market_data_keeper_id();
+    return $id > 0 ? find_user($id) : null;
+}
+
+function is_market_data_keeper(?array $user): bool
+{
+    return is_admin($user) && (int)$user['id'] === market_data_keeper_id();
+}
+
+/** Pro Správu a Hindsight: kdo data spravuje a jestli to může dělat. */
+function market_data_keeper_card(?array $viewer): array
+{
+    $keeper = market_data_keeper();
+    return [
+        'name' => $keeper !== null ? (string)$keeper['display_name'] : '',
+        'login' => $keeper !== null ? (string)$keeper['login'] : '',
+        'active' => is_admin($keeper),
+        'you' => is_market_data_keeper($viewer),
+    ];
+}
+
+function require_market_data_keeper(): array
+{
+    $user = require_user();
+    if (!is_market_data_keeper($user)) {
+        $keeper = market_data_keeper();
+        json_response(['error' => is_admin($keeper)
+            ? sprintf('Svíčky v Hindsightu nahrává a maže jen %s.', $keeper['display_name'])
+            : 'Svíčky v Hindsightu teď nemůže nahrávat nikdo. Správce dat grafu se nastaví příkazem na serveru.'], 403);
+    }
+    return $user;
+}
+
+/** Nastaví správce dat grafu (jen z příkazové řádky na serveru). */
+function set_market_data_keeper(string $login): array
+{
+    $user = find_user_by_login($login);
+    if ($user === null) {
+        throw new InvalidArgumentException("Uživatel {$login} neexistuje.");
+    }
+    if (!is_admin($user)) {
+        throw new InvalidArgumentException("{$user['display_name']} není aktivní správce. Nejdřív ho ve Správě udělej správcem.");
+    }
+    save_setting(MARKET_KEEPER_SETTING, (string)$user['id']);
+    return $user;
+}
+
 function end_current_session(): void
 {
     $id = current_session_id();

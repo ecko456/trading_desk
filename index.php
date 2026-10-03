@@ -955,6 +955,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
               <div class="section-heading"><div><p class="eyebrow">Nastavení</p><h2>Přístup do aplikace</h2></div></div>
               <div class="switch-row"><div><strong>Otevřené registrace</strong><small>Kdokoli s adresou se může zaregistrovat; přihlásí se až po tvém schválení.</small></div><label class="switch" aria-label="Otevřené registrace"><input type="checkbox" id="registrationOpen"><i></i></label></div>
               <div class="switch-row"><div><strong>Šifrované deníky</strong><small>Členům se šifrováním nejde obnovit heslo ani přečíst deník. Můžeš je jen zablokovat nebo smazat.</small></div></div>
+              <div class="switch-row"><div><strong>Data grafu v Hindsightu</strong><small id="marketKeeperInfo">Svíčky nahrává a maže jen jeden správce.</small></div><span class="badge" id="marketKeeperBadge" hidden>Ty</span></div>
             </section>
           </div>
           <section class="surface settings-card ctrader-settings">

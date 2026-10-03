@@ -30,7 +30,11 @@ Stav k 3. 10. 2026:
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (osobnost a dýchání v Psychice, 3. 10. 2026):
+- Poslední práce (Hindsight, 3. 10. 2026): svíčky nahrává jen **správce dat grafu**,
+  ne každý správce (uživatel chtěl „ať mohu importovat pouze já“). Výchozí je první
+  správce instalace, změna jen příkazem `bin/hindsight-keeper.php` na serveru. Info ve
+  Správě (`#marketKeeperInfo`), testy `HindsightKeeperTests`.
+- Předtím (osobnost a dýchání v Psychice, 3. 10. 2026):
   - `lib/personality.php`: Big Five z IPIP (50 výroků, veřejná doména, náš překlad, bez norem)
     a talenty CliftonStrengths (jen pořadí z reportu uživatele, 34 talentů s naším výkladem pro
     trading; Gallupovy texty v repu nejsou a být nesmí). Tabulka `psych_personality` (id = 1).
@@ -181,7 +185,8 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
 - Ostatní PHP:
   - `backup.php`: ZIP záloha deníku;
   - `file.php`: obrázky a screenshoty;
-  - `bin/setup-token.php`: kód prvního správce.
+  - `bin/setup-token.php`: kód prvního správce;
+  - `bin/hindsight-keeper.php`: kdo smí nahrávat svíčky do Hindsightu.
 - `router.php`: router pro `php -S`, zavírá neveřejné cesty jako Apache.
   - Jiné způsoby spuštění: `start-*.bat/.command` a `.devcontainer/` (Codespaces).
 - `tests/`: Python HTTP testy (spouští vlastní `php -S`) a Node testy (`*.js`).
@@ -195,7 +200,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 126 testů, asi minuta a půl (1 skip bez pypdf)
+# Trading Desk: 129 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory

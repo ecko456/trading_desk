@@ -486,5 +486,95 @@ class HindsightTimeTests(unittest.TestCase):
         self.assertEqual(lines[8], "ESU6 ESZ6")
 
 
+
+@unittest.skipIf(PHP is None, "PHP není nainstalované")
+class HindsightKeeperTests(unittest.TestCase):
+    """Svíčky nahrává a maže jen správce dat grafu (jeden člověk), ne každý správce."""
+
+    def setUp(self):
+        self.server = Server()
+        self.owner = Client(self.server)
+        self.owner.api("GET", "auth_state")
+        token = (self.server.data / "setup-token.txt").read_text().strip()
+        status, result = self.owner.api("POST", "setup", {"token": token, "login": "majitel", "display_name": "Majitel", "secret_mode": "key"})
+        self.assertEqual(status, 201, result)
+        self.second = self.user("druhy", promote=True)
+
+    def tearDown(self):
+        self.server.stop()
+
+    def user(self, login, promote=False):
+        client = Client(self.server)
+        status, result = client.api("POST", "register", {"login": login, "display_name": login.title(), "secret_mode": "password", "password": "member-password-1"})
+        self.assertEqual(status, 201, result)
+        self.owner.api("POST", "admin_user", {"id": result["user"]["id"], "op": "approve"})
+        if promote:
+            self.assertEqual(self.owner.api("POST", "admin_user", {"id": result["user"]["id"], "op": "promote"})[0], 200)
+        status, _ = client.api("POST", "login", {"login": login, "secret": "member-password-1"})
+        self.assertEqual(status, 200)
+        client.user_id = result["user"]["id"]
+        return client
+
+    def keeper_cli(self, *args):
+        return subprocess.run([PHP, "bin/hindsight-keeper.php", *args], cwd=ROOT, capture_output=True, text=True,
+                              env={"PATH": "/usr/bin:/bin", "TRADING_DATA_DIR": str(self.server.data)}, timeout=30)
+
+    def can_import(self, client):
+        return [upload(client, "ESZ6")[0], client.api("POST", "hindsight_demo")[0],
+                client.request("DELETE", "/api.php?action=hindsight_contract&contract=ESZ6")[0]]
+
+    def data_button(self, client):
+        status, body, _ = client.request("GET", "/hindsight.php", raw=True)
+        self.assertEqual(status, 200)
+        return b'id="hsDataButton"' in body
+
+    def test_only_first_admin_imports(self):
+        # Druhý správce svíčky nenahraje, nesmaže ani nevytvoří ukázková data.
+        status, result = upload(self.second, "ESZ6")
+        self.assertEqual(status, 403, result)
+        self.assertIn("jen Majitel", result["error"])
+        self.assertEqual(self.can_import(self.second), [403, 403, 403])
+        self.assertEqual(self.can_import(self.user("clen")), [403, 403, 403])
+        self.assertEqual(self.can_import(self.owner), [201, 201, 200])
+        # Stránka i API to klientovi řeknou.
+        self.assertTrue(self.data_button(self.owner))
+        self.assertFalse(self.data_button(self.second))
+        keeper = self.second.api("GET", "hindsight_range")[1]["keeper"]
+        self.assertEqual((keeper["name"], keeper["active"], keeper["you"]), ("Majitel", True, False))
+        self.assertTrue(self.owner.api("GET", "hindsight_range")[1]["keeper"]["you"])
+        self.assertEqual(self.second.api("GET", "admin_users")[1]["market_keeper"]["login"], "majitel")
+        # Zpětné doplňování (vlastní zóny) dál smí každý správce.
+        _, body, _ = self.second.request("GET", "/hindsight.php", raw=True)
+        self.assertIn(b'id="hsBackfill"', body)
+
+    def test_keeper_changes_only_on_server(self):
+        self.assertIn("jen Majitel (majitel)", self.keeper_cli().stdout)
+        result = self.keeper_cli("clen-neexistuje")
+        self.assertEqual(result.returncode, 1)
+        member = self.user("clen")
+        result = self.keeper_cli("clen")
+        self.assertEqual(result.returncode, 1, "člen bez role správce data spravovat nemůže")
+        self.assertIn("není aktivní správce", result.stderr)
+
+        result = self.keeper_cli("druhy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(upload(self.second, "ESZ6")[0], 201)
+        self.assertEqual(upload(self.owner, "ESZ6")[0], 403)
+        self.assertEqual(upload(member, "ESZ6")[0], 403)
+
+        # Když správce dat přestane být správcem, oprávnění nepřejde na nikoho dalšího.
+        self.assertEqual(self.owner.api("POST", "admin_user", {"id": self.second.user_id, "op": "demote"})[0], 200)
+        status, result = upload(self.owner, "ESZ6")
+        self.assertEqual(status, 403, result)
+        self.assertIn("nemůže nahrávat nikdo", result["error"])
+        self.assertFalse(self.owner.api("GET", "admin_users")[1]["market_keeper"]["active"])
+        self.assertIn("už není aktivní správce", self.keeper_cli().stdout)
+        self.assertEqual(self.keeper_cli("majitel").returncode, 0)
+        self.assertEqual(upload(self.owner, "ESZ6")[0], 201)
+
+    def test_script_is_not_public(self):
+        self.assertEqual(self.owner.request("GET", "/bin/hindsight-keeper.php")[0], 404)
+
+
 if __name__ == "__main__":
     unittest.main()

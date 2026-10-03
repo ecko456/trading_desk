@@ -193,12 +193,24 @@ function downloadIssuedKey() {
 
 /* ---------------------------------------------------------------- správa členů */
 
+// Svíčky v Hindsightu nahrává jen jeden správce; změní se jen příkazem na serveru.
+function renderMarketKeeper(keeper) {
+  const info = $('#marketKeeperInfo');
+  if (!info || !keeper) return;
+  const command = 'bin/hindsight-keeper.php <login>';
+  info.textContent = keeper.active
+    ? `Svíčky nahrává a maže jen ${keeper.name} (${keeper.login}). Ostatní správci ne. Změnit to jde jen příkazem na serveru: ${command}.`
+    : `Správce dat grafu ${keeper.name || ''} už není aktivní správce, svíčky teď nenahrává nikdo. Nastav jiného příkazem na serveru: ${command}.`;
+  $('#marketKeeperBadge').hidden = !keeper.you;
+}
+
 async function refreshAdmin() {
   if (!isAdminViewer()) return;
   try {
     const result = await api('admin_users');
     membersState.users = result.items || [];
     $('#registrationOpen').checked = Boolean(result.registration_open);
+    renderMarketKeeper(result.market_keeper);
     renderAdmin();
     refreshMe();
   } catch (error) { toast(error.message, 'error'); }
