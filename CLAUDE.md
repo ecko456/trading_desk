@@ -24,13 +24,24 @@ Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a pozn�
 
 ## Kde jsme skončili
 
-Stav k 2. 10. 2026:
+Stav k 3. 10. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (Strategie, 2. 10. 2026):
+- Poslední práce (napojení na cTrader, 3. 10. 2026):
+  - cTrader Open API jen pro čtení (scope `accounts`). Správce vloží Client ID, Secret a adresu
+    pro návrat ve Správě, každý člen si napojí svoje účty v Účtech a auditu (`ctrader.php`, OAuth).
+  - Synchronizace stáhne zůstatek, pozice, deals, příkazy (kvůli SL) a pohyby na účtu a zapíše
+    uzavřené pozice jako obchody. Money audit napojeného účtu bere zůstatek z cTraderu, při
+    termínu sám, bez screenshotu.
+  - **Proti skutečnému cTraderu to ještě nikdo nezkoušel.** Testy běží proti simulaci
+    (`tests/ctrader_mock.py`). Uživatel musí zaregistrovat aplikaci na openapi.ctrader.com
+    (Spotware ji schvaluje) a vyzkoušet demo účet. Nejisté body: jestli cTrader vrací `state`
+    (ověřuje se i bez něj, cookie), výčty a int64 v JSON (text i číslo), sémantika komise
+    (čistý výsledek se bere z rozdílu verzí zůstatku, vzorec je jen záloha).
+- Předtím (Strategie, 2. 10. 2026):
   - SVG obrázky strategií (`lib/svg.php`: whitelist prvků a atributů, bez entit, `file.php`
     vydává SVG se sandbox CSP). SVG jde jen ke strategii, ne k náhledu, obchodu ani auditu;
   - pravý sloupec „Moje strategie“ v záložce Strategie: „+ Přidat strategii“, karty s náhledem
@@ -44,7 +55,8 @@ Stav k 2. 10. 2026:
 - **Projekty jsou rozdělené do tří repozitářů** (1. 10. 2026). Odměny odsud zmizely i s původní
   aplikací `hodnoceni-operatoru.html`, jejich historie je v nových repozitářích.
 - Od uživatele se čeká:
-  - vzorek CSV s obchody pro import do Hindsightu.
+  - vzorek exportu obchodů z ATAS (futures) pro import do deníku a Hindsightu;
+  - registrace aplikace cTrader a první test s demo účtem.
 
 ## Začátek nové session
 
@@ -110,6 +122,15 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
 - `lib/wall.php`: nástěnka. Sdílí se snímek, ne živý odkaz.
 - `lib/workspace.php`: prostředí na míru (metodika, prvky, vlastní pole, trhy, moduly).
 - `lib/svg.php`: čištění SVG obrázků strategií před uložením.
+- cTrader:
+  - `lib/ctrader.php`: nastavení aplikace, OAuth (token, obnova), klient WebSocketu s JSON
+    zprávami (port 5036), čísla zpráv podle proto souborů Spotware;
+  - `lib/broker.php`: tabulky `broker_*` v deníku, propojení s účtem, synchronizace, import
+    pozic do `trades` (`external_ref`), automatický audit, oprava očekávaného zůstatku
+    (`broker_balance_adjustment`);
+  - `ctrader.php`: start přihlášení a návrat (cookie `td_ctrader` svázaná s členem);
+  - `static/broker.js`: panel v Účtech a auditu a karta ve Správě;
+  - `TRADING_CTRADER_SOCKET`, `_TOKEN_URL`, `_AUTH_URL` přesměrují spojení (jen testy).
 - `lib/hindsight.php`, `hindsight.php`, `static/hindsight/`: Hindsight (viz jeho CLAUDE.md).
 - `static/app.js`: hlavní klient.
   - Vedle něj: `auth.js`, `members.js`, `settings.js`, `wall.js`, `dinapoli.js`,
@@ -132,7 +153,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 99 testů, asi minuta (1 skip bez pypdf)
+# Trading Desk: 107 testů, asi minuta (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory
@@ -154,5 +175,10 @@ php -l api.php            # a další změněné PHP soubory
   - `playwright install` nespouštěj.
 - `$S` = scratchpad session. Pomocné skripty a data drž tam. Kontejner je dočasný, takže co
   se má zachovat, patří do repa (commit a push).
+- cTrader v prohlížeči: spusť simulaci (`CtraderMock()` z `tests/ctrader_mock.py`, vypíše
+  `env`) a PHP server s těmi proměnnými. Client ID `test-client`, Secret `test-secret`,
+  adresa pro návrat `http://127.0.0.1:<port>/ctrader.php`.
+- Testy, které ukončují server, musí dočíst odpověď. Jinak zabitý požadavek nechá v `/dev/shm`
+  odemčenou kopii šifrovaného deníku a `test_encrypted_journal_is_sealed_on_disk` selže.
 - Hodiny kontejneru jsou reálné. Testy s daty „v budoucnosti“ můžou změnit autodetekci
   formátu data (Hindsight import).

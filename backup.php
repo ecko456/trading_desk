@@ -30,6 +30,12 @@ try {
     $temporaryDb = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '.sqlite3';
     $temporary[] = $temporaryDb;
     $journal->snapshotTo($temporaryDb);
+    // ZIP je odemčený; přístupové klíče k cTraderu do něj nepatří (po obnovení se účty napojí znovu).
+    $copy = new PDO('sqlite:' . $temporaryDb);
+    if ($copy->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broker_connections'")->fetchColumn() !== false) {
+        $copy->exec("UPDATE broker_connections SET access_token = '', refresh_token = '', expires_at = 0");
+    }
+    $copy = null;
 
     $temporaryZip = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '.zip';
     $temporary[] = $temporaryZip;

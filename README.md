@@ -458,7 +458,30 @@ tolerance          = 0,4 * risk na den (bez risku 0,2 % vstupního stavu, minim�
 
 Kontrola tedy není přesná na dolary, ale odchylku zhruba od 0,4R nahoru označí jako nesedící evidenci, uvede směr odchylky a přepočte ji na násobek průměrného risku. Závěr obsahuje také procento obchodů, u kterých byl dodržen plán, průměrné hodnocení exekuce a výsledek aktuálního měsíce v R i v penězích. Win rate se zde záměrně nepočítá.
 
-Screenshot je u auditu povinný a vynucuje ho formulář v prohlížeči.
+Screenshot je u auditu povinný a vynucuje ho formulář v prohlížeči. Výjimkou je účet napojený na cTrader (viz níže): tam se zůstatek bere přímo od brokera.
+
+## Napojení na cTrader
+
+Účty u brokera nebo prop firmy, která běží na platformě **cTrader**, jde napojit přes oficiální cTrader Open API (Spotware). Napojení je **jen pro čtení** (oprávnění `accounts`): Trading Desk vidí zůstatek, equity, otevřené pozice a historii obchodů, ale obchodovat neumí. Futures obchodované přes ATAS (Rithmic, CQG) cTrader nevidí.
+
+**Zapnutí (jednou, správce).** Na [openapi.ctrader.com](https://openapi.ctrader.com/apps) se správce přihlásí svým cTrader ID a přidá aplikaci. Spotware ji před použitím schvaluje. Do *Redirect URIs* aplikace přidá adresu pro návrat, kterou mu Trading Desk ukáže ve **Správě** v kartě *cTrader Open API* (`https://…/trading/ctrader.php`). Tam pak vloží i Client ID a Secret. Secret zůstane jen na serveru v datovém adresáři a do prohlížeče se už nevrací.
+
+**Napojení účtu (každý člen sám).** V **Účtech a auditu** klikne na **Napojit cTrader**, přihlásí se cTrader ID a povolí účty. Po návratu u každého účtu cTraderu vybere:
+
+- **Účet v deníku**: nový (vytvoří se s názvem brokera a čísla účtu), nebo stávající.
+- **Zapsat obchody od**: pozice uzavřené od toho dne se zapíšou do deníku, nejvýš rok zpátky. Nový účet dostane vstupní stav podle zůstatku k tomu dni. U stávajícího účtu nech dnešek, ať se ručně zapsané obchody nezdvojí.
+
+Přístupové klíče k cTraderu leží v deníku člena, u šifrovaného deníku tedy zašifrované. ZIP záloha je odemčená, proto se do ní klíče nedávají; po obnovení ze zálohy stačí účet znovu napojit. Přístup jde kdykoli zrušit i v cTrader ID v nastavení aplikací.
+
+**Co se zapíše.** Každá uzavřená pozice je jeden obchod deníku: trh (symbol), směr, vstup (průměrná cena pozice), výstup (průměr uzavírajících obchodů), objem v lotech, poplatky (komise, swap, převod měny) a čistý výsledek v měně účtu. Čistý výsledek se bere přesně podle změny zůstatku, kterou cTrader u obchodu hlásí. Když měla pozice při vstupu stop loss, dopočte se i risk a R; posunutý stop (třeba na break-even) se pro risk nepoužije. Bez stop lossu zůstane R prázdné (v deníku „—“) a risk doplníš ručně. Strategii, hodnocení a poznámky doplníš jako u ručního obchodu. Smazaný obchod se při další synchronizaci znovu neobjeví a stejná pozice se nezapíše dvakrát. Částečně uzavřená pozice se zapíše, až se uzavře celá.
+
+**Synchronizace** proběhne při propojení, tlačítkem **Synchronizovat** a sama při otevření aplikace, když od poslední uběhlo víc než 10 minut. Na pozadí bez přihlášení neběží, protože šifrovaný deník server bez člena neotevře.
+
+**Money audit napojeného účtu** se udělá sám, jakmile je na řadě (každých 30 dní), a bez screenshotu: nahlášený zůstatek je zůstatek z cTraderu. Kdykoli ho spustíš i tlačítkem **Money audit z cTraderu**. Očekávaný zůstatek u napojeného účtu zahrnuje i vklady a výběry (třeba výplatu z prop účtu) od začátku importu a výsledek částečně uzavřených pozic:
+
+```text
+očekávaný zůstatek = vstupní stav + čisté výsledky obchodů + vklady − výběry + realizovaný výsledek otevřených pozic
+```
 
 ## Export náhledu do PDF
 

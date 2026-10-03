@@ -1358,6 +1358,34 @@ td .share-status { margin-right: 6px; vertical-align: middle; }
   .strategy-cards { grid-auto-columns: 78%; }
 }
 
+/* Napojení na cTrader (Účty a audit, Správa) */
+.broker-panel { padding: 18px 20px; margin-bottom: 16px; }
+.broker-panel .section-heading { margin-bottom: 8px; }
+.broker-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.broker-note { margin: 0; max-width: 78ch; color: var(--text-3); font-size: 13.5px; line-height: 1.55; }
+.broker-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; margin-top: 14px; }
+.broker-list:empty { display: none; }
+.broker-card { display: grid; align-content: start; min-width: 0; }
+.broker-card.is-pending { border-style: dashed; border-color: var(--accent-line); }
+.broker-card .account-head p b { color: var(--text-2); font-weight: 650; }
+.broker-card .account-actions { flex-wrap: wrap; align-items: center; }
+.broker-card .account-actions .spacer { flex: 1; }
+.broker-link { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
+.broker-hint { margin: 10px 0 0; color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
+.broker-error { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--red-soft); color: var(--red); font-size: 13px; }
+.broker-empty { margin: 14px 0 0; color: var(--text-3); font-size: 13px; }
+.broker-positions { margin-top: 14px; }
+.broker-positions table { font-size: 13px; }
+.broker-positions td, .broker-positions th { padding-top: 7px; padding-bottom: 7px; }
+.ctrader-settings { margin-bottom: 16px; }
+.ctrader-steps { display: grid; gap: 5px; margin: 0 0 16px; padding-left: 20px; color: var(--text-2); font-size: 13.5px; line-height: 1.5; }
+.ctrader-steps a { color: var(--accent); }
+.ctrader-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.copy-field { display: flex; gap: 8px; }
+.copy-field input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.ctrader-form-actions { display: flex; align-items: center; gap: 8px; }
+.ctrader-form-actions .spacer { flex: 1; }
+
 @media (min-width: 1760px) {
   .bias-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1405,7 +1433,8 @@ td .share-status { margin-right: 6px; vertical-align: middle; }
   .plan-inspector { grid-template-columns: 1fr; }
   .plan-inspector .bias-block { grid-row: auto; }
   .readiness-grid, .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .account-list, .backup-layout { grid-template-columns: 1fr; }
+  .account-list, .backup-layout, .broker-list { grid-template-columns: 1fr; }
+  .broker-link, .ctrader-form { grid-template-columns: 1fr; }
   .discipline-layout, .profile-grid { grid-template-columns: 1fr; }
   .checkbox-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .conditions { grid-template-columns: 1fr; }

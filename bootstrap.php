@@ -13,6 +13,8 @@ require_once __DIR__ . '/lib/wall.php';
 require_once __DIR__ . '/lib/workspace.php';
 require_once __DIR__ . '/lib/hindsight.php';
 require_once __DIR__ . '/lib/svg.php';
+require_once __DIR__ . '/lib/ctrader.php';
+require_once __DIR__ . '/lib/broker.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -412,6 +414,7 @@ SQL);
         $pdo->exec('PRAGMA user_version = 2');
     }
     ensure_workspace_schema($pdo);
+    ensure_broker_schema($pdo);
 }
 
 const PLAN_EXTRA_COLUMNS = [
@@ -1479,11 +1482,16 @@ function account_overview(array $account): array
     $reference = $last === null ? $registeredAt : (string)$last['audit_date'];
     $daysSince = max(0, days_between($reference, $today));
 
+    $adjustment = broker_balance_adjustment($id);
+
     $account['trades_count'] = (int)($totals['trades'] ?? 0);
     $account['net_usd'] = (float)($totals['net_usd'] ?? 0);
     $account['net_r'] = (float)($totals['net_r'] ?? 0);
     $account['fees_total'] = (float)($totals['fees'] ?? 0);
-    $account['expected_balance'] = (float)$account['starting_balance'] + $account['net_usd'];
+    // U účtu napojeného na cTrader patří k očekávanému stavu i vklady, výběry a rozpracované pozice.
+    $account['expected_balance'] = (float)$account['starting_balance'] + $account['net_usd'] + $adjustment['total'];
+    $account['broker_adjustment'] = $adjustment;
+    $account['broker_link'] = broker_account_summary($id);
     $account['tolerance'] = audit_tolerance($account);
     $account['last_audit'] = $last;
     $account['audited_before'] = $last !== null;
@@ -1508,7 +1516,8 @@ function account_audit_result(array $account, string $auditDate, float $reported
         [$id, substr($auditDate, 0, 7)]
     ) ?? [];
 
-    $expected = (float)$account['starting_balance'] + (float)($stats['net_usd'] ?? 0);
+    $adjustment = broker_balance_adjustment($id);
+    $expected = (float)$account['starting_balance'] + (float)($stats['net_usd'] ?? 0) + $adjustment['total'];
     $difference = $reportedBalance - $expected;
     $tolerance = audit_tolerance($account);
     $status = abs($difference) <= $tolerance ? 'ok' : 'mismatch';
@@ -1546,6 +1555,13 @@ function account_audit_result(array $account, string $auditDate, float $reported
             format_money($tolerance),
             $direction,
             $scale
+        );
+    }
+    if ($adjustment['cash'] != 0.0 || $adjustment['open'] != 0.0) {
+        $parts[] = sprintf(
+            'Očekávaný zůstatek zahrnuje vklady a výběry z cTraderu (%s) a výsledek částečně uzavřených pozic (%s).',
+            format_money($adjustment['cash']),
+            format_money($adjustment['open'])
         );
     }
     if ($openTrades > 0) {

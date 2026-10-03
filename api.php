@@ -176,6 +176,16 @@ try {
         json_response(['registration_open' => registration_open()]);
     }
 
+    if ($action === 'admin_ctrader' && $method === 'GET') {
+        require_admin();
+        json_response(ctrader_admin_state());
+    }
+
+    if ($action === 'admin_ctrader' && $method === 'POST') {
+        require_admin();
+        json_response(ctrader_save_settings(request_json()));
+    }
+
     /* ---------- přizpůsobené prostředí */
 
     if ($action === 'workspace' && $method === 'GET') {
@@ -499,6 +509,30 @@ try {
 
     if ($action === 'audit' && in_array($method, ['POST', 'PUT'], true)) {
         json_response(save_audit(request_json()), 201);
+    }
+
+    /* ---------- napojení na cTrader */
+
+    if ($action === 'broker_state' && $method === 'GET') {
+        json_response(broker_state());
+    }
+
+    if ($action === 'broker_account' && $method === 'POST') {
+        json_response(broker_link_account(request_json()));
+    }
+
+    if ($action === 'broker_account' && $method === 'DELETE') {
+        broker_remove_account((int)($_GET['id'] ?? 0));
+        json_response(broker_state());
+    }
+
+    if ($action === 'broker_sync' && $method === 'POST') {
+        $data = request_json();
+        json_response(broker_sync(isset($data['id']) ? (int)$data['id'] : null));
+    }
+
+    if ($action === 'broker_audit' && $method === 'POST') {
+        json_response(broker_audit_now((int)(request_json()['id'] ?? 0)), 201);
     }
 
     if ($action === 'upload' && $method === 'POST') {

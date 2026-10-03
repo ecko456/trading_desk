@@ -64,6 +64,13 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+/** Cena obchodu s tolika desetinnými místy, kolik má (forex 1,0985), nejméně se dvěma. */
+function tradePrice(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : '—';
+}
+
 function displayNumber(value, digits = 2) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toLocaleString('cs-CZ', { minimumFractionDigits: digits, maximumFractionDigits: digits }) : '—';
@@ -151,7 +158,7 @@ function activateView(name) {
   if (name === 'calendar') refreshCalendar();
   if (name === 'psyche') { refreshProfile(); refreshDiscipline(); refreshPsychLatest(); refreshCalibration(); }
   if (name === 'wall') { refreshWall(); refreshMembers(); }
-  if (name === 'admin') refreshAdmin();
+  if (name === 'admin') { refreshAdmin(); refreshCtraderAdmin(); }
   if (name === 'settings') renderSettings();
 }
 
@@ -2779,11 +2786,15 @@ function renderAccounts() {
         ? `<span class="badge badge-soon">${days === 0 ? 'Audit dnes' : `Audit za ${days} ${dayWord(days)}`}</span>`
         : `<span class="badge">Další audit ${escapeHtml(account.next_audit_date)}</span>`;
     const removable = Number(account.trades_count) === 0 && !account.last_audit;
+    const linked = account.broker_link
+      ? `<div><dt>U brokera (cTrader)</dt><dd>${displayAmount(account.broker_link.balance, currency)}</dd></div>`
+      : '';
     return `<article class="account-card${account.audit_due ? ' is-due' : account.audit_soon ? ' is-soon' : ''}">
-      <div class="account-head"><div><strong>${escapeHtml(account.name)}</strong><p>${escapeHtml(account.broker || 'Bez brokera')} · evidence od ${escapeHtml(account.opened_at)}</p></div>${badge}</div>
+      <div class="account-head"><div><strong>${escapeHtml(account.name)}</strong><p>${escapeHtml(account.broker || 'Bez brokera')} · evidence od ${escapeHtml(account.opened_at)}${account.broker_link ? ' · napojeno na cTrader' : ''}</p></div>${badge}</div>
       <dl class="account-figures">
         <div><dt>Vstupní stav</dt><dd>${displayAmount(account.starting_balance, currency)}</dd></div>
         <div><dt>Podle deníku</dt><dd>${displayAmount(account.expected_balance, currency)}</dd></div>
+        ${linked}
         <div><dt>Risk na den</dt><dd>${account.daily_risk ? displayAmount(account.daily_risk, currency) : '—'}</dd></div>
         <div><dt>Obchodů</dt><dd>${escapeHtml(account.trades_count)}</dd></div>
         <div><dt>Celkem R</dt><dd>${displayNumber(account.net_r)}R</dd></div>
@@ -2843,7 +2854,7 @@ function renderAuditTable() {
       <td>${displayAmount(audit.reported_balance, currency)}</td>
       <td>${displayAmount(audit.expected_balance, currency)}</td>
       <td class="${withinTolerance ? 'value-positive' : 'value-negative'}">${displayAmount(audit.difference, currency)}</td>
-      <td>${audit.status === 'ok' ? 'Sedí' : 'Nesedí'}</td>
+      <td>${audit.status === 'ok' ? 'Sedí' : 'Nesedí'}${audit.source === 'ctrader' ? ' <span class="badge badge-gold" title="Zůstatek přímo z cTraderu">cTrader</span>' : ''}</td>
       <td class="${Number(audit.month_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(audit.month_r)}R</td>
       <td><button class="mini-button" type="button" data-show-audit="${audit.id}">Detail</button></td>
     </tr>`;
@@ -2871,6 +2882,7 @@ async function refreshAccounts() {
     updateAuditBanner();
     renderReadiness();
     await refreshAudits();
+    refreshBroker({ autoSync: true });
   } catch (error) { toast(error.message, 'error'); }
 }
 
@@ -3081,7 +3093,7 @@ function renderTradeTable() {
   const strategyOn = !isHiddenEl('trade.strategy');
   const planOn = !isHiddenEl('trade.followed');
   const columns = 7 + (strategyOn ? 1 : 0) + (planOn ? 1 : 0) + fields.length;
-  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td>${strategyOn ? `<td>${escapeHtml(trade.strategy || '—')}</td>` : ''}<td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${displayNumber(trade.entry_price)} / ${displayNumber(trade.exit_price)}</td><td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td><td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td>${planOn ? `<td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td>` : ''}${fields.map(field => customCell(field, trade)).join('')}<td>${sharedMark('trade', trade.id)}<button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button>${shareButton('trade', trade.id)}<button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || `<tr><td colspan="${columns}" class="muted">Žádné obchody odpovídající filtru.</td></tr>`;
+  $('#tradeTable').innerHTML = rows.map(trade => `<tr><td>${escapeHtml(trade.trade_date)}</td><td><strong>${escapeHtml(trade.market)}</strong></td>${strategyOn ? `<td>${escapeHtml(trade.strategy || '—')}</td>` : ''}<td class="direction-${escapeHtml(trade.direction)}">${directionLabel(trade.direction)}</td><td>${tradePrice(trade.entry_price)} / ${tradePrice(trade.exit_price)}</td>${trade.result_r === null || trade.result_r === undefined ? '<td class="muted" title="R chybí: doplň risk nebo stop loss">—</td>' : `<td class="${Number(trade.result_r) >= 0 ? 'value-positive' : 'value-negative'}">${displayNumber(trade.result_r)}R</td>`}<td class="${Number(trade.result_usd) >= 0 ? 'value-positive' : 'value-negative'}">${displayMoney(trade.result_usd)}</td>${planOn ? `<td>${trade.followed_plan === 1 || trade.followed_plan === '1' ? 'Ano' : trade.followed_plan === 0 || trade.followed_plan === '0' ? 'Ne' : '—'}</td>` : ''}${fields.map(field => customCell(field, trade)).join('')}<td>${sharedMark('trade', trade.id)}<button class="mini-button" type="button" data-edit-trade="${trade.id}">Upravit</button>${shareButton('trade', trade.id)}<button class="mini-button danger" type="button" data-delete-trade="${trade.id}">Smazat</button></td></tr>`).join('') || `<tr><td colspan="${columns}" class="muted">Žádné obchody odpovídající filtru.</td></tr>`;
 }
 
 async function refreshTrades() {
@@ -3678,6 +3690,7 @@ async function init() {
   bindMemberEvents();
   bindDnEvents();
   bindSettingsEvents();
+  bindBrokerEvents();
   applyHues(document);
   await loadWorkspace();
   resetPlan({ type: 'daily' });
@@ -3688,6 +3701,7 @@ async function init() {
   await checkHealth();
   await refreshShares();
   await Promise.all([refreshDashboard(), refreshPlans(), refreshTrades(), refreshStrategies(), refreshAccounts(), refreshMe()]);
+  if (handleBrokerReturn()) return;
   if (state.workspace && !prefs().onboarded) openOnboarding();
 }
 

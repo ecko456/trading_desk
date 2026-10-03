@@ -522,6 +522,11 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
         <!-- ÚČTY -->
         <section class="view" id="view-accounts">
           <div class="view-toolbar"><div class="inline-fields"><label>Účet<select id="auditAccountFilter"><option value="">Všechny</option></select></label></div><div class="view-actions"><button class="button button-ghost" type="button" id="addAccount"><?= icon('plus') ?>Přidat účet</button><button class="button button-primary" type="button" id="openAudit">Money audit</button></div></div>
+          <section class="surface broker-panel" id="brokerPanel" hidden>
+            <div class="section-heading"><div><p class="eyebrow">Napojení na brokera</p><h2>cTrader</h2></div><div class="broker-head-actions"><button class="button button-ghost" type="button" id="brokerSyncAll" hidden>Synchronizovat</button><a class="button button-primary" id="brokerConnect" href="ctrader.php?start=1" hidden><?= icon('plus') ?>Napojit cTrader</a></div></div>
+            <p class="broker-note" id="brokerNote"></p>
+            <div class="broker-list" id="brokerList"></div>
+          </section>
           <div class="account-list" id="accountList"></div>
           <section class="surface table-surface">
             <div class="section-heading"><div><p class="eyebrow">Historie kontrol</p><h2>Provedené Money audity</h2></div><span id="auditIntervalNote">Audit se rozsvítí každých 30 dní.</span></div>
@@ -759,6 +764,20 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
               <div class="switch-row"><div><strong>Šifrované deníky</strong><small>Členům se šifrováním nejde obnovit heslo ani přečíst deník. Můžeš je jen zablokovat nebo smazat.</small></div></div>
             </section>
           </div>
+          <section class="surface settings-card ctrader-settings">
+            <div class="section-heading"><div><p class="eyebrow">Napojení na brokera</p><h2>cTrader Open API</h2></div><span class="badge" id="ctraderStatus">Vypnuto</span></div>
+            <ol class="ctrader-steps">
+              <li>Na <a href="https://openapi.ctrader.com/apps" target="_blank" rel="noopener noreferrer">openapi.ctrader.com</a> se přihlas svým cTrader ID a přidej aplikaci. Spotware ji před použitím schvaluje.</li>
+              <li>Do <b>Redirect URIs</b> aplikace přidej adresu pro návrat níže (přesně, včetně https).</li>
+              <li>Client ID a Secret zkopíruj sem. Členové pak účty napojí v Účtech a auditu, jen pro čtení.</li>
+            </ol>
+            <form class="ctrader-form" id="ctraderForm" autocomplete="off">
+              <label class="span-2">Adresa pro návrat (Redirect URI)<span class="copy-field"><input name="redirect_uri" id="ctraderRedirect" required spellcheck="false"><button class="button button-ghost" type="button" id="ctraderCopy">Kopírovat</button></span></label>
+              <label>Client ID<input name="client_id" required spellcheck="false"></label>
+              <label>Secret<input name="client_secret" type="password" autocomplete="new-password" spellcheck="false" id="ctraderSecret"></label>
+              <div class="ctrader-form-actions span-2"><button class="button button-ghost danger" type="button" id="ctraderClear" hidden>Vypnout napojení</button><span class="spacer"></span><button class="button button-primary" type="submit">Uložit</button></div>
+            </form>
+          </section>
           <section class="surface table-surface">
             <div class="section-heading"><div><p class="eyebrow">Přehled</p><h2>Všichni členové</h2></div><span>Obsah deníků správce nevidí</span></div>
             <div class="table-wrap"><table><thead><tr><th>Člen</th><th>Stav</th><th>Role</th><th>Deník</th><th>Registrace</th><th>Naposledy</th><th class="num">Příspěvky</th><th class="num">Data</th><th></th></tr></thead><tbody id="memberTable"></tbody></table></div>
@@ -1109,6 +1128,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/wall.js') ?>" defer></script>
   <script src="<?= asset_url('static/settings.js') ?>" defer></script>
   <script src="<?= asset_url('static/members.js') ?>" defer></script>
+  <script src="<?= asset_url('static/broker.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>

@@ -180,6 +180,16 @@ sudo -u www-data TRADING_DATA_DIR=/var/lib/trading-journal php /var/www/trading-
 - **Firewall** jen pro SSH, HTTP a HTTPS a automatické bezpečnostní aktualizace.
 - **Zálohy mimo server.** ZIP ze sekce **Záloha** stahuj i k sobě.
 
+### 4. Napojení na cTrader (volitelné)
+
+Aby si členové mohli napojit účty z cTraderu, správce jednou zaregistruje aplikaci u Spotware:
+
+1. Na [openapi.ctrader.com/apps](https://openapi.ctrader.com/apps) se přihlas svým cTrader ID a přidej aplikaci. Popiš, že jde o soukromý deník obchodů, který účty jen čte. Spotware aplikaci před použitím schvaluje.
+2. V Trading Desku otevři **Správa** → karta **cTrader Open API** a zkopíruj adresu pro návrat (`https://<tvoje adresa>/trading/ctrader.php`). Vlož ji do *Redirect URIs* aplikace na openapi.ctrader.com.
+3. Client ID a Secret aplikace vlož do stejné karty ve Správě a ulož.
+
+Server se pak připojuje ven na `openapi.ctrader.com` (443) a `live.ctraderapi.com` / `demo.ctraderapi.com` (5036). Instalace kvůli tomu nic dalšího nepotřebuje.
+
 ---
 
 ## Kde jsou moje data
