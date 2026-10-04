@@ -35,6 +35,10 @@ try {
     if ($copy->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broker_connections'")->fetchColumn() !== false) {
         $copy->exec("UPDATE broker_connections SET access_token = '', refresh_token = '', expires_at = 0");
     }
+    // Ani token odkazu pro ATAS (po obnovení se odkaz vytvoří znovu, starý zůstane platit, dokud se nevydá nový).
+    if ($copy->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'atas_links'")->fetchColumn() !== false) {
+        $copy->exec('DELETE FROM atas_links');
+    }
     $copy = null;
 
     $temporaryZip = $directory . DIRECTORY_SEPARATOR . 'backup-' . bin2hex(random_bytes(8)) . '.zip';

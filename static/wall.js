@@ -595,6 +595,13 @@ function afterShareChange() {
   if ($('#sharePickerDialog').open) renderPicker();
 }
 
+function closeSharePlanMenu() {
+  const menu = $('#sharePlanMenu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('#sharePlan').setAttribute('aria-expanded', 'false');
+}
+
 async function shareCurrentPlan() {
   const button = $('#sharePlan');
   button.disabled = true;
@@ -756,7 +763,22 @@ function bindWallEvents() {
 
   $('#shareForm').addEventListener('submit', submitShare);
   $('#unshareButton').addEventListener('click', unshareCurrent);
-  $('#sharePlan').addEventListener('click', shareCurrentPlan);
+  // Sdílet v náhledu: nástěnka, nebo odkaz pro indikátor v ATAS.
+  $('#sharePlan').addEventListener('click', event => {
+    event.stopPropagation();
+    const menu = $('#sharePlanMenu');
+    menu.hidden = !menu.hidden;
+    $('#sharePlan').setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  $('#sharePlanMenu').addEventListener('click', event => {
+    const item = event.target.closest('[data-share-plan]');
+    if (!item) return;
+    closeSharePlanMenu();
+    if (item.dataset.sharePlan === 'atas') shareCurrentPlanToAtas();
+    else shareCurrentPlan();
+  });
+  document.addEventListener('click', event => { if (!event.target.closest('#sharePlanMenu, #sharePlan')) closeSharePlanMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeSharePlanMenu(); });
   $('#shareStrategy').addEventListener('click', () => {
     const id = state.currentStrategy?.id;
     $('#strategyDialog').close();

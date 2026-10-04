@@ -220,7 +220,13 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                 <div class="plan-progress" id="planProgress" title="Jak kompletní je náhled"><span><i id="planProgressBar"></i></span><em id="planProgressText">0 %</em></div>
                 <button class="button button-ghost" type="button" id="newPlan">Vyčistit</button>
                 <button class="button button-ghost" type="button" id="exportPlanPdf"><?= icon('download') ?>PDF</button>
-                <button class="button button-ghost" type="button" id="sharePlan"><?= icon('share') ?>Sdílet</button>
+                <div class="menu-wrap">
+                  <button class="button button-ghost" type="button" id="sharePlan" aria-haspopup="menu" aria-expanded="false"><?= icon('share') ?>Sdílet</button>
+                  <div class="menu" id="sharePlanMenu" role="menu" hidden>
+                    <button type="button" role="menuitem" data-share-plan="wall"><strong>Na nástěnku</strong><small>Snímek náhledu pro ostatní členy</small></button>
+                    <button type="button" role="menuitem" data-share-plan="atas"><strong>Odkaz pro ATAS</strong><small>Zóny do indikátoru v ATAS, obnovují se samy</small></button>
+                  </div>
+                </div>
                 <button class="button button-primary" type="submit">Uložit náhled</button>
               </div>
             </div>
@@ -1317,6 +1323,30 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
     </form>
   </dialog>
 
+  <dialog class="modal modal-narrow" id="atasDialog" aria-labelledby="atasDialogTitle">
+    <form method="dialog" id="atasForm">
+      <div class="modal-head"><div><p class="eyebrow">Sdílet do ATAS</p><h2 id="atasDialogTitle">Odkaz pro ATAS</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <p class="atas-intro">Indikátor v ATAS si přes odkaz každou minutu stáhne zóny posledního denního náhledu pro <strong id="atasMarket">ES</strong> a podle směru zóny ukáže, jestli na ní hledat long, short, nebo obojí. Odkaz se do ATAS vkládá jen jednou. Když uložíš nový náhled nebo změníš zónu, indikátor si to načte sám.</p>
+      <div class="atas-status" id="atasStatus"></div>
+      <div class="atas-link" id="atasLinkBox" hidden>
+        <label>Odkaz do indikátoru<span class="copy-field"><input id="atasUrl" readonly spellcheck="false"><button class="button button-ghost" type="button" id="atasCopy">Kopírovat</button></span></label>
+      </div>
+      <label class="toggle-control"><input type="checkbox" id="atasWeekly" checked><span><strong>Přidat zóny z týdenního náhledu</strong><small>Týdenní zóny se v ATAS kreslí slaběji a s popiskem „týden“.</small></span></label>
+      <details class="atas-howto">
+        <summary>Jak indikátor dostat do ATAS</summary>
+        <ol>
+          <li>Stáhni oba soubory do jedné složky: <a href="static/atas/TradingDeskZones.cs" download>TradingDeskZones.cs</a> a <a href="static/atas/TradingDeskZones.csproj" download>TradingDeskZones.csproj</a>.</li>
+          <li>Nainstaluj si <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener noreferrer">.NET 10 SDK</a> (jednorázově).</li>
+          <li>Ve složce spusť <code>dotnet build -c Release</code>. Vzniknou dvě DLL, pro .NET 10 a pro .NET 8.</li>
+          <li>V ATAS otevři nastavení indikátorů, vlevo dole dej <b>Add custom indicator</b> a vyber <code>bin\Release\net10.0-windows\TradingDeskZones.dll</code>. Když se indikátor neobjeví, vezmi tu z <code>net8.0-windows</code>.</li>
+          <li>Na graf přidej <b>Trading Desk: zóny z náhledu</b> a do pole <b>Odkaz z Trading Desku</b> vlož odkaz výše.</li>
+        </ol>
+        <p>V nastavení indikátoru vybereš, jestli ukazovat všechny zóny, jen zóny pro long, nebo jen pro short, a jestli upozornit na vstup ceny do zóny.</p>
+      </details>
+      <p class="share-warning">Kdo má odkaz, vidí zóny tohoto trhu, nic jiného z deníku. Zóny v odkazu nejsou šifrované, podobně jako sdílení na nástěnku. Když odkaz unikne, vydej nový a starý přestane platit.</p>
+      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="atasRemove" hidden>Zrušit odkaz</button><button class="button button-ghost" type="button" id="atasRegenerate" hidden>Vydat nový odkaz</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zavřít</button><button class="button button-primary" type="button" id="atasCreate">Vytvořit odkaz</button></div>
+    </form>
+  </dialog>
   <dialog class="modal modal-narrow" id="shareDialog" aria-labelledby="shareDialogTitle">
     <form method="dialog" id="shareForm">
       <div class="modal-head"><div><p class="eyebrow">Společná nástěnka</p><h2 id="shareDialogTitle">Sdílet s komunitou</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
@@ -1394,6 +1424,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/soundscapes.js') ?>" defer></script>
   <script src="<?= asset_url('static/breathing.js') ?>" defer></script>
   <script src="<?= asset_url('static/personality.js') ?>" defer></script>
+  <script src="<?= asset_url('static/atas-link.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>

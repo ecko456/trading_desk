@@ -37,6 +37,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - **obchodní plán**: účty a risk, obchodní okna, bias, stavba zón, strategie s podmínkami, rutina, psychika a review v jednom dokumentu s verzemi; vzorový návrh pro Market a Volume Profile a export do PDF,
 - PDF náhledu ve vzhledu aplikace: nahoře bias, pod ním krátký popis trhu, mapa ceny a očíslované zóny s podmínkami,
 - export zón, levelů, hodnot profilu a otevřených referencí do TradingView jako Pine Script v6,
+- **odkaz pro ATAS**: indikátor v ATAS si sám stahuje zóny posledního denního náhledu a ukáže, jestli na zóně hledat long, short, nebo obojí,
 - tmavý i světlý vzhled s většími a čitelnějšími popisky,
 - kompletní ZIP záloha SQLite databáze a screenshotů plus JSON export.
 
@@ -590,6 +591,40 @@ Levely jdou do TradingView exportu společně se zónami. Vykreslí se jako `lin
 V části **Obchodní zóny** otevři **TradingView export**. Aplikace použije aktuálně vyplněné spodní a horní hranice, rozliší long, short a obousměrné zóny barvou a připraví Pine Script v6. Volba **Hodnoty profilu a reference** přidá VAH, POC, VAL, high a low předchozího období (modře, čárkovaně), u denního náhledu i týdenní VAH a VAL, a otevřené reference na dojetí (fialově). Volba **DiNapoli levely** přidá zadané levely (retracementy čárkovaně, expanze tečkovaně) a pásma konfluence a shody jako zóny. Kód můžeš jedním kliknutím zkopírovat nebo stáhnout jako `.pine` soubor. Popisky lze zobrazit několik barů napravo od aktuální ceny, výškově uprostřed zóny, a volitelně do nich přidat také zdroj nebo shodu.
 
 Doporučení: alespoň jednu kopii uchovávej mimo disk Ubuntu serveru.
+
+## Odkaz pro ATAS
+
+V náhledu dej **Sdílet → Odkaz pro ATAS** a **Vytvořit odkaz**. Odkaz vložíš jednou do indikátoru **Trading Desk: zóny z náhledu** v ATAS a ten si každou minutu stáhne zóny **posledního denního náhledu** daného trhu. Když uložíš nový náhled, změníš zónu nebo ji nakreslíš v Hindsightu, indikátor si to načte sám, nic se znovu nevkládá.
+
+Co odkaz vrací:
+
+- zóny posledního denního náhledu trhu, které mají vyplněné obě ceny;
+- zóny ze starších náhledů, které pořád platí (*dokud ji neukončím* nebo do data);
+- volitelně zóny z týdenního náhledu téhož týdne (v ATAS slabší a s popiskem „týden“).
+
+**Co indikátor v ATAS ukáže.** Každá zóna je obdélník od začátku obchodního dne náhledu (18:00 New York předchozího dne) doprava. Barva a popisek říkají, co na zóně hledat:
+
+```text
+zelená   LONG           hledám jen long
+červená  SHORT          hledám jen short
+modrá    LONG i SHORT   obojí
+šedá     bez směru      směr v náhledu nevyplněný
+```
+
+V nastavení indikátoru jde zobrazit všechny zóny, jen zóny pro long (long a obojí), nebo jen pro short (short a obojí), vypnout týdenní zóny, změnit průhlednost a zapnout **upozornění**: když cena vstoupí do zóny, ATAS zahraje zvuk a napíše třeba „cena v zóně VAL týdne 6664–6671, hledej jen LONG“. Na stejnou zónu znovu nejdřív po nastavené pauze. Když náhled pro daný den ještě na grafu nezačal (příprava večer předem), kreslí se zóny přes celý graf.
+
+**Jak indikátor dostat do ATAS.** ATAS bere vlastní indikátory jako zkompilované DLL, zdrojový kód sám nesestaví. V dialogu odkazu je návod a oba soubory ke stažení (`static/atas/TradingDeskZones.cs` a `.csproj`):
+
+1. stáhni oba soubory do jedné složky a nainstaluj [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0);
+2. ve složce spusť `dotnet build -c Release`; vzniknou DLL pro .NET 10 i .NET 8 (podle verze běží ATAS na jednom z nich, dokumentace ATAS doporučuje sestavit obě);
+3. v ATAS v nastavení indikátorů vlevo dole **Add custom indicator** a vyber `bin\Release\net10.0-windows\TradingDeskZones.dll` (když se neobjeví, tu z `net8.0-windows`);
+4. na graf přidej **Trading Desk: zóny z náhledu** a do pole **Odkaz z Trading Desku** vlož odkaz.
+
+ATAS X (macOS) se sestaví příkazem `dotnet build -c Release /p:Platform=Cross`. Když máš ATAS nainstalovaný jinde než ve výchozí složce, uprav v `.csproj` cestu `ATAS_BASE`. Indikátor používá jen API, které mají i oficiální indikátory ATAS. Zkompilovaný a vyzkoušený je proti jeho kopii, se skutečnou instalací ATAS zatím ne.
+
+**Bezpečnost.** Odkaz obsahuje tajný token. Kdo ho má, vidí zóny tohoto trhu, nic jiného z deníku. ATAS se do deníku přihlásit neumí a šifrovaný deník server bez tebe neotevře, proto se zóny pro odkaz ukládají jako snímek mimo deník, podobně jako sdílení na nástěnku, a nejsou šifrované. Token je v deníku (u šifrovaného deníku zašifrovaný), na serveru jen jeho otisk. **Vydat nový odkaz** starý okamžitě zneplatní, **Zrušit odkaz** ho smaže. U zablokovaného nebo smazaného účtu odkaz přestane fungovat. Dialog ukazuje, kdy ATAS odkaz naposledy četl.
+
+Pro jiné nástroje vrací odkaz s `&format=json` stejná data jako JSON.
 
 ## Bezpečnost
 

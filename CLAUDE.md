@@ -30,7 +30,17 @@ Stav k 3. 10. 2026:
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (Hindsight, 3. 10. 2026): svíčky nahrává jen **správce dat grafu**,
+- Poslední práce (odkaz pro ATAS, 4. 10. 2026):
+  - v náhledu Sdílet → **Odkaz pro ATAS** (`static/atas-link.js`, `#atasDialog`). Veřejný
+    `atas.php?t=TOKEN` (text, `&format=json`) vrací snímek zón posledního denního náhledu
+    trhu: zóny dne, platné starší (open/do data) a volitelně týdenní (`lib/atas.php`);
+  - snímek je v `app.sqlite3` (`atas_feeds`, otisk tokenu), token v deníku (`atas_links`).
+    Obnoví se po uložení/smazání náhledu a zóny v Hindsightu (`atas_refresh_feeds`);
+  - indikátor `static/atas/TradingDeskZones.cs` + `.csproj` (net8.0-windows i net10.0-windows,
+    UseWPF jako v ukázkách ATAS). API podle github.com/AtasPlatform/Indicators. **Se skutečným
+    ATAS nikdo nezkoušel.** Ověřeno jen překladem a během proti náhradním třídám API (.NET SDK
+    se dá stáhnout do `$S` přes dotnet-install.sh, reálné DLL ATAS tu nejsou).
+- Předtím (Hindsight, 3. 10. 2026): svíčky nahrává jen **správce dat grafu**,
   ne každý správce (uživatel chtěl „ať mohu importovat pouze já“). Výchozí je první
   správce instalace, změna jen příkazem `bin/hindsight-keeper.php` na serveru. Info ve
   Správě (`#marketKeeperInfo`), testy `HindsightKeeperTests`.
@@ -92,7 +102,8 @@ Stav k 3. 10. 2026:
   - vzorek exportu obchodů z ATAS (futures) pro import do deníku a Hindsightu;
   - registrace aplikace cTrader a první test s demo účtem;
   - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF;
-  - zpětná vazba na kulisy (poslech) a výklad talentů pro trading.
+  - zpětná vazba na kulisy (poslech) a výklad talentů pro trading;
+  - první test indikátoru v ATAS (sestavení, zobrazení zón, upozornění).
 
 ## Začátek nové session
 
@@ -182,6 +193,8 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - vstupní profil, rychlý test a kalibrace jsou v `bootstrap.php` (`psych_*`);
   - `lib/personality.php` + `static/personality.js`: osobnost (Big Five, talenty), oblasti zaměření;
   - `static/breathing.js` (dechové cvičení) a `static/soundscapes.js` (kulisy, `TDSound`).
+- Odkaz pro ATAS: `lib/atas.php`, veřejný `atas.php`, `static/atas-link.js`, indikátor ve
+  `static/atas/` (C#, sestavuje si ho uživatel proti své instalaci ATAS).
 - Ostatní PHP:
   - `backup.php`: ZIP záloha deníku;
   - `file.php`: obrázky a screenshoty;
@@ -200,7 +213,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 129 testů, asi minuta a půl (1 skip bez pypdf)
+# Trading Desk: 136 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory

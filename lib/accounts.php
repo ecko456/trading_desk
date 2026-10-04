@@ -147,6 +147,20 @@ CREATE TABLE IF NOT EXISTS reactions (
     PRIMARY KEY (post_id, user_id)
 );
 
+-- Odkazy pro ATAS: snímek zón denního náhledu, čte ho indikátor přes tajný token (lib/atas.php).
+CREATE TABLE IF NOT EXISTS atas_feeds (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    market TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    include_weekly INTEGER NOT NULL DEFAULT 1,
+    snapshot TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    read_at TEXT,
+    UNIQUE(user_id, market)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_attempts_lookup ON auth_attempts(kind, created_at);
 CREATE INDEX IF NOT EXISTS idx_posts_feed ON posts(id DESC);

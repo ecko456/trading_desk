@@ -242,7 +242,9 @@ try {
     }
 
     if ($action === 'plan' && in_array($method, ['POST', 'PUT'], true)) {
-        json_response(save_plan(request_json()));
+        $saved = save_plan(request_json());
+        atas_refresh_feeds();
+        json_response($saved);
     }
 
     if ($action === 'plan' && $method === 'DELETE') {
@@ -254,6 +256,7 @@ try {
         foreach ($screenshots as $screenshot) {
             delete_screenshot_file($screenshot);
         }
+        atas_refresh_feeds();
         json_response(['ok' => true]);
     }
 
@@ -339,12 +342,29 @@ try {
     }
 
     if ($action === 'hindsight_zone' && in_array($method, ['POST', 'PUT'], true)) {
-        json_response(hs_save_zone(request_json()));
+        $saved = hs_save_zone(request_json());
+        atas_refresh_feeds();
+        json_response($saved);
     }
 
     if ($action === 'hindsight_zone' && $method === 'DELETE') {
         hs_delete_zone((int)($_GET['id'] ?? 0));
+        atas_refresh_feeds();
         json_response(['ok' => true]);
+    }
+
+    /* ---------- odkaz pro ATAS: zóny posledního denního náhledu trhu */
+
+    if ($action === 'atas_link' && $method === 'GET') {
+        json_response(atas_link_state(atas_market($_GET['market'] ?? '')));
+    }
+
+    if ($action === 'atas_link' && $method === 'POST') {
+        json_response(atas_save_link(request_json()));
+    }
+
+    if ($action === 'atas_link' && $method === 'DELETE') {
+        json_response(atas_delete_link((string)($_GET['market'] ?? '')));
     }
 
     if ($action === 'hindsight_idea' && in_array($method, ['POST', 'PUT'], true)) {

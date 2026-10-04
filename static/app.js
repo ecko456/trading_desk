@@ -3724,6 +3724,7 @@ async function init() {
   bindBrokerEvents();
   bindTradePlanEvents();
   bindPersonalityEvents();
+  bindAtasEvents();
   bindBreathing();
   applyHues(document);
   await loadWorkspace();

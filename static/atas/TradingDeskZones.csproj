@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Trading Desk: zóny z náhledu pro ATAS.
+       Klasický ATAS (Windows):  dotnet build -c Release
+         Sestaví se dvě DLL, pro .NET 8 i .NET 10. ATAS běží podle verze na jednom z nich
+         a číslo verze v ATAS to neřekne (dokumentace ATAS doporučuje sestavit obě):
+           bin\Release\net10.0-windows\TradingDeskZones.dll
+           bin\Release\net8.0-windows\TradingDeskZones.dll
+       ATAS X:                   dotnet build -c Release /p:Platform=Cross
+       DLL přidáš v ATAS v nastavení indikátorů tlačítkem „Add custom indicator“, nebo ho
+       zkopíruješ do %AppData%\ATAS\Indicators. Když máš ATAS jinde, uprav ATAS_BASE níže. -->
+  <PropertyGroup>
+    <AssemblyName>TradingDeskZones</AssemblyName>
+    <RootNamespace>ATAS.Indicators.TradingDesk</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;Cross</Platforms>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Platform)' == 'Cross' ">
+    <UseWPF>False</UseWPF>
+    <DefineConstants>$(DefineConstants);CROSS_PLATFORM</DefineConstants>
+    <TargetFramework>net10.0</TargetFramework>
+    <ATAS_BASE Condition=" '$(ATAS_BASE)' == '' ">C:\Program Files\ATAS X</ATAS_BASE>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Platform)' != 'Cross' ">
+    <UseWPF>True</UseWPF>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <ATAS_BASE Condition=" '$(ATAS_BASE)' == '' ">C:\Program Files (x86)\ATAS Platform</ATAS_BASE>
+  </PropertyGroup>
+
+  <!-- Knihovny ATAS z nainstalované platformy; do výstupu se nekopírují. -->
+  <ItemGroup>
+    <Reference Include="ATAS.Indicators">
+      <HintPath>$(ATAS_BASE)\ATAS.Indicators.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ATAS.DataFeedsCore">
+      <HintPath>$(ATAS_BASE)\ATAS.DataFeedsCore.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OFT.Rendering">
+      <HintPath>$(ATAS_BASE)\OFT.Rendering.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Utils.Common">
+      <HintPath>$(ATAS_BASE)\Utils.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

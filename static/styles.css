@@ -1573,6 +1573,26 @@ td .share-status { margin-right: 6px; vertical-align: middle; }
   .breath-sounds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Odkaz pro ATAS (Sdílet v náhledu) */
+.atas-intro { margin: 0 0 14px; color: var(--text-2); font-size: 14px; line-height: 1.6; }
+.atas-intro strong { color: var(--text); }
+.atas-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.atas-status div { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-2); }
+.atas-status span { color: var(--text-3); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.atas-status strong { font-size: 14px; font-weight: 650; }
+.atas-status strong.is-live { color: var(--green); }
+.atas-link { margin-bottom: 12px; }
+.atas-link label { display: grid; gap: 6px; }
+.atas-howto { margin-top: 12px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-2); }
+.atas-howto summary { cursor: pointer; font-weight: 650; font-size: 14px; }
+.atas-howto ol { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 7px; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+.atas-howto p { margin: 10px 0 2px; color: var(--text-3); font-size: 13px; line-height: 1.55; }
+.atas-howto code { padding: 1px 5px; border-radius: 5px; background: var(--surface-3); font-size: 12.5px; word-break: break-all; }
+.atas-howto a { color: var(--accent); }
+@media (max-width: 640px) {
+  .atas-status { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Napojení na cTrader (Účty a audit, Správa) */
 .broker-panel { padding: 18px 20px; margin-bottom: 16px; }
 .broker-panel .section-heading { margin-bottom: 8px; }
