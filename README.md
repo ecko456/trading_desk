@@ -24,6 +24,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - **osobnost a silné stránky**: osobnostní test Big Five (IPIP) a talenty z reportu Gallup CliftonStrengths s výkladem pro trading; rychlý test se podle nich zaměří na tvoje slabá místa,
 - **dýchání před seancí**: kruh, který se s nádechem zvětšuje a s výdechem zmenšuje, rytmy 4–8 a box 5–5–5–5 a pět zvukových kulis vybraných podle osobnosti,
 - rychlý test psychiky přizpůsobený profilu, s vlastními pravidly pro špatný den,
+- **Trading mode a tep**: přepínač nahoře spustí rychlý test, dvě minuty klidového měření a pak sleduje tep (Bluetooth snímač živě, Apple Watch přes Zkratku po seanci); po 15 obchodech s tepem upozorní, když tep vyskočí nad tvoji osobní hranici,
 - pravidlový rozbor dnů s porušenými pravidly,
 - potenciální obchody s entry, SL, TP1, TP2, finálním TP a R:R,
 - rozlišení Intraday a Hybrid Intraday obchodů,
@@ -468,6 +469,24 @@ potřeba akce, vliv cizích názorů                          →  Zvonkohra
 Co si sám změníš (rytmus, délku, kulisu, hlasitost), si aplikace pamatuje. Zbytek dál sleduje doporučení.
 
 **Po rychlém testu** aplikace dýchání nabídne sama: u zelené dvě minuty na naladění, u oranžové tři minuty 4–8, u červené pět minut 4–8. Tohle doporučení platí jen pro ten den a uložené nastavení nepřepíše.
+
+### Trading mode a tep
+
+Přepínač **Trading mode** v horní liště zapne sledování seance ve třech krocích:
+
+1. **Tep.** Buď **snímač přes Bluetooth** (živě), nebo **Apple Watch, doplnit po seanci**, nebo bez tepu. Bluetooth snímač umí Chrome a Edge na Windows, macOS a Androidu (Safari a Firefox ne). Hrudní pás funguje rovnou. Apple Watch sama tep jako snímač nevysílá, tep do prohlížeče pošle až aplikace v iPhonu, která ho přeposílá jako Bluetooth snímač (takové aplikace se dělají pro trenažéry a Zwift).
+2. **Rychlý test**, nebo dnešní výsledek, když už ho máš.
+3. **Klidové měření**: dvě minuty v klidu, dýchat normálně, nemluvit. Medián z nich je dnešní klidový tep a od něj se počítají všechny odchylky. Kdo měření přeskočí, dostane klid z nejklidnější části seance (10. percentil).
+
+Během seance ukazuje lišta tep a odchylku od klidu. Po klepnutí se otevře panel se snímačem (stav, baterie, znovu připojení), dýcháním a ukončením. Tep se ukládá po pěti sekundách, u pásu s R-R intervaly i variabilita tepu (RMSSD). Snímač se po výpadku signálu sám zkusí připojit znovu. Hindsight se během seance otevírá v novém panelu, aby spojení nezaniklo.
+
+**Učení a upozornění.** Upozornění se zapnou až po **15 obchodech s tepem**. Obchod se počítá, když má čas vstupu a vyplněné Dodržen plán nebo Hodnocení obchodu. Pro každý obchod se vezme tep v posledních dvou minutách před vstupem a porovná se s klidem. Chybný je stejně jako jinde v aplikaci obchod s nedodrženým plánem nebo hodnocením 4–5. Aplikace najde hranici, nad kterou u tebe chyb přibývá, a ověří ji Fisherovým testem (silná, prokazatelná, jen naznačená souvislost). Když souvislost s chybami zatím nevychází, upozorňuje na neobvykle vysoký tep: výš než u 80 % tvých vstupů. Upozornění přijde, když tep drží nad hranicí minutu a půl, když prudce vyskočí, nebo když u pásu klesne variabilita. Nabídne dvě minuty dýchání 4–8 a mezi dvěma upozorněními je aspoň deset minut klid.
+
+**Zpětně.** Psychika → **Tep a obchody** ukazuje stav učení, tvoji hranici s důkazem, chybovost podle tepu před vstupem a seznam seancí. Detail seance má graf tepu s klidem a hranicí, obchody (chybné jako ✕), upozornění, úseky, kdy byl čas na dýchání, a tabulku obchodů s tepem před vstupem.
+
+**Apple Watch přes Zkratku.** V Psychice → Tep a obchody → **Apple Watch** si vytvoříš osobní odkaz. Zkratka v iPhonu najde vzorky srdečního tepu ze Zdraví (třeba za posledních 6 hodin), z každého udělá řádek `čas ISO 8601;tep` a pošle je metodou POST na odkaz. Během seance měj na hodinkách zapnuté cvičení, jinak hodinky měří tep jen jednou za pár minut. Server tep **zapečetí veřejným klíčem tvého deníku** (sodium sealed box) a uloží ho do schránky. Přečíst ho umí jen tvůj deník a zařadí ho při dalším otevření Trading Desku k seanci, se kterou se časem překrývá. Kdo má odkaz, může ti tep poslat, ale nic z deníku nepřečte. Tep jde nahrát i ze souboru (CSV nebo JSON se sloupci čas a tep).
+
+Tep je hrubý ukazatel napětí a zvedne ho i káva, pohyb nebo mluvení. Vyhodnocení je osobní statistika, ne lékařské měření. Data o tepu jsou jen v deníku (šifrovaném, když máš šifrování zapnuté), v záloze a v exportu, ne na nástěnce.
 
 ### Kalibrace testu
 

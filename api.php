@@ -499,6 +499,74 @@ try {
         json_response(save_psych_check(request_json()), 201);
     }
 
+    /* ---------- tep (Trading mode) */
+
+    if ($action === 'heart_state' && $method === 'GET') {
+        json_response(heart_state());
+    }
+
+    if ($action === 'heart_session' && $method === 'GET') {
+        json_response(heart_session_detail((int)($_GET['id'] ?? 0)));
+    }
+
+    if ($action === 'heart_session' && $method === 'POST') {
+        $data = request_json();
+        $id = (int)($data['id'] ?? 0);
+        $operation = (string)($data['op'] ?? '');
+        if ($operation === 'start') {
+            json_response(['session' => heart_start_session($data)], 201);
+        }
+        if ($operation === 'baseline') {
+            json_response(['session' => heart_set_baseline($id, (int)($data['from'] ?? 0), (int)($data['to'] ?? 0))]);
+        }
+        if ($operation === 'source') {
+            json_response(['session' => heart_set_source($id, (string)($data['source'] ?? ''), (string)($data['device'] ?? ''))]);
+        }
+        if ($operation === 'end') {
+            json_response(['session' => heart_end_session($id)]);
+        }
+        json_response(['error' => 'Neznámá operace se seancí.'], 422);
+    }
+
+    if ($action === 'heart_session' && $method === 'DELETE') {
+        heart_delete_session((int)($_GET['id'] ?? 0));
+        json_response(['ok' => true]);
+    }
+
+    if ($action === 'heart_samples' && $method === 'POST') {
+        $data = request_json();
+        json_response(heart_add_samples((int)($data['session_id'] ?? 0), is_array($data['samples'] ?? null) ? $data['samples'] : []));
+    }
+
+    if ($action === 'heart_alert' && $method === 'POST') {
+        json_response(heart_add_alert(request_json()));
+    }
+
+    if ($action === 'heart_link' && $method === 'POST') {
+        json_response(heart_save_link());
+    }
+
+    if ($action === 'heart_link' && $method === 'DELETE') {
+        json_response(heart_delete_link());
+    }
+
+    if ($action === 'heart_upload' && $method === 'POST') {
+        $file = $_FILES['file'] ?? null;
+        if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            if ((int)$file['size'] > HEART_MAX_UPLOAD_BYTES) {
+                json_response(['error' => 'Soubor s tepem je větší než 2 MB. Pošli kratší období.'], 413);
+            }
+            $text = (string)file_get_contents((string)$file['tmp_name']);
+        } else {
+            $text = (string)(request_json()['text'] ?? '');
+        }
+        $parsed = heart_parse_text($text);
+        if ($parsed['samples'] === []) {
+            json_response(['error' => 'V souboru není žádný tep. Čekám řádky „čas;tep“, čas nejlépe ve formátu ISO 8601.'], 422);
+        }
+        json_response(heart_store_samples($parsed['samples'], 'import') + ['skipped' => $parsed['skipped']]);
+    }
+
     if ($action === 'accounts' && $method === 'GET') {
         $items = array_map(static fn(array $account): array => account_overview($account), fetch_all('SELECT * FROM accounts ORDER BY name COLLATE NOCASE'));
         json_response(['items' => $items, 'interval_days' => AUDIT_INTERVAL_DAYS, 'warning_days' => AUDIT_WARNING_DAYS]);
@@ -706,6 +774,9 @@ try {
             'trades' => fetch_all('SELECT * FROM trades ORDER BY trade_date, id'),
             'trading_plans' => fetch_all('SELECT * FROM trading_plans ORDER BY version, id'),
             'psych_personality' => fetch_all('SELECT * FROM psych_personality'),
+            'hr_sessions' => fetch_all('SELECT * FROM hr_sessions ORDER BY started_ts, id'),
+            'hr_samples' => fetch_all('SELECT session_id, ts, b10 / 10.0 AS bpm, r10 / 10.0 AS rmssd FROM hr_samples ORDER BY session_id, ts'),
+            'hr_alerts' => fetch_all('SELECT * FROM hr_alerts ORDER BY ts, id'),
             'screenshots' => fetch_all('SELECT id, plan_id, trade_id, strategy_id, audit_id, role, original_name, mime_type, size_bytes, caption, created_at FROM screenshots ORDER BY created_at, id'),
         ]);
     }

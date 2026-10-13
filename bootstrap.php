@@ -18,6 +18,7 @@ require_once __DIR__ . '/lib/broker.php';
 require_once __DIR__ . '/lib/tradeplan.php';
 require_once __DIR__ . '/lib/personality.php';
 require_once __DIR__ . '/lib/atas.php';
+require_once __DIR__ . '/lib/heart.php';
 
 /** Adresář deníku přihlášeného uživatele. */
 function data_dir(): string
@@ -421,6 +422,7 @@ SQL);
     ensure_tradeplan_schema($pdo);
     ensure_personality_schema($pdo);
     ensure_atas_journal_schema($pdo);
+    ensure_heart_schema($pdo);
 }
 
 const PLAN_EXTRA_COLUMNS = [

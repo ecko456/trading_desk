@@ -161,6 +161,25 @@ CREATE TABLE IF NOT EXISTS atas_feeds (
     UNIQUE(user_id, market)
 );
 
+-- Tep ze Zkratky (Apple Watch): odkaz s veřejným klíčem člena a schránka se zapečetěnými
+-- vzorky, které rozbalí až jeho deník (lib/heart.php).
+CREATE TABLE IF NOT EXISTS hr_links (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    public_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    received_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS hr_inbox (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sealed TEXT NOT NULL,
+    samples INTEGER NOT NULL,
+    received_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_hr_inbox_user ON hr_inbox(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_attempts_lookup ON auth_attempts(kind, created_at);
 CREATE INDEX IF NOT EXISTS idx_posts_feed ON posts(id DESC);

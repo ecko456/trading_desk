@@ -24,13 +24,46 @@ Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a pozn�
 
 ## Kde jsme skončili
 
-Stav k 3. 10. 2026:
+Stav k 13. 10. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (odkaz pro ATAS, 4. 10. 2026):
+- Poslední práce (Trading mode a tep, 13. 10. 2026). Uživatel: „připojit Apple Watch kvůli
+  tepu … nahoře ‚ON trading mode‘ … prvně by se spustil rychlý test a po celou dobu by to
+  sledovalo tep … zpětně vyhodnocovat, jaký výkyv způsobuje chyby, a kdy je čas na dechové
+  cvičení“; „mám Apple Watch, obchoduji na Windows a v prohlížeči … zpětné i živé, upozorňovat
+  až po 15 obchodech, do té doby se to učilo“.
+  - Webová stránka se k HealthKitu nedostane a Watch tep jako BLE snímač samy nevysílají. Proto
+    dvě cesty: **živě** standardní Bluetooth snímač (služba 0x180D, Web Bluetooth v Chrome/Edge;
+    hrudní pás, nebo aplikace v iPhonu, která tep z Watch přeposílá jako snímač) a **zpětně**
+    Zkratka v iPhonu, která po cvičení na hodinkách pošle vzorky ze Zdraví na `hr.php?t=TOKEN`.
+  - `lib/heart.php`: deník `hr_sessions`, `hr_samples` (po 5 s, `b10` = tep × 10, `r10` = RMSSD
+    × 10, WITHOUT ROWID), `hr_alerts`, `hr_link` (token a klíčový pár, base64). V app.sqlite3
+    `hr_links` (otisk tokenu, veřejný klíč) a `hr_inbox`: `hr.php` vzorky ověří a **zapečetí**
+    `sodium_crypto_box_seal` veřejným klíčem člena; rozbalí je až deník (`heart_import_inbox`
+    při `heart_state`). Úseky vzorků (mezera nad 20 min) se přiřadí k překrývající se seanci,
+    jinak vznikne seance „Apple Watch“.
+  - Klid: medián z klidového měření (≥ 6 vzorků), jinak 10. percentil seance. Model
+    (`heart_model`): obchody s `entry_ts` a vyplněným Dodržen plán nebo Hodnocením, tep 2 min
+    před vstupem proti klidu; chyba = `followed_plan = 0 OR execution_rating >= 4`. Po 15
+    obchodech hledá hranici s největším rozdílem chybovosti (střed mezi sousedními hodnotami),
+    Fisherův test → strength strong/medium/weak/none; bez souvislosti 80. percentil odchylek.
+  - Pozor: PDO posílá parametry do SQLite jako text. Ve výrazu (`started_ts - ?`) se pak číslo
+    porovnává s textem a podmínka tiše nevyjde. Porovnávej přímo sloupec s parametrem.
+  - Klient: `static/heartrate.js` (čtení 0x2A37, RMSSD, průměry po 5 s, `detectAlert`: high 90 s,
+    spike za 30 s, hrv; klid 10 min; test `tests/test_heartrate.js`) a `static/trading-mode.js`
+    (přepínač `#tmToggle`, průvodce `#tmStartDialog`, panel, `#tmAlert`, souhrn s SVG grafem,
+    Psychika `#heartBlock`, dialog Apple Watch). `app.js` posílá události `td:psych-done`
+    a `td:view` a volá `bindTradingMode()`.
+  - Barvy grafu validátorem dataviz: čára tepu `--series-2`, chybné obchody `--red` ✕, ostatní
+    neutrální ○, klid a hranice čárkovaně s popiskem.
+  - **Se skutečnými hodinkami ani pásem to nikdo nezkoušel.** Ověřeno HTTP testy
+    (`tests/test_heart_http.py`), Node testem a průchodem v Chromiu s náhradním
+    `navigator.bluetooth` (addInitScript, zprávy 0x2A37 s R-R), `window.TD_HEART_TEST`
+    zkrátí klid a okna. Aktualizace šifrovaného deníku ze starší verze: export beze změny.
+- Předtím (odkaz pro ATAS, 4. 10. 2026):
   - v náhledu Sdílet → **Odkaz pro ATAS** (`static/atas-link.js`, `#atasDialog`). Veřejný
     `atas.php?t=TOKEN` (text, `&format=json`) vrací snímek zón posledního denního náhledu
     trhu: zóny dne, platné starší (open/do data) a volitelně týdenní (`lib/atas.php`);
@@ -103,7 +136,9 @@ Stav k 3. 10. 2026:
   - registrace aplikace cTrader a první test s demo účtem;
   - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF;
   - zpětná vazba na kulisy (poslech) a výklad talentů pro trading;
-  - první test indikátoru v ATAS (sestavení, zobrazení zón, upozornění).
+  - první test indikátoru v ATAS (sestavení, zobrazení zón, upozornění);
+  - Trading mode s Apple Watch: Zkratka podle návodu v aplikaci a případně aplikace, která tep
+    z hodinek vysílá jako Bluetooth snímač (ověřit, že ji Chrome na Windows najde).
 
 ## Začátek nové session
 
@@ -195,6 +230,8 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - `static/breathing.js` (dechové cvičení) a `static/soundscapes.js` (kulisy, `TDSound`).
 - Odkaz pro ATAS: `lib/atas.php`, veřejný `atas.php`, `static/atas-link.js`, indikátor ve
   `static/atas/` (C#, sestavuje si ho uživatel proti své instalaci ATAS).
+- Trading mode a tep: `lib/heart.php`, veřejný příjem ze Zkratky `hr.php`, `static/heartrate.js`
+  (výpočty a Web Bluetooth), `static/trading-mode.js` (rozhraní).
 - Ostatní PHP:
   - `backup.php`: ZIP záloha deníku;
   - `file.php`: obrázky a screenshoty;
@@ -213,7 +250,7 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 136 testů, asi minuta a půl (1 skip bez pypdf)
+# Trading Desk: 141 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory

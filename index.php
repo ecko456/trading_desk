@@ -148,6 +148,13 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           <h1 id="viewTitle">Přehled</h1>
         </div>
         <div class="top-actions">
+          <div class="tm-wrap"<?= module_attr('psyche') ?>>
+            <button class="tm-toggle" type="button" id="tmToggle" aria-pressed="false" aria-haspopup="dialog" title="Trading mode: rychlý test, klidové měření a sledování tepu během obchodování">
+              <span class="tm-heart" id="tmHeart" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2Z"/></svg></span>
+              <span class="tm-text"><span class="tm-label">Trading mode</span><span class="tm-state" id="tmState">OFF</span></span>
+            </button>
+            <div class="tm-panel" id="tmPanel" role="dialog" aria-label="Trading mode" hidden></div>
+          </div>
           <select id="globalMarket" aria-label="Filtrovat trh">
             <option value="">Všechny trhy</option>
             <option>ES</option><option>NQ</option><option>GC</option><option>CL</option><option>6E</option>
@@ -697,6 +704,13 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
           <section class="surface psyche-block breath-card">
             <div class="section-heading"><div><p class="eyebrow">Před seancí</p><h2>Dýchání a zklidnění</h2></div><button class="button button-primary" type="button" id="startBreathing">Začít dýchání</button></div>
             <div id="breathCardBody" class="breath-card-body"></div>
+          </section>
+
+          <section class="surface psyche-block heart-block" id="heartBlock">
+            <div class="section-heading"><div><p class="eyebrow">Trading mode</p><h2>Tep a obchody</h2></div><div class="view-actions"><button class="button button-ghost" type="button" id="heartWatch">Apple Watch</button><label class="button button-ghost heart-upload">Nahrát tep<input type="file" id="heartFile" accept=".csv,.txt,.json,text/plain,text/csv,application/json"></label><button class="button button-primary" type="button" id="heartStart">Zapnout trading mode</button></div></div>
+            <div id="heartModel" class="empty-state compact">Načítám…</div>
+            <div id="heartSessions" class="heart-sessions"></div>
+            <p class="disclaimer">Tep je hrubý ukazatel napětí. Zvedne ho i káva, pohyb nebo mluvení, proto se vždy porovnává s tvým dnešním klidovým tepem. Vyhodnocení je tvoje osobní statistika, ne lékařské měření. Obchod se do učení počítá, když má čas vstupu a vyplněné Dodržen plán nebo Hodnocení obchodu. Data o tepu zůstávají jen ve tvém deníku a na nástěnku se nedostanou.</p>
           </section>
 
           <section class="surface psyche-block">
@@ -1323,6 +1337,70 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
     </form>
   </dialog>
 
+  <dialog class="modal modal-narrow tm-dialog" id="tmStartDialog" aria-labelledby="tmStartTitle">
+    <form method="dialog" id="tmStartForm">
+      <div class="modal-head"><div><p class="eyebrow">Trading mode</p><h2 id="tmStartTitle">Zapnout sledování</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <ol class="tm-steps" id="tmSteps"><li data-step="source"><b>1</b>Tep</li><li data-step="test"><b>2</b>Rychlý test</li><li data-step="calm"><b>3</b>Klid</li></ol>
+      <section class="tm-step" data-tm-step="source">
+        <div class="tm-sources" role="radiogroup" aria-label="Odkud vezmu tep">
+          <label class="tm-source"><input type="radio" name="tmSource" value="ble"><span><strong>Snímač přes Bluetooth</strong><small>Živý tep a upozornění během seance. Hrudní pás, nebo aplikace v iPhonu, která tep z Apple Watch vysílá jako snímač.</small></span></label>
+          <label class="tm-source"><input type="radio" name="tmSource" value="watch"><span><strong>Apple Watch, doplnit po seanci</strong><small>Na hodinkách zapni cvičení. Po seanci tep pošle Zkratka v iPhonu. Bez živých upozornění.</small></span></label>
+          <label class="tm-source"><input type="radio" name="tmSource" value="none"><span><strong>Bez tepu</strong><small>Jen rychlý test a záznam seance.</small></span></label>
+        </div>
+        <div class="tm-sensor" id="tmSensorBox" hidden>
+          <button class="button button-primary" type="button" id="tmConnect">Připojit snímač</button>
+          <div class="tm-sensor-state" id="tmSensorState"><span class="status-dot"></span><span>Nepřipojeno</span></div>
+        </div>
+        <p class="tm-note" id="tmSourceNote" hidden></p>
+      </section>
+      <section class="tm-step" data-tm-step="test" hidden>
+        <div class="tm-test" id="tmTestBox"></div>
+      </section>
+      <section class="tm-step" data-tm-step="calm" hidden>
+        <div class="tm-calm">
+          <div class="tm-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="tm-ring-track" cx="60" cy="60" r="52"/><circle class="tm-ring-fill" id="tmRingFill" cx="60" cy="60" r="52" pathLength="100"/></svg><div><strong id="tmCalmCount">2:00</strong><small id="tmCalmBpm">tep —</small></div></div>
+          <p id="tmCalmText">Seď v klidu, dýchej normálně a nemluv. Z těchhle dvou minut vznikne tvůj dnešní klidový tep.</p>
+        </div>
+      </section>
+      <div class="modal-actions"><button class="button button-ghost" type="button" id="tmBack" hidden>Zpět</button><span class="spacer"></span><button class="button button-ghost" type="button" id="tmSkip" hidden>Přeskočit</button><button class="button button-primary" type="button" id="tmNext">Pokračovat</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal modal-wide tm-session-dialog" id="tmSessionDialog" aria-labelledby="tmSessionTitle">
+    <form method="dialog">
+      <div class="modal-head"><div><p class="eyebrow" id="tmSessionEyebrow">Seance</p><h2 id="tmSessionTitle">Tep během seance</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <div id="tmSessionBody"></div>
+      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="tmSessionDelete">Smazat seanci</button><span class="spacer"></span><button class="button button-primary" value="cancel" type="submit" formnovalidate>Zavřít</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal modal-narrow" id="tmWatchDialog" aria-labelledby="tmWatchTitle">
+    <form method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">Tep ze Zkratky</p><h2 id="tmWatchTitle">Apple Watch</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <p class="atas-intro">Během seance měj na hodinkách zapnuté cvičení (třeba <b>Jiné</b>), pak hodinky měří tep zhruba po pěti sekundách. Po seanci Zkratka v iPhonu pošle tep ze Zdraví na tvůj osobní odkaz. Server ho zašifruje tak, že ho přečte jen tvůj deník, a zařadí se při dalším otevření Trading Desku.</p>
+      <div class="atas-status" id="tmWatchStatus"></div>
+      <div class="atas-link" id="tmWatchLinkBox" hidden>
+        <label>Odkaz pro Zkratku<span class="copy-field"><input id="tmWatchUrl" readonly spellcheck="false"><button class="button button-ghost" type="button" id="tmWatchCopy">Kopírovat</button></span></label>
+      </div>
+      <details class="atas-howto" open>
+        <summary>Jak Zkratku nastavit (jednou)</summary>
+        <ol>
+          <li>V iPhonu otevři <b>Zkratky</b> a vytvoř novou zkratku, třeba „Tep do Trading Desku“.</li>
+          <li>Přidej akci <b>Najít vzorky ze Zdraví</b>: typ <b>Srdeční tep</b>, Datum začátku je v posledních <b>6 hodinách</b>, seřadit podle Datum začátku, bez omezení počtu.</li>
+          <li>Přidej <b>Opakovat s každou položkou</b> a uvnitř akci <b>Text</b>: vlož proměnnou <b>Opakovat položku → Datum začátku</b> s formátem <b>ISO 8601</b>, napiš středník a vlož <b>Opakovat položku → Hodnota</b>.</li>
+          <li>Za cyklus přidej <b>Spojit text</b> (oddělovač: Nový řádek).</li>
+          <li>Přidej <b>Získat obsah URL</b>: adresa je odkaz výše, metoda <b>POST</b>, tělo požadavku <b>Soubor</b> a v něm spojený text.</li>
+          <li>Nakonec <b>Zobrazit oznámení</b> s obsahem URL. Uvidíš, kolik hodnot tepu server přijal.</li>
+        </ol>
+        <p>Zkratku spusť po seanci, třeba z widgetu. Když ji máš v Automatizaci, může se spustit sama po ukončení cvičení na hodinkách. Řádky vypadají takhle: <code>2026-10-13T15:31:05+02:00;74</code>.</p>
+      </details>
+      <p class="share-warning">Kdo má odkaz, může ti do deníku poslat hodnoty tepu, nic z něj ale nepřečte. Když odkaz unikne, vydej nový a starý přestane platit.</p>
+      <div class="modal-actions"><button class="button button-ghost danger" type="button" id="tmWatchRemove" hidden>Zrušit odkaz</button><button class="button button-ghost" type="button" id="tmWatchRegenerate" hidden>Vydat nový odkaz</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zavřít</button><button class="button button-primary" type="button" id="tmWatchCreate">Vytvořit odkaz</button></div>
+    </form>
+  </dialog>
+  <div class="tm-alert" id="tmAlert" role="alertdialog" aria-labelledby="tmAlertTitle" aria-describedby="tmAlertText" hidden>
+    <span class="tm-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2Z"/></svg></span>
+    <div><strong id="tmAlertTitle">Tep je vysoko</strong><p id="tmAlertText"></p>
+      <div class="tm-alert-actions"><button class="button button-primary" type="button" id="tmAlertBreath">Dýchání 2 min</button><button class="button button-ghost" type="button" id="tmAlertDismiss">Teď ne</button></div></div>
+  </div>
   <dialog class="modal modal-narrow" id="atasDialog" aria-labelledby="atasDialogTitle">
     <form method="dialog" id="atasForm">
       <div class="modal-head"><div><p class="eyebrow">Sdílet do ATAS</p><h2 id="atasDialogTitle">Odkaz pro ATAS</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
@@ -1425,6 +1503,8 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/breathing.js') ?>" defer></script>
   <script src="<?= asset_url('static/personality.js') ?>" defer></script>
   <script src="<?= asset_url('static/atas-link.js') ?>" defer></script>
+  <script src="<?= asset_url('static/heartrate.js') ?>" defer></script>
+  <script src="<?= asset_url('static/trading-mode.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
 </body>
 </html>

@@ -150,6 +150,7 @@ function activateView(name) {
   closeQuickPlanMenu();
   closeSidebar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.dispatchEvent(new CustomEvent('td:view', { detail: name }));
   if (name === 'dashboard') refreshDashboard();
   if (name === 'plan') { applySessionLocks(); schedulePlanRefresh(); }
   if (name === 'journal') refreshTrades();
@@ -2389,6 +2390,8 @@ async function finishPsychCheck() {
     const check = await api('psych_check', { method: 'POST', body: { check_date: today(), answers } });
     $('#psychDialog').close();
     renderPsychResult(check);
+    // Trading mode (trading-mode.js) navazuje na rychlý test klidovým měřením.
+    document.dispatchEvent(new CustomEvent('td:psych-done', { detail: check }));
     await refreshPsychLatest();
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -3726,6 +3729,7 @@ async function init() {
   bindPersonalityEvents();
   bindAtasEvents();
   bindBreathing();
+  bindTradingMode();
   applyHues(document);
   await loadWorkspace();
   resetPlan({ type: 'daily' });
