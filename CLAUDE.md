@@ -6,19 +6,20 @@ ve `static/hindsight/CLAUDE.md`.
 
 Dokumentace pro uživatele je v `README.md` a `INSTALL.md`.
 
-## Tři oddělené projekty
+## Oddělené projekty
 
-Od 1. 10. 2026 je **tenhle repozitář jen Trading Desk**. Odměny mají vlastní repozitáře
-s vlastním `CLAUDE.md` a pracuje se na nich v samostatných sessions.
+Od 1. 10. 2026 je **tenhle repozitář jen Trading Desk**. Odměny a Evidence toku dílů mají vlastní
+repozitáře s vlastním `CLAUDE.md` a pracuje se na nich v samostatných sessions.
 
 | projekt | repozitář | adresa | klon na serveru |
 |---|---|---|---|
 | **Trading Desk (tady)** | `ecko456/trading_desk` | `/trading/` | `/root/trading_desk` |
 | Odměny, ostrá verze 1.0 | `ecko456/odmeny` | `/odmeny/` | `/root/odmeny` |
 | Odměny, verze 2 | `ecko456/odmeny_v2` | `/odmeny_v2/` | `/root/odmeny_v2` |
+| Evidence toku dílů (od 21. 10. 2026) | `ecko456/evidence_toku_dilu` | `/evidence_toku_dilu/` | `/root/evidence_toku_dilu` |
 
 Když uživatel v téhle session chce něco v Odměnách, připomeň mu, ať otevře session
-nad repozitářem `odmeny_v2` (nebo `odmeny`).
+nad repozitářem `odmeny_v2` (nebo `odmeny`). U Evidence toku dílů nad `evidence_toku_dilu`.
 
 Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a poznámky modulu.
 
