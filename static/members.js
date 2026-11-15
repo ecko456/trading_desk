@@ -209,7 +209,8 @@ async function refreshAdmin() {
   try {
     const result = await api('admin_users');
     membersState.users = result.items || [];
-    $('#registrationOpen').checked = Boolean(result.registration_open);
+    const open = $('#registrationOpen');
+    if (open) open.checked = Boolean(result.registration_open);
     renderMarketKeeper(result.market_keeper);
     renderAdmin();
     refreshMe();
@@ -329,7 +330,7 @@ function bindMemberEvents() {
   $('#appDownloadKey').addEventListener('click', downloadIssuedKey);
 
   if (isAdminViewer()) {
-    $('#registrationOpen').addEventListener('change', toggleRegistration);
+    $('#registrationOpen')?.addEventListener('change', toggleRegistration);
     $('#view-admin').addEventListener('click', event => {
       const button = event.target.closest('[data-admin-op]');
       if (!button) return;

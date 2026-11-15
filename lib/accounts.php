@@ -223,9 +223,19 @@ function save_setting(string $key, string $value): void
     app_execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [$key, $value]);
 }
 
+/* Registrace do platformy jsou vypnuté (zadání 15. 11. 2026): přihlašovací stránka místo
+   formuláře jen ohlásí, že to nejde, a API registraci odmítne. Zapne je jen proměnná prostředí
+   TRADING_REGISTRATION=1 (testy, které zakládají členy); přepínač ve Správě pak platí jako dřív. */
+const REGISTRATION_CLOSED_MESSAGE = 'Do platformy se není možné registrovat!';
+
+function registration_enabled(): bool
+{
+    return getenv('TRADING_REGISTRATION') === '1';
+}
+
 function registration_open(): bool
 {
-    return setting('registration_open', '1') === '1';
+    return registration_enabled() && setting('registration_open', '1') === '1';
 }
 
 /* ---------------------------------------------------------------- uživatelé */
@@ -1040,6 +1050,9 @@ function perform_login(string $login, string $secret): array
 
 function perform_registration(array $data): array
 {
+    if (!registration_enabled()) {
+        json_response(['error' => REGISTRATION_CLOSED_MESSAGE], 403);
+    }
     if (!registration_open()) {
         json_response(['error' => 'Registrace jsou teď uzavřené.'], 403);
     }
@@ -1087,6 +1100,7 @@ function auth_state(): array
     }
     return [
         'setup_required' => $setupRequired,
+        'registration_enabled' => registration_enabled(),
         'registration_open' => registration_open(),
         'encryption_available' => vault_available(),
         'user' => $user === null ? null : public_user($user),

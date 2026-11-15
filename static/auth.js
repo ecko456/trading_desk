@@ -175,6 +175,9 @@
     try { localStorage.setItem('td-theme', next); } catch (error) { /* bez úložiště jen na tuto návštěvu */ }
   });
 
+  // Registrace jsou vypnuté: místo formuláře jen okno se zprávou, přihlášení zůstane otevřené.
+  $('[data-auth-closed]')?.addEventListener('click', () => $('#registerClosed').showModal());
+
   $$('[data-auth-tab]').forEach(tab => tab.addEventListener('click', () => {
     $$('[data-auth-tab]').forEach(item => item.setAttribute('aria-selected', String(item === tab)));
     $$('[data-auth-pane]').forEach(pane => { pane.hidden = pane.dataset.authPane !== tab.dataset.authTab; });

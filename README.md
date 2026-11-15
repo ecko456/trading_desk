@@ -4,10 +4,10 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 
 ## Co umí
 
-- **účty se schvalováním**: registraci každého člena schvaluje správce, každý má vlastní, oddělený deník,
+- **účty**: každý člen má vlastní, oddělený deník; registrace do platformy jsou vypnuté (viz níže),
 - **šifrovaný deník na přání**: místo hesla přístupový klíč, deník i screenshoty jsou na disku zašifrované a správce je nepřečte,
 - **společná nástěnka**: sdílení náhledů, obchodů a strategií, vlastní příspěvky s grafy, komentáře a reakce,
-- **správa členů**: schvalování, blokace, role správce, obnova hesla, uzavření registrací,
+- **správa členů**: blokace, role správce, obnova hesla,
 - **prostředí na míru**: každý trader si v Nastavení zvolí metodiku (Market Profile, DiNapoli nebo obojí), zapne jen ty prvky náhledu a zápisu obchodu, které používá, přidá vlastní pole, vlastní trhy s hodnotou bodu, výchozí hodnoty a moduly v menu,
 - **DiNapoli levely**: zadáváš F3, F5, F7 a expanze COP, OP, XOP s timeframem a stavem naked / revisited; aplikace sama najde konfluenci (dva F5) a shodu (expanze u retracementu) podle tolerance, kterou si nastavíš pro každý timeframe; k tomu trend podle DMA 3x3, 7x5 a 25x5 a vzory (Double Repo, Railroad Tracks, Single Penetration…),
 - **vlastní pole a jejich rozbor**: ano/ne, výběr, hodnocení 1–5, číslo i text; u obchodů aplikace spočítá, jak se ti daří podle každé hodnoty,
@@ -123,7 +123,9 @@ Po založení správce kód přestane platit.
 
 ### Registrace a schválení
 
-Kdo zná adresu, může se zaregistrovat. Přihlásí se ale až po schválení správcem v sekci **Členové**. Tam správce také blokuje a maže účty, uděluje práva správce, obnovuje zapomenuté heslo (vygeneruje dočasné, které si člen po přihlášení změní) a může registrace úplně uzavřít. Obsah deníků správce nevidí, jen jméno, e-mail, stav a velikost dat.
+**Do platformy se není možné registrovat.** Na přihlašovací stránce je záložka **Registrace**, ale po klepnutí jen vyskočí okno „Do platformy se není možné registrovat!“ a formulář se neukáže. Server registraci odmítne se stejnou zprávou i při přímém volání API. Ve Správě je místo přepínače „Otevřené registrace“ jen informace, že jsou vypnuté.
+
+Registraci (se schválením správcem jako dřív) zapne jen proměnná prostředí `TRADING_REGISTRATION=1`; používají ji testy, které zakládají členy. V sekci **Členové** správce blokuje a maže účty, uděluje práva správce a obnovuje zapomenuté heslo (vygeneruje dočasné, které si člen po přihlášení změní). Obsah deníků správce nevidí, jen jméno, e-mail, stav a velikost dat.
 
 Přihlášení je chráněné proti hádání: po osmi neúspěšných pokusech na jeden účet se další zkoušky na čtvrt hodiny odmítnou, stejně jako nadměrný počet registrací z jedné adresy.
 

@@ -25,13 +25,22 @@ Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a pozn�
 
 ## Kde jsme skončili
 
-Stav k 13. 10. 2026:
+Stav k 15. 11. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (Trading mode a tep, 13. 10. 2026). Uživatel: „připojit Apple Watch kvůli
+- Poslední práce (registrace vypnuté, 15. 11. 2026). Uživatel: „nepůjde kliknout na registraci.
+  Jen vyskočí ‚Do platformy se není možné registrovat!‘“.
+  - Přihlašovací stránka (`lib/auth-page.php`): záložka Registrace má `data-auth-closed` a otevře
+    dialog `#registerClosed` (`static/auth.js`); formulář `#registerForm` se vůbec nevykreslí.
+  - Server: `registration_enabled()` v `lib/accounts.php` = `getenv('TRADING_REGISTRATION') === '1'`;
+    bez ní `perform_registration` vrátí 403 s `REGISTRATION_CLOSED_MESSAGE` a `registration_open()`
+    je vždy false. Správa (`index.php`) místo přepínače ukáže „Registrace vypnuté“.
+  - Testy: společný `Server` v `tests/test_accounts_http.py` registrace zapíná (zakládají jimi
+    členy), `RegistrationClosedTests` ověří vypnutý stav bez proměnné. Ostrý server ji nemá.
+- Předtím (Trading mode a tep, 13. 10. 2026). Uživatel: „připojit Apple Watch kvůli
   tepu … nahoře ‚ON trading mode‘ … prvně by se spustil rychlý test a po celou dobu by to
   sledovalo tep … zpětně vyhodnocovat, jaký výkyv způsobuje chyby, a kdy je čas na dechové
   cvičení“; „mám Apple Watch, obchoduji na Windows a v prohlížeči … zpětné i živé, upozorňovat

@@ -18,7 +18,7 @@ Deník obchodů a denní příprava pro Market Profile a Volume Profile.
 
 Po prvním nastavení už appku spouštíš jedním kliknutím.
 
-**První spuštění:** aplikace ještě nemá žádný účet, a tak se na přihlašovací stránce ukáže *Založení správce*. Chce jednorázový kód, který vypíše instalace (Windows, Linux), okno Terminálu (Mac) nebo terminál Codespace. Správce pak schvaluje registrace dalších členů. Pokud už aplikaci používáš, tvůj dosavadní deník převezme právě tenhle první účet.
+**První spuštění:** aplikace ještě nemá žádný účet, a tak se na přihlašovací stránce ukáže *Založení správce*. Chce jednorázový kód, který vypíše instalace (Windows, Linux), okno Terminálu (Mac) nebo terminál Codespace. Registrace dalších členů jsou vypnuté (Registrace na přihlašovací stránce jen ohlásí, že to nejde). Pokud už aplikaci používáš, tvůj dosavadní deník převezme právě tenhle první účet.
 
 ---
 
@@ -166,7 +166,7 @@ Instalace na konci vypíše kód pro založení správce.
 
 ### 2. Správce a členové
 
-Otevři aplikaci, zadej kód a založ účet správce. Další lidé se zaregistrují sami a ty je schválíš v sekci **Členové**. Každý má vlastní deník; na společné nástěnce je jen to, co kdo sdílí. Kdo chce, zvolí si šifrovaný deník s přístupovým klíčem místo hesla.
+Otevři aplikaci, zadej kód a založ účet správce. Do platformy se registrovat nejde: po klepnutí na **Registrace** se jen ukáže okno „Do platformy se není možné registrovat!“ a server registraci odmítne. Každý člen má vlastní deník; na společné nástěnce je jen to, co kdo sdílí. Kdo chce, zvolí si šifrovaný deník s přístupovým klíčem místo hesla.
 
 Když kód ztratíš, vypíšeš ho znovu:
 
@@ -276,6 +276,6 @@ Otevři `start-macos.command` v textovém editoru a změň `PORT=8420` na jiné 
 
 ## Bezpečnost — přečti si to
 
-Aplikace má účty: každý člen se přihlašuje a vidí jen svůj deník, registrace schvaluje správce a přihlášení je chráněné proti hádání hesel.
+Aplikace má účty: každý člen se přihlašuje a vidí jen svůj deník, registrace jsou vypnuté a přihlášení je chráněné proti hádání hesel.
 
 **Na internet ji dávej jen s HTTPS** (varianta E). Bez něj jde heslo i přihlášení po síti čitelně. Na `localhost` a v Codespace to potřeba není.

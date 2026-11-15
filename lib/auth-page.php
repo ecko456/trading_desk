@@ -68,7 +68,11 @@ function hero_profile(): string
         <?php else: ?>
         <div class="auth-tabs" role="tablist">
           <button type="button" role="tab" aria-selected="true" data-auth-tab="login">Přihlášení</button>
+          <?php if ($state['registration_enabled']): ?>
           <button type="button" role="tab" aria-selected="false" data-auth-tab="register">Registrace</button>
+          <?php else: ?>
+          <button type="button" aria-haspopup="dialog" aria-controls="registerClosed" data-auth-closed>Registrace</button>
+          <?php endif; ?>
         </div>
 
         <form class="auth-form" id="loginForm" data-auth-pane="login" novalidate>
@@ -81,6 +85,7 @@ function hero_profile(): string
           <p class="auth-error" role="alert" hidden></p>
         </form>
 
+        <?php if ($state['registration_enabled']): ?>
         <form class="auth-form" id="registerForm" data-auth-pane="register" hidden novalidate>
           <header><p class="eyebrow">Nový člen</p><h2>Registrace</h2><p>Každou registraci schvaluje správce. Jakmile ji schválí, můžeš se přihlásit.</p></header>
           <?php if (!$state['registration_open']): ?>
@@ -91,6 +96,14 @@ function hero_profile(): string
           <p class="auth-error" role="alert" hidden></p>
           <?php endif; ?>
         </form>
+        <?php else: ?>
+        <dialog class="modal auth-closed" id="registerClosed" aria-labelledby="registerClosedText">
+          <form method="dialog">
+            <p id="registerClosedText"><?= htmlspecialchars(REGISTRATION_CLOSED_MESSAGE, ENT_QUOTES, 'UTF-8') ?></p>
+            <button class="button button-primary button-block" type="submit" autofocus>Rozumím</button>
+          </form>
+        </dialog>
+        <?php endif; ?>
         <?php endif; ?>
 
         <section class="auth-result" id="authResult" hidden>

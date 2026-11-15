@@ -42,7 +42,8 @@ class Server:
         self.data = Path(tempfile.mkdtemp(prefix="td-http-"))
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
-        env = dict(os.environ, TRADING_DATA_DIR=str(self.data), TRADING_REGISTER_PER_HOUR="1000", NO_PROXY="*")
+        # registrace jsou v platformě vypnuté; testy jimi zakládají členy, proto je zapnou
+        env = dict(os.environ, TRADING_DATA_DIR=str(self.data), TRADING_REGISTER_PER_HOUR="1000", TRADING_REGISTRATION="1", NO_PROXY="*")
         env.update(extra_env or {})
         self.process = subprocess.Popen(
             [PHP, "-S", f"127.0.0.1:{self.port}", "router.php"],
@@ -382,6 +383,44 @@ class LoginThrottleTests(unittest.TestCase):
             statuses = [client.api("POST", "login", {"login": "nobody", "secret": "wrong"})[0] for _ in range(10)]
             self.assertEqual(statuses[:8], [401] * 8)
             self.assertEqual(statuses[-1], 429)
+        finally:
+            server.stop()
+
+
+@unittest.skipIf(PHP is None, "PHP není nainstalované")
+class RegistrationClosedTests(unittest.TestCase):
+    """Bez TRADING_REGISTRATION=1 (ostrý server) se do platformy registrovat nejde."""
+
+    def test_registration_is_closed(self):
+        server = Server(extra_env={"TRADING_REGISTRATION": ""})
+        try:
+            admin = Client(server)
+            self.assertEqual(admin.api("GET", "auth_state")[0], 200)
+            token = (server.data / "setup-token.txt").read_text().strip()
+            status, result = admin.api("POST", "setup", {"token": token, "login": "boss", "display_name": "Boss", "secret_mode": "password", "password": "boss-password-123"})
+            self.assertEqual(status, 201, result)
+
+            stranger = Client(server)
+            status, state = stranger.api("GET", "auth_state")
+            self.assertEqual((status, state["registration_enabled"], state["registration_open"]), (200, False, False))
+            status, page = stranger.request("GET", "/")
+            html = page.decode()
+            self.assertIn("data-auth-closed", html)
+            self.assertIn('id="registerClosed"', html)
+            self.assertIn("Do platformy se není možné registrovat!", html)
+            self.assertNotIn('id="registerForm"', html)
+            self.assertNotIn('data-auth-tab="register"', html)
+
+            status, result = stranger.api("POST", "register", {"login": "cizi", "display_name": "Cizí", "secret_mode": "password", "password": "cizi-password-1"})
+            self.assertEqual((status, result["error"]), (403, "Do platformy se není možné registrovat!"))
+            # ani zapnutý přepínač ve Správě registraci neotevře
+            self.assertEqual(admin.api("POST", "admin_settings", {"registration_open": True})[1]["registration_open"], False)
+            self.assertEqual(stranger.api("POST", "register", {"login": "cizi", "display_name": "Cizí", "secret_mode": "password", "password": "cizi-password-1"})[0], 403)
+            self.assertEqual(admin.api("GET", "admin_users")[1]["items"][0]["login"], "boss")
+            self.assertEqual(len(admin.api("GET", "admin_users")[1]["items"]), 1)
+            status, page = admin.request("GET", "/")
+            self.assertIn("Registrace vypnuté", page.decode())
+            self.assertNotIn('id="registrationOpen"', page.decode())
         finally:
             server.stop()
 
