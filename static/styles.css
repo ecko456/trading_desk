@@ -284,6 +284,7 @@ code { color: var(--accent-strong); font-family: ui-monospace, SFMono-Regular, C
 .section-heading h3 { margin: 0; font-family: var(--font-display); font-size: 16.5px; font-weight: 560; }
 .section-heading > span { color: var(--text-3); font-size: 13px; text-align: right; }
 .section-actions, .view-actions { display: flex; align-items: center; gap: 10px; }
+.section-actions > .section-note { color: var(--text-3); font-size: 13px; }
 .section-hint { margin: 12px 0 0; color: var(--text-3); font-size: 13px; }
 .subhead { margin: 0 0 10px; color: var(--text); font-size: 14px; font-weight: 700; }
 .subhead small { display: block; margin-top: 1px; color: var(--text-3); font-size: 12.5px; font-weight: 450; }
@@ -1592,8 +1593,26 @@ td .share-status { margin-right: 6px; vertical-align: middle; }
 .atas-howto p { margin: 10px 0 2px; color: var(--text-3); font-size: 13px; line-height: 1.55; }
 .atas-howto code { padding: 1px 5px; border-radius: 5px; background: var(--surface-3); font-size: 12.5px; word-break: break-all; }
 .atas-howto a { color: var(--accent); }
+/* Nástřel náhledu z ATAS (Náhled trhu → krok Profil → Nástřel z ATAS) */
+.draft-list { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; margin-bottom: 14px; }
+.draft-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-2); }
+.draft-kind { flex: none; display: inline-grid; place-items: center; min-width: 62px; padding: 5px 8px; border-radius: 8px; font-size: 11.5px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); }
+.draft-kind[data-kind="weekly"] { color: var(--text-2); background: var(--surface-3); }
+.draft-main { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.draft-main strong { font-size: 14px; }
+.draft-main small { color: var(--text-3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-values { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.draft-values em { font-style: normal; color: var(--text-3); font-size: 11.5px; font-weight: 700; margin-right: 2px; }
+.draft-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+.draft-file { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px dashed var(--line); border-radius: 12px; }
+.draft-file .button { flex: none; cursor: pointer; }
+.draft-file small { color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
+.draft-file code { padding: 1px 5px; border-radius: 5px; background: var(--surface-3); font-size: 12px; word-break: break-all; }
 @media (max-width: 640px) {
   .atas-status { grid-template-columns: minmax(0, 1fr); }
+  .draft-row { flex-wrap: wrap; }
+  .draft-actions { width: 100%; justify-content: flex-end; }
+  .draft-file { flex-direction: column; align-items: stretch; }
 }
 
 /* Napojení na cTrader (Účty a audit, Správa) */

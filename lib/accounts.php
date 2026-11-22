@@ -161,6 +161,20 @@ CREATE TABLE IF NOT EXISTS atas_feeds (
     UNIQUE(user_id, market)
 );
 
+-- Nástřel náhledu z ATAS: surová data profilu, která indikátor poslal přes odkaz pro ATAS
+-- (lib/atas-draft.php). Do náhledu je převede až aplikace po přihlášení.
+CREATE TABLE IF NOT EXISTS atas_drafts (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    market TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    period_from TEXT,
+    period_to TEXT,
+    payload TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS atas_drafts_user ON atas_drafts(user_id, received_at);
+
 -- Tep ze Zkratky (Apple Watch): odkaz s veřejným klíčem člena a schránka se zapečetěnými
 -- vzorky, které rozbalí až jeho deník (lib/heart.php).
 CREATE TABLE IF NOT EXISTS hr_links (

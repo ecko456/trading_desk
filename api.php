@@ -367,6 +367,24 @@ try {
         json_response(atas_delete_link((string)($_GET['market'] ?? '')));
     }
 
+    /* ---------- nástřel náhledu z ATAS (indikátor posílá přes odkaz, nebo se nahraje soubor) */
+
+    if ($action === 'atas_drafts' && $method === 'GET') {
+        json_response(atas_draft_list());
+    }
+
+    if ($action === 'atas_draft' && $method === 'GET') {
+        json_response(atas_draft_open((int)($_GET['id'] ?? 0)));
+    }
+
+    if ($action === 'atas_draft' && $method === 'DELETE') {
+        json_response(atas_draft_delete((int)($_GET['id'] ?? 0)));
+    }
+
+    if ($action === 'atas_draft_file' && $method === 'POST') {
+        json_response(atas_draft_from_file(request_json()));
+    }
+
     if ($action === 'hindsight_idea' && in_array($method, ['POST', 'PUT'], true)) {
         json_response(hs_save_idea(request_json()));
     }

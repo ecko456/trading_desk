@@ -25,13 +25,37 @@ Po každé větší práci **aktualizuj sekci „Kde jsme skončili“** a pozn�
 
 ## Kde jsme skončili
 
-Stav k 15. 11. 2026:
+Stav k 22. 11. 2026:
 
 - Pracovní větev je `claude/elegant-clarke-vl5n7d`. Uživatel z ní nasazuje a do `main` zatím
   sloučená není (přes 20 commitů navíc). Na `main` jsou navíc jen nahrané podklady:
   - `Chart.csv`, vzorek exportu svíček z ATAS;
   - `Hindsight – zadání modulu.docx`.
-- Poslední práce (registrace vypnuté, 15. 11. 2026). Uživatel: „nepůjde kliknout na registraci.
+- Poslední práce (nástřel náhledu z ATAS, 22. 11. 2026). Uživatel: „indikátor pro atas X, který
+  vyexportuje data a udělá mi nástřel třeba na weekly náhled nebo daily“.
+  - Indikátor `static/atas/TradingDeskDraft.cs` (`TradingDeskDraft : Indicator`, bez WPF, kvůli
+    ATAS X) ve stejné DLL jako zóny. Výpočty jsou čisté a bez API ATAS v
+    `static/atas/TradingDeskProfile.cs` (`TdDraftBuilder`): seance v čase New Yorku přes
+    `TimeZoneInfo` (RTH 9:30–16:00, den od 18:00), value area jako ATAS, VWAP, tvar, IB a průměr
+    IB, TPO po 30 min (single prints, tails, poor high/low), naked POC, HVN/LVN, overnight.
+    Výstup je JSON `td-atas-draft` verze 1. Odeslání: „Odeslat teď“, nebo automaticky po konci
+    RTH (týdenní v pátek). Pošle ho jako POST na `atas.php?t=TOKEN` a uloží i soubor do
+    `Dokumenty\Trading Desk\ATAS`.
+  - Server `lib/atas-draft.php`: `atas_draft_clean` (whitelist), `atas_draft_receive` (jen aktivní
+    účet, 60 za hodinu, drží 10 na trh a typ) do tabulky `atas_drafts` v app.sqlite3.
+    `atas_draft_plan` převede nástřel na hodnoty formuláře náhledu a vrací `existing_id`.
+    API: `atas_drafts`, `atas_draft` (GET/DELETE), `atas_draft_file` (nahraný soubor se neukládá).
+  - Záměrně se **nevyplňuje `initial_balance`**: patří ke dni náhledu (krok Otevření). IB minulé
+    seance jde jen do poznámky a do levelů IBH/IBL. `weekly_position` (jen v denním náhledu) se
+    počítá z Close proti VAH/VAL týdenního náhledu toho týdne, když existuje.
+  - Klient `static/atas-draft.js`: tlačítko `#atasDraftOpen` v záhlaví kroku 2 (v liště náhledu
+    zalamovalo pole při 1280 a 1600 px), dialog `#atasDraftDialog`. Existující náhled se nepřepíše,
+    doplní se jen prázdná pole a chybějící levely a reference. Před zahozením rozpracovaného
+    neuloženého náhledu se ptá (`planFormHasOwnContent` porovnává s výchozími hodnotami).
+  - Testy: `AtasDraftTests` v `tests/test_atas_http.py` a C# testy v `tests/atas` (syntetický trh
+    přes změnu času, fixture `draft-sample.json` čte i Python test). **Se skutečným ATAS ani ATAS
+    X to nikdo nezkoušel.**
+- Předtím (registrace vypnuté, 15. 11. 2026). Uživatel: „nepůjde kliknout na registraci.
   Jen vyskočí ‚Do platformy se není možné registrovat!‘“.
   - Přihlašovací stránka (`lib/auth-page.php`): záložka Registrace má `data-auth-closed` a otevře
     dialog `#registerClosed` (`static/auth.js`); formulář `#registerForm` se vůbec nevykreslí.
@@ -146,7 +170,10 @@ Stav k 15. 11. 2026:
   - registrace aplikace cTrader a první test s demo účtem;
   - zpětná vazba na obchodní plán (struktura a vzorový návrh) a na nový vzhled PDF;
   - zpětná vazba na kulisy (poslech) a výklad talentů pro trading;
-  - první test indikátoru v ATAS (sestavení, zobrazení zón, upozornění);
+  - první test indikátoru v ATAS (sestavení, zobrazení zón, upozornění) a nástřelu náhledu
+    v ATAS X (hodnoty proti grafu, odeslání přes odkaz, soubor);
+  - rozhodnutí k FlashAlpha (GEX levely pro ES): Free tarif ES neumí, Basic dá SPX (přepočet
+    přes zadanou cenu ES), Growth i ES=F. Bez odpovědi nezačínat.
   - Trading mode s Apple Watch: Zkratka podle návodu v aplikaci a případně aplikace, která tep
     z hodinek vysílá jako Bluetooth snímač (ověřit, že ji Chrome na Windows najde).
 
@@ -238,8 +265,11 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - vstupní profil, rychlý test a kalibrace jsou v `bootstrap.php` (`psych_*`);
   - `lib/personality.php` + `static/personality.js`: osobnost (Big Five, talenty), oblasti zaměření;
   - `static/breathing.js` (dechové cvičení) a `static/soundscapes.js` (kulisy, `TDSound`).
-- Odkaz pro ATAS: `lib/atas.php`, veřejný `atas.php`, `static/atas-link.js`, indikátor ve
-  `static/atas/` (C#, sestavuje si ho uživatel proti své instalaci ATAS).
+- Odkaz pro ATAS: `lib/atas.php`, veřejný `atas.php` (GET zóny, POST nástřel), `static/atas-link.js`,
+  indikátory ve `static/atas/` (C#, jedna DLL, sestavuje si ji uživatel proti své instalaci ATAS):
+  - `TradingDeskZones.cs`: zóny z náhledu;
+  - `TradingDeskDraft.cs` + `TradingDeskProfile.cs`: nástřel náhledu, na serveru
+    `lib/atas-draft.php`, v aplikaci `static/atas-draft.js`.
 - Trading mode a tep: `lib/heart.php`, veřejný příjem ze Zkratky `hr.php`, `static/heartrate.js`
   (výpočty a Web Bluetooth), `static/trading-mode.js` (rozhraní).
 - Ostatní PHP:
@@ -249,7 +279,8 @@ Když pracuješ v jiné větvi, dej uživateli příkaz s jejím názvem, nebo n
   - `bin/hindsight-keeper.php`: kdo smí nahrávat svíčky do Hindsightu.
 - `router.php`: router pro `php -S`, zavírá neveřejné cesty jako Apache.
   - Jiné způsoby spuštění: `start-*.bat/.command` a `.devcontainer/` (Codespaces).
-- `tests/`: Python HTTP testy (spouští vlastní `php -S`) a Node testy (`*.js`).
+- `tests/`: Python HTTP testy (spouští vlastní `php -S`), Node testy (`*.js`) a C# testy
+  indikátorů pro ATAS v `tests/atas` (náhradní třídy API v `AtasStubs.cs`).
 
 **Ostatní:** `trading-desk-v16.zip` je původní nahraná verze. Nic se z ní nenasazuje.
 
@@ -260,11 +291,22 @@ Apache předinstalovaný není. Nainstaluje ho `sudo bash deploy/install.sh`, al
 aktualizace na lokálním Apachi v kontejneru. **Nikdy ne na ostrém serveru.**
 
 ```bash
-# Trading Desk: 141 testů, asi minuta a půl (1 skip bez pypdf)
+# Trading Desk: 147 testů, asi minuta a půl (1 skip bez pypdf)
 python3 -m unittest discover -s tests
 for f in tests/*.js; do node "$f"; done
 php -l api.php            # a další změněné PHP soubory
+
+# Indikátory pro ATAS (C#), z kořene repa; .NET SDK se stáhne do $S (viz níže)
+DOTNET_ROOT=$S/dotnet $S/dotnet/dotnet build tests/atas -o $S/atasbuild
+DOTNET_ROOT=$S/dotnet $S/dotnet/dotnet $S/atasbuild/TradingDeskAtas.Tests.dll   # --update-fixture přepíše draft-sample.json
 ```
+
+- .NET SDK: `curl -sSL https://dot.net/v1/dotnet-install.sh -o $S/dotnet-install.sh` a
+  `bash $S/dotnet-install.sh --channel 10.0 --install-dir $S/dotnet`. Skutečné DLL ATAS tu nejsou,
+  testy běží proti `tests/atas/AtasStubs.cs`. Cesty výstupu `.csproj` ověříš bez ATAS přes
+  `dotnet msbuild static/atas/TradingDeskZones.csproj -p:Platform=Cross -getProperty:OutputPath`.
+- Když systémový Pillow v kontejneru padá na importu (`_imaging`), spouštěj celou sadu přes venv:
+  `TRADING_PYTHON=$S/venv/bin/python $S/venv/bin/python -m unittest discover -s tests`.
 
 - Testy spouštěj přes `discover` z kořene repa. `python3 -m unittest tests.x` selže na importu.
 - `tests/test_pdf_export.py` potřebuje Python reportlab a Pillow. Když chybí, nainstaluj je přes
@@ -277,9 +319,11 @@ php -l api.php            # a další změněné PHP soubory
     `{token, login, display_name, secret_mode:'key'}`.
   - Větší uploady potřebují `php -d upload_max_filesize=100M -d post_max_size=128M -S …`.
 - Playwright:
-  - `require('/opt/node22/lib/node_modules/playwright')`;
-  - `chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })`;
-  - `playwright install` nespouštěj.
+  - `require('playwright')` a `chromium.launch()` bez cesty. Verze Chromia v `/opt/pw-browsers`
+    se mezi kontejnery mění (naposledy `chromium-1243/chrome-linux64/chrome`);
+  - `playwright install` nespouštěj;
+  - CSP aplikace zakazuje inline styly, `page.addStyleTag` neprojde. Plynulý posun obejdeš přes
+    `window.scrollTo({ top, behavior: 'instant' })`.
 - `$S` = scratchpad session. Pomocné skripty a data drž tam. Kontejner je dočasný, takže co
   se má zachovat, patří do repa (commit a push).
 - cTrader v prohlížeči: spusť simulaci (`CtraderMock()` z `tests/ctrader_mock.py`, vypíše

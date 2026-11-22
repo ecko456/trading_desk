@@ -1,0 +1,66 @@
+{
+  "format": "td-atas-draft",
+  "version": 1,
+  "kind": "daily",
+  "symbol": "ESZ6",
+  "market": "ES",
+  "tick": 0.25,
+  "profile": "rth",
+  "generated_at": "2026-11-20T21:30:00Z",
+  "source": "ATAS TradingDeskDraft 1.0",
+  "period": {
+    "from": "2026-11-20",
+    "to": "2026-11-20"
+  },
+  "next": "2026-11-23",
+  "open": 6008,
+  "high": 6030.00,
+  "low": 6000.00,
+  "close": 6022,
+  "volume": 69000.00,
+  "poc": 6025.00,
+  "vah": 6030.00,
+  "val": 6022.75,
+  "vwap": 6022.75,
+  "shape": "p",
+  "ib": {
+    "low": 6000,
+    "high": 6012,
+    "open": 6008,
+    "close": 6008.00,
+    "minutes": 60,
+    "avg_range": 12
+  },
+  "ib_ext": "up",
+  "prev": {
+    "high": 6030.00,
+    "low": 6000.00,
+    "poc": 6025.00,
+    "vah": 6030.00,
+    "val": 6022.75
+  },
+  "single_prints": [
+    {
+      "low": 6012.25,
+      "high": 6017.75
+    }
+  ],
+  "tails": {
+    "buying": {
+      "low": 6000.00,
+      "high": 6003.75
+    },
+    "selling": null
+  },
+  "poor_high": true,
+  "poor_low": false,
+  "naked_pocs": [
+    {
+      "price": 5985.00,
+      "date": "2026-11-18"
+    }
+  ],
+  "lvn": [],
+  "hvn": [],
+  "overnight": null
+}

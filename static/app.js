@@ -3728,6 +3728,7 @@ async function init() {
   bindTradePlanEvents();
   bindPersonalityEvents();
   bindAtasEvents();
+  bindAtasDraftEvents();
   bindBreathing();
   bindTradingMode();
   applyHues(document);

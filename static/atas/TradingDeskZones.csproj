@@ -1,14 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Trading Desk: zóny z náhledu pro ATAS.
+  <!-- Trading Desk pro ATAS: jedna DLL se dvěma indikátory.
+         Trading Desk: zóny z náhledu      (TradingDeskZones.cs)
+         Trading Desk: nástřel náhledu     (TradingDeskDraft.cs a výpočty v TradingDeskProfile.cs)
+       Všechny .cs soubory musí být ve stejné složce jako tento soubor.
        Klasický ATAS (Windows):  dotnet build -c Release
          Sestaví se dvě DLL, pro .NET 8 i .NET 10. ATAS běží podle verze na jednom z nich
          a číslo verze v ATAS to neřekne (dokumentace ATAS doporučuje sestavit obě):
            bin\Release\net10.0-windows\TradingDeskZones.dll
            bin\Release\net8.0-windows\TradingDeskZones.dll
        ATAS X:                   dotnet build -c Release /p:Platform=Cross
+           bin\Cross\Release\net10.0\TradingDeskZones.dll
        DLL přidáš v ATAS v nastavení indikátorů tlačítkem „Add custom indicator“, nebo ho
-       zkopíruješ do %AppData%\ATAS\Indicators. Když máš ATAS jinde, uprav ATAS_BASE níže. -->
+       zkopíruješ do %AppData%\ATAS\Indicators (ATAS X: %AppData%\ATAS X\Indicators).
+       Když máš ATAS jinde, uprav ATAS_BASE níže. -->
   <PropertyGroup>
     <AssemblyName>TradingDeskZones</AssemblyName>
     <RootNamespace>ATAS.Indicators.TradingDesk</RootNamespace>

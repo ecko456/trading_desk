@@ -39,6 +39,7 @@ Samostatná webová aplikace pro Ubuntu/Apache. Běží pod `/trading/`, takže 
 - PDF náhledu ve vzhledu aplikace: nahoře bias, pod ním krátký popis trhu, mapa ceny a očíslované zóny s podmínkami,
 - export zón, levelů, hodnot profilu a otevřených referencí do TradingView jako Pine Script v6,
 - **odkaz pro ATAS**: indikátor v ATAS si sám stahuje zóny posledního denního náhledu a ukáže, jestli na zóně hledat long, short, nebo obojí,
+- **nástřel náhledu z ATAS**: druhý indikátor spočítá profil minulého dne nebo týdne (value area, POC, IB, single prints, tail, naked POC…) a náhled z něj předvyplní,
 - tmavý i světlý vzhled s většími a čitelnějšími popisky,
 - kompletní ZIP záloha SQLite databáze a screenshotů plus JSON export.
 
@@ -634,18 +635,45 @@ modrá    LONG i SHORT   obojí
 
 V nastavení indikátoru jde zobrazit všechny zóny, jen zóny pro long (long a obojí), nebo jen pro short (short a obojí), vypnout týdenní zóny, změnit průhlednost a zapnout **upozornění**: když cena vstoupí do zóny, ATAS zahraje zvuk a napíše třeba „cena v zóně VAL týdne 6664–6671, hledej jen LONG“. Na stejnou zónu znovu nejdřív po nastavené pauze. Když náhled pro daný den ještě na grafu nezačal (příprava večer předem), kreslí se zóny přes celý graf.
 
-**Jak indikátor dostat do ATAS.** ATAS bere vlastní indikátory jako zkompilované DLL, zdrojový kód sám nesestaví. V dialogu odkazu je návod a oba soubory ke stažení (`static/atas/TradingDeskZones.cs` a `.csproj`):
+**Jak indikátor dostat do ATAS.** ATAS bere vlastní indikátory jako zkompilované DLL, zdrojový kód sám nesestaví. V dialogu odkazu je návod a čtyři soubory ke stažení (`static/atas/TradingDeskZones.cs`, `TradingDeskDraft.cs`, `TradingDeskProfile.cs` a `TradingDeskZones.csproj`). Vznikne z nich jedna DLL se dvěma indikátory, zónami a nástřelem náhledu:
 
-1. stáhni oba soubory do jedné složky a nainstaluj [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0);
+1. stáhni všechny čtyři soubory do jedné složky a nainstaluj [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0);
 2. ve složce spusť `dotnet build -c Release`; vzniknou DLL pro .NET 10 i .NET 8 (podle verze běží ATAS na jednom z nich, dokumentace ATAS doporučuje sestavit obě);
 3. v ATAS v nastavení indikátorů vlevo dole **Add custom indicator** a vyber `bin\Release\net10.0-windows\TradingDeskZones.dll` (když se neobjeví, tu z `net8.0-windows`);
 4. na graf přidej **Trading Desk: zóny z náhledu** a do pole **Odkaz z Trading Desku** vlož odkaz.
 
-ATAS X (macOS) se sestaví příkazem `dotnet build -c Release /p:Platform=Cross`. Když máš ATAS nainstalovaný jinde než ve výchozí složce, uprav v `.csproj` cestu `ATAS_BASE`. Indikátor používá jen API, které mají i oficiální indikátory ATAS. Zkompilovaný a vyzkoušený je proti jeho kopii, se skutečnou instalací ATAS zatím ne.
+ATAS X se sestaví příkazem `dotnet build -c Release /p:Platform=Cross` a DLL je pak v `bin\Cross\Release\net10.0\TradingDeskZones.dll`. Indikátory nepoužívají WPF, které ATAS X odmítá. Když máš ATAS nainstalovaný jinde než ve výchozí složce, uprav v `.csproj` cestu `ATAS_BASE`. Indikátor používá jen API, které mají i oficiální indikátory ATAS. Zkompilovaný a vyzkoušený je proti jeho kopii, se skutečnou instalací ATAS zatím ne.
 
 **Bezpečnost.** Odkaz obsahuje tajný token. Kdo ho má, vidí zóny tohoto trhu, nic jiného z deníku. ATAS se do deníku přihlásit neumí a šifrovaný deník server bez tebe neotevře, proto se zóny pro odkaz ukládají jako snímek mimo deník, podobně jako sdílení na nástěnku, a nejsou šifrované. Token je v deníku (u šifrovaného deníku zašifrovaný), na serveru jen jeho otisk. **Vydat nový odkaz** starý okamžitě zneplatní, **Zrušit odkaz** ho smaže. U zablokovaného nebo smazaného účtu odkaz přestane fungovat. Dialog ukazuje, kdy ATAS odkaz naposledy četl.
 
 Pro jiné nástroje vrací odkaz s `&format=json` stejná data jako JSON.
+
+### Nástřel náhledu z ATAS
+
+Indikátor **Trading Desk: nástřel náhledu** (ve stejné DLL jako zóny) spočítá z grafu profil poslední dokončené seance nebo týdne a pošle ho přes stejný odkaz pro ATAS do Trading Desku. Počítá:
+
+- High, Low, Open, Close, objem, POC, VAH a VAL (70 %, krok value area nastavíš stejně jako v ATAS), VWAP a tvar profilu (P, b, D, dvojitá distribuce, trend);
+- initial balance (první hodina RTH) a jeho porovnání s průměrem posledních 10 dní;
+- z TPO po 30 minutách single prints, kupní a prodejní tail, poor high a poor low;
+- naked POC za posledních 20 dní, HVN a LVN;
+- overnight (high, low, POC), když nástřel posíláš ráno a noční seance dalšího dne už na grafu běží.
+
+Seance se počítají v čase burzy (RTH 9:30–16:00 New York, obchodní den od 18:00 předchozího dne) i přes změnu letního času. Nejlépe funguje na minutovém grafu s historií aspoň měsíc.
+
+**Odeslání.** V nastavení indikátoru vyber denní, týdenní, nebo obojí a zaškrtni **Odeslat teď**. Se zapnutým **Automaticky po konci seance** odejde denní nástřel sám po konci RTH a týdenní v pátek. Indikátor ho zároveň uloží jako soubor JSON do `Dokumenty\Trading Desk\ATAS`. Ten jde v Trading Desku nahrát ručně, když indikátor nemá odkaz nebo ATAS nesmí na síť.
+
+**Použití.** V Náhledu trhu v kroku 2 (Profil) dej **Nástřel z ATAS**. Dialog ukáže přijaté nástřely a u každého **Použít** nebo **Smazat**, pod nimi **Nahrát soubor**. Nástřel otevře náhled na další obchodní den (týdenní na další týden) a vyplní:
+
+- hodnoty profilu, polohu Close vůči value, tvar profilu, migraci value a POC, stav aukce, single prints a tail;
+- u denního náhledu polohu vůči týdenní value, když už máš týdenní náhled toho týdne;
+- reference na dojetí (single prints, poor high a low, tail, naked POC, LVN) a levely navíc (VWAP, IBH a IBL minulé seance, overnight, HVN);
+- poznámku se shrnutím, včetně hodnocení IB minulé seance.
+
+Pole Initial Balance v kroku Otevření patří ke dni náhledu, proto ho nástřel nevyplní. Nic se samo neuloží: náhled zkontroluj a dej **Uložit náhled**. Když náhled na ten den už máš, nástřel ho nepřepíše, doplní jen prázdná pole a chybějící levely a reference. Před zahozením rozpracovaného neuloženého náhledu se aplikace zeptá.
+
+**Co se ukládá.** Server drží posledních 10 nástřelů na trh a typ v `app.sqlite3` mimo deník, podobně jako snímek zón. Obsahují jen ceny a objem z grafu, nic z deníku. Přijímá je jen platný odkaz aktivního účtu, nejvýš 60 za hodinu. Se smazáním účtu zmizí.
+
+Indikátor je přeložený a otestovaný proti náhradním třídám ATAS API (`tests/atas`). Se skutečným ATAS ani ATAS X ho zatím nikdo nezkoušel, takže hodnoty před uložením porovnej s grafem.
 
 ## Bezpečnost
 

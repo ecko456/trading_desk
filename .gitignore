@@ -7,3 +7,9 @@
 !/data/uploads/.gitkeep
 
 __pycache__/
+
+# Výstupy sestavení .NET (indikátory pro ATAS a jejich testy). Kořenová bin/ jsou skripty, ta se verzuje.
+/static/atas/bin/
+/static/atas/obj/
+/tests/atas/bin/
+/tests/atas/obj/

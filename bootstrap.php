@@ -18,6 +18,7 @@ require_once __DIR__ . '/lib/broker.php';
 require_once __DIR__ . '/lib/tradeplan.php';
 require_once __DIR__ . '/lib/personality.php';
 require_once __DIR__ . '/lib/atas.php';
+require_once __DIR__ . '/lib/atas-draft.php';
 require_once __DIR__ . '/lib/heart.php';
 
 /** Adresář deníku přihlášeného uživatele. */

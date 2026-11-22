@@ -291,7 +291,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
                 </section>
 
                 <section class="plan-section" id="step-profile" data-section="profile">
-                  <div class="section-heading"><div><p class="eyebrow">Krok 2 · Market Profile</p><h2 id="profileHeading">Profil předchozího dne</h2></div><span id="profileHeadingNote">Jak se trh vypořádal s objemem</span></div>
+                  <div class="section-heading"><div><p class="eyebrow">Krok 2 · Market Profile</p><h2 id="profileHeading">Profil předchozího dne</h2></div><div class="section-actions"><span class="section-note" id="profileHeadingNote">Jak se trh vypořádal s objemem</span><button class="button button-small" type="button" id="atasDraftOpen" title="Předvyplnit náhled profilem z indikátoru v ATAS"><?= icon('spark') ?>Nástřel z ATAS</button></div></div>
                   <fieldset class="shape-picker"<?= el('profile.shape') ?>>
                     <legend>Jaký profil se utvořil</legend>
                     <div class="shape-options">
@@ -1417,16 +1417,40 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
       <details class="atas-howto">
         <summary>Jak indikátor dostat do ATAS</summary>
         <ol>
-          <li>Stáhni oba soubory do jedné složky: <a href="static/atas/TradingDeskZones.cs" download>TradingDeskZones.cs</a> a <a href="static/atas/TradingDeskZones.csproj" download>TradingDeskZones.csproj</a>.</li>
+          <li>Stáhni do jedné složky všechny čtyři soubory: <a href="static/atas/TradingDeskZones.cs" download>TradingDeskZones.cs</a>, <a href="static/atas/TradingDeskDraft.cs" download>TradingDeskDraft.cs</a>, <a href="static/atas/TradingDeskProfile.cs" download>TradingDeskProfile.cs</a> a <a href="static/atas/TradingDeskZones.csproj" download>TradingDeskZones.csproj</a>. Vznikne z nich jedna DLL se dvěma indikátory: zóny z náhledu a nástřel náhledu.</li>
           <li>Nainstaluj si <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener noreferrer">.NET 10 SDK</a> (jednorázově).</li>
-          <li>Ve složce spusť <code>dotnet build -c Release</code>. Vzniknou dvě DLL, pro .NET 10 a pro .NET 8.</li>
-          <li>V ATAS otevři nastavení indikátorů, vlevo dole dej <b>Add custom indicator</b> a vyber <code>bin\Release\net10.0-windows\TradingDeskZones.dll</code>. Když se indikátor neobjeví, vezmi tu z <code>net8.0-windows</code>.</li>
+          <li>Ve složce spusť <code>dotnet build -c Release</code>. Vzniknou dvě DLL, pro .NET 10 a pro .NET 8. Pro <b>ATAS X</b> spusť <code>dotnet build -c Release /p:Platform=Cross</code>.</li>
+          <li>V ATAS otevři nastavení indikátorů, vlevo dole dej <b>Add custom indicator</b> a vyber <code>bin\Release\net10.0-windows\TradingDeskZones.dll</code>. Když se indikátor neobjeví, vezmi tu z <code>net8.0-windows</code>. V ATAS X vyber <code>bin\Cross\Release\net10.0\TradingDeskZones.dll</code>.</li>
           <li>Na graf přidej <b>Trading Desk: zóny z náhledu</b> a do pole <b>Odkaz z Trading Desku</b> vlož odkaz výše.</li>
         </ol>
         <p>V nastavení indikátoru vybereš, jestli ukazovat všechny zóny, jen zóny pro long, nebo jen pro short, a jestli upozornit na vstup ceny do zóny.</p>
+        <p>Druhý indikátor ze stejné DLL, <b>Trading Desk: nástřel náhledu</b>, posílá přes tentýž odkaz profil minulého dne nebo týdne. V náhledu ho pak najdeš v kroku Profil pod <b>Nástřel z ATAS</b>.</p>
       </details>
       <p class="share-warning">Kdo má odkaz, vidí zóny tohoto trhu, nic jiného z deníku. Zóny v odkazu nejsou šifrované, podobně jako sdílení na nástěnku. Když odkaz unikne, vydej nový a starý přestane platit.</p>
       <div class="modal-actions"><button class="button button-ghost danger" type="button" id="atasRemove" hidden>Zrušit odkaz</button><button class="button button-ghost" type="button" id="atasRegenerate" hidden>Vydat nový odkaz</button><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zavřít</button><button class="button button-primary" type="button" id="atasCreate">Vytvořit odkaz</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal modal-narrow" id="atasDraftDialog" aria-labelledby="atasDraftTitle">
+    <form method="dialog" id="atasDraftForm">
+      <div class="modal-head"><div><p class="eyebrow">Z indikátoru v ATAS</p><h2 id="atasDraftTitle">Nástřel náhledu</h2></div><button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="Zavřít">×</button></div>
+      <p class="atas-intro">Indikátor <strong>Trading Desk: nástřel náhledu</strong> spočítá z grafu profil posledního dne nebo týdne (High, Low, Close, value area, POC, IB, single prints, tail, naked POC) a pošle ho sem. Nástřel náhled jen předvyplní. Uloží se, až ho zkontroluješ a dáš <strong>Uložit náhled</strong>.</p>
+      <div class="draft-list" id="atasDraftList" aria-live="polite"></div>
+      <div class="draft-file">
+        <label class="button button-ghost" for="atasDraftFile"><?= icon('download') ?>Nahrát soubor</label>
+        <input type="file" id="atasDraftFile" accept=".json,application/json" hidden>
+        <small>Soubor <code>TradingDesk-ES-daily-….json</code> ze složky Dokumenty\Trading Desk\ATAS. Hodí se, když indikátor nemá odkaz nebo ATAS nesmí na síť. Trh se vezme z náhledu.</small>
+      </div>
+      <details class="atas-howto">
+        <summary>Jak indikátor nastavit</summary>
+        <ol>
+          <li>Indikátor je ve stejné DLL jako zóny. Soubory a postup sestavení najdeš v náhledu pod <b>Sdílet → Odkaz pro ATAS</b>.</li>
+          <li>Na graf trhu (svíčky do 30 minut, historie aspoň měsíc) přidej <b>Trading Desk: nástřel náhledu</b>.</li>
+          <li>Do pole <b>Odkaz z Trading Desku</b> vlož stejný odkaz jako u zón.</li>
+          <li>Vyber denní, týdenní, nebo obojí a zaškrtni <b>Odeslat teď</b>. Se zapnutým <b>Automaticky po konci seance</b> přijde denní nástřel sám po konci RTH a týdenní v pátek.</li>
+        </ol>
+        <p>Indikátor ATAS ani ATAS X zatím nikdo se skutečnými daty nezkoušel. Hodnoty před uložením porovnej s grafem.</p>
+      </details>
+      <div class="modal-actions"><span class="spacer"></span><button class="button button-ghost" value="cancel" type="submit" formnovalidate>Zavřít</button></div>
     </form>
   </dialog>
   <dialog class="modal modal-narrow" id="shareDialog" aria-labelledby="shareDialogTitle">
@@ -1507,6 +1531,7 @@ $viewerInitials = htmlspecialchars(mb_strtoupper(implode('', array_map(static fn
   <script src="<?= asset_url('static/breathing.js') ?>" defer></script>
   <script src="<?= asset_url('static/personality.js') ?>" defer></script>
   <script src="<?= asset_url('static/atas-link.js') ?>" defer></script>
+  <script src="<?= asset_url('static/atas-draft.js') ?>" defer></script>
   <script src="<?= asset_url('static/heartrate.js') ?>" defer></script>
   <script src="<?= asset_url('static/trading-mode.js') ?>" defer></script>
   <script src="<?= asset_url('static/app.js') ?>" defer></script>
